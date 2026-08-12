@@ -1,102 +1,154 @@
 @echo off
-chcp 65001 >nul
 setlocal enabledelayedexpansion
 
 echo ========================================
-echo   安装个人 C 工具库到 MinGW
+echo   Install personal C library to MinGW
 echo ========================================
 echo.
 
-:: 1. 查找 MinGW 的根目录
+:: Run from the script's own folder, no matter where it is invoked from
+cd /d "%~dp0"
+
+:: ============ 1. Locate the MinGW root ============
 set "MINGW_ROOT="
+
+:: Method 1: derive from gcc.exe found in PATH (parent of bin is the root)
 for /f "delims=" %%i in ('where gcc 2^>nul') do (
-    set "gcc_path=%%i"
-    set "bin_dir=!gcc_path!..\.."
-    echo !bin_dir! | findstr /i "mingw" >nul
-    if !errorlevel! equ 0 (
-        set "MINGW_ROOT=!bin_dir!"
-        goto :found
+    pushd "%%~dpi.." 2>nul
+    set "candidate=!CD!"
+    popd
+    echo !candidate! | findstr /i "mingw" >nul
+    if not errorlevel 1 (
+        if exist "!candidate!\bin\gcc.exe" (
+            set "MINGW_ROOT=!candidate!"
+            goto :found
+        )
     )
 )
 
-:: 如果没找到，尝试常用路径
+:: Method 2: try common install locations
 if not defined MINGW_ROOT (
-    if exist "C:\MinGW" set "MINGW_ROOT=C:\MinGW"
-    if exist "C:\mingw64" set "MINGW_ROOT=C:\mingw64"
-    if exist "D:\MinGW" set "MINGW_ROOT=D:\MinGW"
+    for %%p in ("C:\MinGW" "C:\mingw64" "C:\TDM-GCC-64" "C:\msys64\mingw64" "D:\MinGW" "D:\mingw64") do (
+        if exist "%%~p\bin\gcc.exe" set "MINGW_ROOT=%%~p"
+    )
 )
 
 :found
 if not defined MINGW_ROOT (
-    echo [错误] 未找到 MinGW 安装目录，请确认已安装 MinGW。
+    echo [ERROR] MinGW not found - gcc.exe not located.
+    echo Please install MinGW-w64, or add its bin folder to PATH and retry.
     pause
     exit /b 1
 )
 
-echo [信息] 检测到 MinGW 根目录: %MINGW_ROOT%
-echo.
+echo [INFO] MinGW root       : %MINGW_ROOT%
 
-:: 2. 设置目录路径
-set "INCLUDE_DIR=%MINGW_ROOT%\include"
+:: ============ 2. Determine gcc's header / library search dirs ============
+:: MinGW-w64 searches headers in <root>\<target>\include (NOT <root>\include).
+set "MINGW_TARGET=x86_64-w64-mingw32"
+for /f "delims=" %%t in ('"%MINGW_ROOT%\bin\gcc.exe" -dumpmachine 2^>nul') do set "MINGW_TARGET=%%t"
+set "INCLUDE_DIR=%MINGW_ROOT%\%MINGW_TARGET%\include"
 set "LIB_DIR=%MINGW_ROOT%\lib"
 if not exist "%INCLUDE_DIR%" mkdir "%INCLUDE_DIR%"
 if not exist "%LIB_DIR%" mkdir "%LIB_DIR%"
+echo [INFO] Header directory : %INCLUDE_DIR%
+echo [INFO] Library directory: %LIB_DIR%
+echo.
 
-:: 3. 复制头文件
-echo [步骤 1] 复制头文件到 %INCLUDE_DIR% ...
+:: ============ 3. Copy header files ============
+echo [Step 1/4] Copying header files ...
 copy /Y "utils\utils.h" "%INCLUDE_DIR%\" >nul
-if %errorlevel% neq 0 (
-    echo [错误] 复制 utils.h 失败
+if errorlevel 1 (
+    echo [ERROR] Failed to copy utils\utils.h
     pause
     exit /b 1
 )
 copy /Y "framework\multifunc.h" "%INCLUDE_DIR%\" >nul
-if %errorlevel% neq 0 (
-    echo [错误] 复制 multifunc.h 失败
+if errorlevel 1 (
+    echo [ERROR] Failed to copy framework\multifunc.h
     pause
     exit /b 1
 )
-echo [成功] 头文件复制完成。
+echo [OK] Headers installed.
 
-:: 4. 编译静态库
-echo [步骤 2] 编译工具库 ...
-gcc -c utils\utils.c -o utils.o
-if %errorlevel% neq 0 (
-    echo [错误] 编译 utils.c 失败
+:: ============ 4. Build the static library ============
+echo [Step 2/4] Compiling sources ...
+gcc -c "utils\utils.c" -o utils.o
+if errorlevel 1 (
+    echo [ERROR] Failed to compile utils\utils.c
     pause
     exit /b 1
 )
-gcc -c framework\multifunc.c -o multifunc.o
-if %errorlevel% neq 0 (
-    echo [错误] 编译 multifunc.c 失败
+gcc -c "framework\multifunc.c" -o multifunc.o
+if errorlevel 1 (
+    echo [ERROR] Failed to compile framework\multifunc.c
     pause
     exit /b 1
 )
+echo [OK] Compilation done.
 
-echo [步骤 3] 打包静态库 ...
+echo [Step 3/4] Packing static library ...
 ar rcs libmylib.a utils.o multifunc.o
-if %errorlevel% neq 0 (
-    echo [错误] 打包静态库失败
+if errorlevel 1 (
+    echo [ERROR] Failed to pack the static library
     pause
     exit /b 1
 )
-
-echo [步骤 4] 复制 libmylib.a 到 %LIB_DIR% ...
 copy /Y libmylib.a "%LIB_DIR%\" >nul
-if %errorlevel% neq 0 (
-    echo [错误] 复制库文件失败
+if errorlevel 1 (
+    echo [ERROR] Failed to copy libmylib.a
     pause
     exit /b 1
 )
+echo [OK] Static library installed to %LIB_DIR%.
 
-:: 5. 清理
+:: ============ 5. Clean up intermediate files ============
 del utils.o multifunc.o libmylib.a >nul 2>&1
 
+:: ============ 6. Make sure gcc is on PATH (callable from anywhere) ============
+echo.
+echo %PATH% | findstr /i /c:"%MINGW_ROOT%\bin" >nul
+if errorlevel 1 (
+    echo [NOTE] gcc is NOT on PATH, so "gcc" cannot be run from anywhere.
+    set /p ADD_PATH="Add %MINGW_ROOT%\bin to your user PATH? [Y/n] "
+    if /i "!ADD_PATH!" neq "n" (
+        set "USER_PATH="
+        for /f "tokens=2,*" %%a in ('reg query "HKCU\Environment" /v Path 2^>nul ^| findstr /r /c:"^    Path"') do set "USER_PATH=%%b"
+        if defined USER_PATH (
+            setx PATH "!USER_PATH!;%MINGW_ROOT%\bin" >nul
+        ) else (
+            setx PATH "%MINGW_ROOT%\bin" >nul
+        )
+        echo [INFO] User PATH updated. It takes effect in new command windows.
+    )
+) else (
+    echo [OK] gcc is already on PATH; callable from anywhere.
+)
+
+:: ============ 7. Optional: compile and run the test program ============
+echo.
+set /p RUN_TEST="Compile and run test_lib.c to verify the install? [Y/n] "
+if /i "!RUN_TEST!" neq "n" (
+    echo [Step 4/4] Compiling and running the test program ...
+    gcc test_lib.c -lmylib -o test_lib.exe
+    if errorlevel 1 (
+        echo [ERROR] Test program failed to compile. See messages above.
+    ) else (
+        test_lib.exe
+        echo.
+        if errorlevel 1 (
+            echo [NOTE] Test program exited with an error. Check output above.
+        ) else (
+            echo [OK] Test passed. The library works from anywhere.
+        )
+    )
+)
+
 echo ========================================
-echo [成功] 工具库安装完成！
-echo 您现在可以在任何 C 程序中：
+echo [DONE] Installation finished.
+echo From now on, in any C program you can write:
 echo   #include ^<utils.h^>
 echo   #include ^<multifunc.h^>
-echo 编译时链接：gcc main.c -lmylib -o main
+echo Compile with:  gcc your_program.c -lmylib -o program
 echo ========================================
 pause

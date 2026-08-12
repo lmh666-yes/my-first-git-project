@@ -1,0 +1,7 @@
+函数一键调用步骤
+首先头文件要有下面两个
+#include <utils.h>
+#include <multifunc.h>
+然后就编译的方式就是下面
+gcc your_program.c -lmylib -o program
+    (程序名)       (固定库名)  (输出文件名)
