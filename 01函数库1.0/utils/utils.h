@@ -129,6 +129,10 @@ void insertion_sort(int arr[], int size);
  */
 void selection_sort(int arr[], int size);
 
+// ===== 最大子数组之和（Kadane 算法） =====
+// 求整型数组中连续子数组的最大和，返回最大和
+int max_subarray_sum(int arr[], int size);
+
 /**
  * 二分查找（要求数组已升序）
  * @param arr 数组

@@ -73,6 +73,16 @@ double avg_int_array(int arr[], int size) {
     return (double)sum_int_array(arr, size) / size;
 }
 
+int max_subarray_sum(int arr[], int size) {
+    if (size <= 0) return 0;
+    int cur = arr[0], max_sum = arr[0];
+    for (int i = 1; i < size; i++) {
+        cur = (cur + arr[i] > arr[i]) ? cur + arr[i] : arr[i];
+        if (cur > max_sum) max_sum = cur;
+    }
+    return max_sum;
+}
+
 int max_int_array(int arr[], int size) {
     int max = arr[0];
     for (int i = 1; i < size; i++) {
