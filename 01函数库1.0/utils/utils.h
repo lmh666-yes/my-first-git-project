@@ -6,6 +6,37 @@
 #include <string.h>
 #include <time.h>
 #include <math.h>
+#include <stdint.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+/* ============================================================
+ *              UTILS 函数库 · 分区快速索引
+ * ============================================================
+ * 本库按功能分区组织，查找函数时用 Ctrl+F 搜下面分区名即可快速定位：
+ *
+ *   【数组工具】       print_int_array / bubble_sort / binary_search ...
+ *   【字符串工具】     str_len / trim / str_split / str_starts_with ...
+ *   【数学工具】       factorial / gcd / lcm / is_prime ...
+ *   【文件工具】       read_file / write_file / copy_file ...
+ *   【内存管理】       safe_malloc / safe_free / copy_string ...
+ *   【位操作(单片机)】 bit_set / byte_get_high / swap_bytes16 ...
+ *   【进制转换】       int_to_binary_str / hex_str_to_int ...
+ *   【数字工具】       is_armstrong / reverse_int / count_digits ...
+ *   【排序算法】       quick_sort / merge_sort / heap_sort ...
+ *   【数据结构】       ListNode(链表) / Stack(栈) / Queue(队列) ...
+ *   【校验与CRC】      checksum8 / crc16_modbus / xor_checksum ...
+ *   【延时(单片机)】   soft_delay_ms / soft_delay_us ...
+ *   【系统工具(Linux)】file_exists / run_cmd / path_join / hex_dump ...
+ *   【调试工具】       debug_log / get_time_str / wait_for_key ...
+ *
+ * 说明：
+ * 1. 本库为纯 C 实现，C++ 工程可直接 #include "utils.h"（已做 extern "C" 保护）。
+ * 2. 所有函数命名已避开 STM32 HAL / 标准外设库等固件库常用名，可放心混用。
+ * 3. 返回 malloc 分配内存的函数，使用后请调用 safe_free() 释放。
+ * ============================================================ */
 
 // ============================================================
 //                     数组工具函数
@@ -488,5 +519,417 @@ void clear_input_buffer(void);
  * @return 成功返回 buf，失败返回 NULL
  */
 char* safe_fgets(char *buf, size_t size, FILE *stream);
+
+// ============================================================
+//                     位操作工具（单片机）
+// ============================================================
+// 用于寄存器/端口位操作，命名已避开 HAL、标准外设库等固件库。
+
+/**
+ * 置位：将寄存器第 bit 位置 1
+ * @param reg 寄存器地址（如 &GPIOA->ODR）
+ * @param bit 位号（0~7）
+ */
+void bit_set(volatile uint8_t *reg, uint8_t bit);
+
+/** 清零：将寄存器第 bit 位清 0 */
+void bit_clear(volatile uint8_t *reg, uint8_t bit);
+
+/** 翻转：将寄存器第 bit 位取反 */
+void bit_toggle(volatile uint8_t *reg, uint8_t bit);
+
+/** 查询：返回 1 表示该位为 1，0 表示该位为 0 */
+uint8_t bit_is_set(volatile uint8_t *reg, uint8_t bit);
+
+/** 查询：返回 1 表示该位为 0，0 表示该位为 1 */
+uint8_t bit_is_clear(volatile uint8_t *reg, uint8_t bit);
+
+/** 取 16 位数据的高字节 */
+uint8_t byte_get_high(uint16_t val);
+
+/** 取 16 位数据的低字节 */
+uint8_t byte_get_low(uint16_t val);
+
+/** 由高字节 + 低字节组合成 16 位数据 */
+uint16_t byte_combine(uint8_t hi, uint8_t lo);
+
+/** 统计 32 位数据中 1 的个数（汉明重量） */
+uint8_t count_ones(uint32_t val);
+
+/** 32 位循环左移 n 位 */
+uint32_t rotate_left(uint32_t val, uint8_t n);
+
+/** 32 位循环右移 n 位 */
+uint32_t rotate_right(uint32_t val, uint8_t n);
+
+/** 16 位高低字节交换（大小端转换） */
+uint16_t swap_bytes16(uint16_t val);
+
+/** 32 位字节序反转（大小端转换） */
+uint32_t swap_bytes32(uint32_t val);
+
+/** 判断当前平台是否小端字节序（1 小端，0 大端） */
+int is_little_endian(void);
+
+// ============================================================
+//                     字符与进制转换工具
+// ============================================================
+
+/** 判断字符是否为数字 '0'~'9' */
+int is_digit_char(char c);
+
+/** 判断字符是否为字母 a~z / A~Z */
+int is_alpha_char(char c);
+
+/** 判断字符是否为数字或字母 */
+int is_alnum_char(char c);
+
+/** 判断字符是否为空白符（空格/制表/换行等） */
+int is_space_char(char c);
+
+/** 单个字符转小写 */
+char char_to_lower(char c);
+
+/** 单个字符转大写 */
+char char_to_upper(char c);
+
+/** 十六进制字符转数值（'0'-'9','a'-'f','A'-'F'），非法返回 -1 */
+int hex_char_to_int(char c);
+
+/** 数值(0~15)转十六进制字符，非法返回 '?' */
+char int_to_hex_char(int v);
+
+/**
+ * 十进制整数转二进制字符串
+ * @param num 整数
+ * @param buf 输出缓冲区
+ * @param buf_size 缓冲区大小
+ * @return buf
+ */
+char* int_to_binary_str(int num, char *buf, int buf_size);
+
+/** 十进制整数转八进制字符串 */
+char* int_to_octal_str(int num, char *buf);
+
+/** 十进制整数转十六进制字符串（大写） */
+char* int_to_hex_str(int num, char *buf);
+
+/** 二进制字符串转十进制整数 */
+long bin_str_to_int(const char *str);
+
+/** 八进制字符串转十进制整数 */
+long oct_str_to_int(const char *str);
+
+/** 十六进制字符串转十进制整数 */
+long hex_str_to_int(const char *str);
+
+// ============================================================
+//                     数字工具（基础算法）
+// ============================================================
+
+/** 统计十进制整数的位数（0 返回 1） */
+int count_digits(int n);
+
+/** 反转十进制整数（123 -> 321，-123 -> -321） */
+int reverse_int(int n);
+
+/** 求十进制整数各位数字之和 */
+int sum_digits(int n);
+
+/** 判断是否为水仙花数（阿姆斯特朗数） */
+int is_armstrong(int n);
+
+/** 判断是否为回文数（121、1221 等） */
+int is_palindrome_num(int n);
+
+// ============================================================
+//                     排序算法补充
+// ============================================================
+
+/** 快速排序（升序，原地） */
+void quick_sort(int arr[], int size);
+
+/** 归并排序（升序，原地，内部临时申请内存） */
+void merge_sort(int arr[], int size);
+
+/** 堆排序（升序，原地） */
+void heap_sort(int arr[], int size);
+
+// ============================================================
+//                     数组工具补充
+// ============================================================
+
+/** 数组整体左旋 k 位（原地） */
+void rotate_array_left(int arr[], int size, int k);
+
+/** 数组整体右旋 k 位（原地） */
+void rotate_array_right(int arr[], int size, int k);
+
+/**
+ * 原地去重（保持首次出现顺序），返回去重后的新长度
+ * @param arr 数组
+ * @param size 数组大小（指针，会被修改为新长度）
+ * @return 去重后的长度
+ */
+int remove_duplicates_int(int arr[], int *size);
+
+// ============================================================
+//                     字符串工具补充
+// ============================================================
+
+/**
+ * 提取子串
+ * @param str 原字符串
+ * @param start 起始下标
+ * @param len 要提取的长度
+ * @param buf 输出缓冲区
+ * @param buf_size 缓冲区大小
+ * @return buf
+ */
+char* str_substr(const char *str, int start, int len, char *buf, int buf_size);
+
+/** 将字符串中所有 old_ch 替换为 new_ch，返回替换次数 */
+int str_replace_char(char *str, char old_ch, char new_ch);
+
+/** 判断字符串是否以 prefix 开头 */
+int str_starts_with(const char *str, const char *prefix);
+
+/** 判断字符串是否以 suffix 结尾 */
+int str_ends_with(const char *str, const char *suffix);
+
+/**
+ * 按分隔符分割字符串（返回动态分配的字符串数组）
+ * @param str 原字符串（不会被修改）
+ * @param delim 分隔符
+ * @param count 输出分割段数
+ * @return 字符串数组（NULL 结尾），用后调用 str_free_split 释放
+ */
+char** str_split(const char *str, char delim, int *count);
+
+/** 释放 str_split 返回的字符串数组 */
+void str_free_split(char **tokens, int count);
+
+// ============================================================
+//                     单向链表（数据结构）
+// ============================================================
+
+/** 链表节点 */
+typedef struct ListNode {
+    int data;
+    struct ListNode *next;
+} ListNode;
+
+/** 创建值为 data 的新节点（需 free 释放） */
+ListNode* list_create(int data);
+
+/** 头插法：在链表头部插入节点 */
+void list_insert_head(ListNode **head, int data);
+
+/** 尾插法：在链表尾部插入节点 */
+void list_insert_tail(ListNode **head, int data);
+
+/** 有序插入：按升序将节点插入有序链表 */
+void list_insert_sorted(ListNode **head, int data);
+
+/** 删除链表中所有等于 data 的节点 */
+void list_delete_value(ListNode **head, int data);
+
+/** 查找第一个等于 data 的节点，返回节点指针（找不到返回 NULL） */
+ListNode* list_find(ListNode *head, int data);
+
+/** 获取链表长度 */
+int list_length(ListNode *head);
+
+/** 反转链表（原地） */
+void list_reverse(ListNode **head);
+
+/** 打印链表：1 -> 2 -> 3 -> NULL */
+void list_print(ListNode *head);
+
+/** 释放整个链表并置 head 为 NULL */
+void list_free(ListNode **head);
+
+// ============================================================
+//                     栈（数据结构）
+// ============================================================
+
+/** 栈结构体（基于数组实现） */
+typedef struct {
+    int *data;
+    int top;
+    int capacity;
+} Stack;
+
+/** 创建容量为 capacity 的栈 */
+Stack* stack_create(int capacity);
+
+/** 销毁栈（释放内存） */
+void stack_destroy(Stack *s);
+
+/** 入栈，0 成功，-1 失败（栈满） */
+int stack_push(Stack *s, int value);
+
+/** 出栈，0 成功，-1 失败（栈空） */
+int stack_pop(Stack *s, int *out);
+
+/** 查看栈顶元素（不出栈），0 成功，-1 失败 */
+int stack_peek(Stack *s, int *out);
+
+/** 判断栈是否为空 */
+int stack_is_empty(Stack *s);
+
+/** 判断栈是否已满 */
+int stack_is_full(Stack *s);
+
+/** 获取栈中元素个数 */
+int stack_size(Stack *s);
+
+// ============================================================
+//                     队列（数据结构）
+// ============================================================
+
+/** 循环队列结构体 */
+typedef struct {
+    int *data;
+    int front;
+    int rear;
+    int size;
+    int capacity;
+} Queue;
+
+/** 创建容量为 capacity 的循环队列 */
+Queue* queue_create(int capacity);
+
+/** 销毁队列（释放内存） */
+void queue_destroy(Queue *q);
+
+/** 入队，0 成功，-1 失败（队满） */
+int queue_enqueue(Queue *q, int value);
+
+/** 出队，0 成功，-1 失败（队空） */
+int queue_dequeue(Queue *q, int *out);
+
+/** 查看队首元素（不出队），0 成功，-1 失败 */
+int queue_peek(Queue *q, int *out);
+
+/** 判断队列是否为空 */
+int queue_is_empty(Queue *q);
+
+/** 判断队列是否已满 */
+int queue_is_full(Queue *q);
+
+/** 获取队列中元素个数 */
+int queue_size(Queue *q);
+
+// ============================================================
+//                     校验与CRC工具（单片机通信）
+// ============================================================
+
+/** 异或校验和（数据逐字节异或） */
+uint8_t xor_checksum(const uint8_t *data, uint16_t len);
+
+/** 8 位累加校验和（取累加和低 8 位） */
+uint8_t checksum8(const uint8_t *data, uint16_t len);
+
+/** 16 位累加校验和（取累加和低 16 位） */
+uint16_t checksum16(const uint8_t *data, uint16_t len);
+
+/** CRC-8 校验（多项式 0x07，初始值 0x00） */
+uint8_t crc8(const uint8_t *data, uint16_t len);
+
+/** CRC-16 Modbus 校验（多项式 0xA001，初始值 0xFFFF） */
+uint16_t crc16_modbus(const uint8_t *data, uint16_t len);
+
+/** 奇偶校验：返回 1 表示 1 的个数为奇数，0 为偶数 */
+uint8_t parity_check(uint32_t val);
+
+/**
+ * 字节数组转十六进制字符串
+ * @param data 数据
+ * @param len 长度
+ * @param buf 输出缓冲区（需 >= len*2+1）
+ * @param buf_size 缓冲区大小
+ * @return buf
+ */
+char* bytes_to_hex_str(const uint8_t *data, uint16_t len, char *buf, uint16_t buf_size);
+
+/**
+ * 十六进制字符串转字节数组
+ * @param hex 十六进制字符串（长度需为偶数）
+ * @param out 输出缓冲区
+ * @param max_len 缓冲区最大长度
+ * @return 转换成功的字节数，格式错误返回 -1
+ */
+int hex_str_to_bytes(const char *hex, uint8_t *out, uint16_t max_len);
+
+// ============================================================
+//                     延时工具（单片机）
+// ============================================================
+// 软件空循环延时，精度与主频相关，仅用于学习演示；
+// 正式工程建议使用硬件定时器（如 HAL_Delay / SysTick）。
+
+/** 软件延时约 ms 毫秒（需按主频微调循环次数） */
+void soft_delay_ms(uint32_t ms);
+
+/** 软件延时约 us 微秒（需按主频微调循环次数） */
+void soft_delay_us(uint32_t us);
+
+// ============================================================
+//                     系统工具（Linux / PC 开发）
+// ============================================================
+// 此分区面向 Linux 嵌入式 / PC 开发环境（Windows 与 Linux 均支持）。
+// 若在裸机单片机工程中使用，请确认工具链提供 sys/stat.h、unistd.h。
+
+/** 判断文件是否存在 */
+int file_exists(const char *path);
+
+/** 判断目录是否存在 */
+int dir_exists(const char *path);
+
+/** 获取文件大小（字节），失败返回 -1 */
+long get_file_size(const char *path);
+
+/** 创建目录，0 成功，-1 失败 */
+int create_dir(const char *path);
+
+/** 删除空目录，0 成功，-1 失败 */
+int remove_dir(const char *path);
+
+/**
+ * 拼接目录与文件名（自动使用平台分隔符）
+ * @param dir 目录
+ * @param file 文件名
+ * @param buf 输出缓冲区
+ * @param buf_size 缓冲区大小
+ * @return buf
+ */
+char* path_join(const char *dir, const char *file, char *buf, int buf_size);
+
+/** 获取文件扩展名（不含点，如 "c"），无扩展名返回空串 */
+const char* get_file_ext(const char *path);
+
+/** 获取文件名（不含目录路径部分） */
+char* get_base_name(const char *path, char *buf, int buf_size);
+
+/** 执行系统命令（返回命令返回值） */
+int run_cmd(const char *cmd);
+
+/**
+ * 执行命令并捕获其标准输出（返回动态字符串，需 safe_free）
+ * @param cmd 命令
+ * @return 输出字符串，失败返回 NULL
+ */
+char* run_cmd_capture(const char *cmd);
+
+/**
+ * 十六进制打印内存内容（调试利器）
+ * @param ptr 内存指针
+ * @param len 长度
+ */
+void hex_dump(const void *ptr, size_t len);
+
+#ifdef __cplusplus
+}
+#endif
 
 #endif // UTILS_H
