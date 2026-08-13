@@ -88,5 +88,71 @@ int main() {
     // ========== 调试工具示例 ==========
     hex_dump(data, sizeof(data));
 
+    // ========== 查找算法（自动生成） ==========
+    int sa[] = {1, 3, 5, 7, 9, 11};
+    printf("插值查找=%d 哨兵查找=%d 斐波那契查找=%d\n",
+           interpolation_search(sa, 6, 7), sentinel_search(sa, 6, 9), fibonacci_search(sa, 6, 5));
+
+    // ========== 字符串算法（自动生成） ==========
+    printf("KMP=%d 最长公共子串=%d 编辑距离=%d\n",
+           kmp_search("ababcabc", "abc"), str_longest_common_substr("abcdef", "zbcdf"),
+           str_edit_distance("kitten", "sitting"));
+
+    // ========== 数论（自动生成） ==========
+    int cnt;
+    int *pr = sieve_primes(30, &cnt);
+    printf("30 以内素数: ");
+    for (int i = 0; i < cnt; i++) printf("%d ", pr[i]);
+    printf("\n");
+    free(pr);
+    int ex, ey;
+    printf("mod_pow(2,10,1000)=%lld, gcd(30,12) 扩展=%d\n", mod_pow(2, 10, 1000), extended_gcd(30, 12, &ex, &ey));
+
+    // ========== 动态规划（自动生成） ==========
+    int w[] = {2, 3, 4}, val[] = {3, 4, 5};
+    printf("0-1背包(容量5)=%d, LIS=%d\n", knapsack01(w, val, 3, 5),
+           lis_length((int[]){10, 9, 2, 5, 3, 7, 101, 18}, 8));
+
+    // ========== 环形缓冲区 / 动态数组 / 优先队列（自动生成） ==========
+    RingBuffer *rb = rb_create(8);
+    rb_write(rb, 0x11);
+    uint8_t byte;
+    rb_read(rb, &byte);
+    printf("环形缓冲读出=0x%02X\n", byte);
+    rb_destroy(rb);
+
+    Vector *vec = vec_create(2);
+    vec_push_back(vec, 10);
+    vec_push_back(vec, 20);
+    vec_push_back(vec, 30);
+    int xv;
+    vec_get(vec, 2, &xv);
+    printf("Vector[2]=%d, size=%d\n", xv, vec_size(vec));
+    vec_destroy(vec);
+
+    PriorityQueue *pq = pq_create(4);
+    pq_push(pq, 3);
+    pq_push(pq, 9);
+    int mx;
+    pq_pop(pq, &mx);
+    printf("优先队列弹出最大值=%d\n", mx);
+    pq_destroy(pq);
+
+    // ========== 二叉搜索树（自动生成） ==========
+    BSTNode *root = NULL;
+    int vs[] = {50, 30, 70, 20, 40, 60, 80};
+    for (int i = 0; i < 7; i++) root = bst_insert(root, vs[i]);
+    printf("BST 中序: ");
+    bst_inorder(root);
+    printf("\nBST 高度=%d, 节点数=%d\n", bst_height(root), bst_node_count(root));
+    bst_free(root);
+
+    // ========== 哈希函数（自动生成） ==========
+    printf("djb2=%u, fnv1a=%u, sdbm=%u, bkdr=%u\n",
+           djb2_hash("hello"), fnv1a_hash("hello"), sdbm_hash("hello"), bkdr_hash("hello"));
+
+    // ========== 时间戳（自动生成） ==========
+    printf("毫秒时间戳=%lld\n", get_timestamp_ms());
+
     return 0;
 }

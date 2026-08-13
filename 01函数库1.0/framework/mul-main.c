@@ -6,27 +6,32 @@
 // ===== 模拟的功能函数 =====
 
 int init_sensor(void *arg) {
+    (void)arg;
     printf("  初始化传感器...");
     return 0; // 成功
 }
 
 int config_uart(void *arg) {
+    (void)arg;
     printf("  配置 UART ...");
     return 0; // 成功
 }
 
 int read_temp(void *arg) {
+    (void)arg;
     printf("  读取温度传感器...");
     // 随机模拟成功/失败
     return (rand() % 3 == 0) ? -1 : 0;
 }
 
 int save_data(void *arg) {
+    (void)arg;
     printf("  保存数据到Flash...");
     return 0;
 }
 
 int led_blink(void *arg) {
+    (void)arg;
     printf("  LED 闪烁...");
     return 0;
 }

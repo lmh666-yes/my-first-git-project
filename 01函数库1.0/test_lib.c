@@ -4,16 +4,19 @@
 
 // ===== 测试函数（模拟传感器初始化） =====
 int test_sensor(void *arg) {
+    (void)arg;
     printf("  传感器初始化...");
     return 0;
 }
 
 int test_uart(void *arg) {
+    (void)arg;
     printf("  UART 配置...");
     return 0;
 }
 
 int test_led(void *arg) {
+    (void)arg;
     printf("  LED 闪烁...");
     return 0;
 }

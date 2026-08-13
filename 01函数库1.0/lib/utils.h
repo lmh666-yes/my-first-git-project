@@ -7,7 +7,6 @@
 #include <time.h>
 #include <math.h>
 #include <stdint.h>
-
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -928,6 +927,10 @@ char* run_cmd_capture(const char *cmd);
  */
 void hex_dump(const void *ptr, size_t len);
 
+
+
+// 自动生成的函数声明（由 gen_functions.py 生成）
+#include "utils_gen.h"
 #ifdef __cplusplus
 }
 #endif

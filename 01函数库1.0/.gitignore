@@ -1,0 +1,14 @@
+# 构建产物（编译/运行产生的文件一律不入库）
+*.o
+*.obj
+*.exe
+*.a
+*.lib
+*.dll
+
+# 测试/临时文件
+*.log
+test_input.txt
+
+# VS Code
+.vscode/

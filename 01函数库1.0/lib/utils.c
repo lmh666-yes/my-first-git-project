@@ -1464,3 +1464,6 @@ void hex_dump(const void *ptr, size_t len) {
         printf("|\n");
     }
 }
+
+// 自动生成的函数实现（由 gen_functions.py 生成）
+#include "utils_gen.c"
