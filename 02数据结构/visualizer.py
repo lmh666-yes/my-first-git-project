@@ -143,6 +143,11 @@ int main() {
 # ---------------------------------------------------------------
 # 绘制器：把快照画到 Canvas
 # ---------------------------------------------------------------
+def loc_tag(blk):
+    """块的位置标签：[栈] / [堆]"""
+    return "[栈]" if blk.get("loc") == "栈" else "[堆]"
+
+
 class Drawer:
     NODE_W = 132
     NODE_H0 = 26          # 标题行高
@@ -155,54 +160,69 @@ class Drawer:
     def clear(self):
         self.c.delete("all")
 
-    def draw(self, snap, msg=""):
+    def draw(self, snap, msg="", diff_text=None):
+        """布局：上方「调用栈/变量」，下方「内存/链表结构」（横向空间更大）"""
         self.clear()
         W = int(self.c.cget("width"))
         H = int(self.c.cget("height"))
         if W < 50 or H < 50:
             self.fit()
             return
-        # 标题
-        self.c.create_text(10, 10, anchor="nw", text=msg, fill="#333333",
+        # 标题（含变更摘要）
+        self.c.create_text(10, 8, anchor="nw", text=msg, fill="#333333",
                            font=("Microsoft YaHei", 11, "bold"))
+        ty = 30
+        if diff_text:
+            color = "#1a7f37" if "未修改" in diff_text else "#b35900"
+            self.c.create_text(10, ty, anchor="nw", text=diff_text, fill=color,
+                               font=("Microsoft YaHei", 9, "bold"))
+            ty += 18
         frames = snap.get("frames", [])
         heap = snap.get("heap", [])
         heap_by_addr = {b["addr"]: b for b in heap}
 
-        # ---- 左侧：调用栈 / 变量面板（高度自适应内容，靠滚动查看） ----
+        # ---- 上方：调用栈 / 变量面板（整行宽度，高度自适应，最多占 42%） ----
         vx = 10
-        vy = 40
-        vw = 210
-        # 先算出面板所需高度
-        need_h = vy + 26
+        vy = ty + 6
+        vw = W - 20
+        need_h = 26
         for fr in frames:
             need_h += 20 + len(fr["vars"]) * 17 + 6
-        ph = max(need_h + 8, 120)
+        ph = min(need_h + 10, int(H * 0.42))
+        ph = max(ph, 44)
         self.c.create_rectangle(vx, vy, vx + vw, vy + ph, outline="#bbbbbb",
                                 fill="#f4f6f8", width=1)
-        self.c.create_text(vx + 6, vy + 4, anchor="nw", text="调用栈 / 变量",
+        self.c.create_text(vx + 8, vy + 4, anchor="nw", text="调用栈 / 变量（栈上）",
                            fill="#555555", font=("Microsoft YaHei", 10, "bold"))
-        yy = vy + 26
+        yy = vy + 24
+        # 变量横向按两列排布（节省纵向空间）
+        half = vw // 2
         for fr in frames:
-            self.c.create_text(vx + 6, yy, anchor="nw", text="[ " + fr["func"] + " ]",
+            self.c.create_text(vx + 8, yy, anchor="nw", text="[ " + fr["func"] + " ]",
                                fill="#1a5276", font=("Microsoft YaHei", 10, "bold"))
-            yy += 20
+            yy += 19
             for name, v in fr["vars"]:
                 line = self.fmt_var(name, v)
                 self.c.create_text(vx + 16, yy, anchor="nw", text=line,
                                    fill="#333333", font=("Consolas", 9))
                 yy += 17
-            yy += 6
+            yy += 5
+        # 提示：堆/栈图在下方，可滚动查看
+        self.c.create_text(vx + 8, vy + ph - 16, anchor="nw",
+                           text="▼ 下方为内存/结构图（横排，空间更大）",
+                           fill="#888888", font=("Microsoft YaHei", 9))
 
-        # ---- 右侧：堆 / 链表结构 ----
-        hx0 = vx + vw + 30
-        # 先找链表链（head 或第一个指针）
+        # ---- 下方：堆 / 链表结构（整行宽度横向铺开） ----
+        hx0 = vx
+        htop = vy + ph + 14
+        self.c.create_text(hx0, htop - 14, anchor="nw",
+                           text="内存 / 结构（■堆 ■栈）",
+                           fill="#555555", font=("Microsoft YaHei", 9, "bold"))
         chain_heads = self.find_chains(frames, heap_by_addr)
         if chain_heads:
-            self.draw_chains(chain_heads, heap_by_addr, hx0, 40, H)
+            self.draw_chains(chain_heads, heap_by_addr, hx0, htop, H)
         else:
-            self.draw_heap_blocks(heap_by_addr, hx0, 40, H)
-        # 根据所有已绘制内容自动扩展滚动范围（内容超出窗口时可滚动查看）
+            self.draw_heap_blocks(heap_by_addr, hx0, htop, H)
         self.fit()
 
     def fit(self):
@@ -219,12 +239,14 @@ class Drawer:
     def fmt_var(self, name, v):
         t = v.get("type", "")
         val = v.get("value")
+        loc = v.get("loc", "栈")
+        locs = "[栈] " if loc == "栈" else "[堆] "
         if val[0] == "ptr":
-            s = f"{name} : {t} -> 0x{val[1]:x}"
+            s = f"{locs}{name} : {t} -> 0x{val[1]:x}"
         elif val[0] == "null":
-            s = f"{name} : {t} -> NULL"
+            s = f"{locs}{name} : {t} -> NULL"
         else:
-            s = f"{name} : {t} = {val[1]}"
+            s = f"{locs}{name} : {t} = {val[1]}"
         if "arr" in v:
             arr = v["arr"]
             s += "  [" + ", ".join(str(x[1]) if x[0] == "int" else "?" for x in arr) + "]"
@@ -290,13 +312,21 @@ class Drawer:
         return self.NODE_H0 + max(1, n) * self.FIELD_H + 8
 
     def draw_node(self, x, y, addr, blk, heap_by_addr):
-        """画一个堆块矩形，返回 (右边缘x, 各字段目标地址映射)"""
+        """画一个内存块矩形（按堆/栈区分颜色），返回 (右边缘x, 底部y)"""
         h = self.node_height(blk)
+        loc = blk.get("loc", "堆")
+        if loc == "栈":
+            outline, fill = "#2e7d32", "#e8f5e9"   # 绿 = 栈上结构体变量
+            loc_txt = "栈"
+        else:
+            outline, fill = "#b8860b", "#fff8dc"   # 黄 = 堆(malloc)
+            loc_txt = "堆"
         self.c.create_rectangle(x, y, x + self.NODE_W, y + h,
-                                outline="#b8860b", fill="#fff8dc", width=2)
+                                outline=outline, fill=fill, width=2)
         self.c.create_text(x + 6, y + 5, anchor="nw",
-                           text=f"{blk['typename']} @0x{addr:x}",
-                           fill="#8b4513", font=("Consolas", 9, "bold"))
+                           text=f"{blk['typename']} @0x{addr:x} [{loc_txt}]",
+                               fill="#5d4037" if loc == "栈" else "#8b4513",
+                               font=("Consolas", 9, "bold"))
         yy = y + self.NODE_H0
         for fn, disp, tgt in self.field_rows(blk):
             if tgt is not None:
@@ -518,15 +548,90 @@ class App:
             return
         snap = snaps.get(line)
         if snap is None:
-            # 该行不是语句行（如空行/注释），用最近的快照
+            # 该行不是语句行（如宏定义/注释/typedef 等），不修改内存
             snap = self.nearest_snap(snaps, line)
-        if snap:
-            self.drawer.draw(snap, f"执行到第 {line} 行（该行执行后）")
-            self.set_status(f"已执行到第 {line} 行，显示该行执行后的内存/结构状态", False)
-            self.lineinfo.config(text=f"第 {line} 行")
+            if snap:
+                self.drawer.draw(snap, f"点击第 {line} 行（无执行效果）",
+                                 "本行未修改内存（宏定义 / 注释 / typedef / 空行等）")
+                self.set_status(f"第 {line} 行未修改内存（宏/注释/声明等）", False)
+                self.lineinfo.config(text=f"第 {line} 行")
+            else:
+                self.draw_empty()
+                self.set_status("该行无可展示状态（代码为空或该行无执行效果）", False)
+            return
+        # 语句行：对比上一快照，判断本行是否修改了内存
+        prev = self.prev_snap(snaps, line)
+        diff = self.diff_snapshots(prev, snap) if prev is not None else []
+        if diff:
+            diff_text = "本行修改内存：" + "；".join(diff[:8])
+            if len(diff) > 8:
+                diff_text += f" 等{len(diff)}处"
         else:
-            self.draw_empty()
-            self.set_status("该行无可展示状态（代码为空或该行无执行效果）", False)
+            diff_text = "本行未修改内存（声明 / 判断 / 函数调用等）"
+        self.drawer.draw(snap, f"执行到第 {line} 行（该行执行后）", diff_text)
+        self.set_status(f"第 {line} 行：{diff_text}", False)
+        self.lineinfo.config(text=f"第 {line} 行")
+
+    def get_line_text(self, line):
+        try:
+            return self.code.get(f"{line}.0", f"{line}.end").strip()
+        except Exception:
+            return ""
+
+    def prev_snap(self, snaps, line):
+        """比 line 小的最大快照行（line 执行前的状态）"""
+        keys = sorted(snaps.keys())
+        best = None
+        for k in keys:
+            if k < line:
+                best = k
+            else:
+                break
+        return snaps.get(best) if best is not None else None
+
+    def fmt_diff_val(self, dv):
+        if dv[0] == "int":
+            return str(dv[1])
+        if dv[0] == "ptr":
+            return f"0x{dv[1]:x}"
+        if dv[0] == "arr":
+            return "[" + ", ".join(self.fmt_diff_val(x) for x in dv[1][:10]) + ("]" if len(dv[1]) <= 10 else "...]")
+        return "NULL"
+
+    def diff_snapshots(self, before, after):
+        """对比两个快照，返回本行对内存/变量的变更描述列表"""
+        if before is None or after is None:
+            return []
+        changes = []
+        b_h = {b["addr"]: b for b in before["heap"]}
+        a_h = {a["addr"]: a for a in after["heap"]}
+        for addr in a_h:
+            if addr not in b_h:
+                changes.append(f"分配{loc_tag(a_h[addr])} {a_h[addr]['typename']}@0x{addr:x}")
+        for addr in b_h:
+            if addr not in a_h:
+                changes.append(f"释放 0x{addr:x}")
+        for addr in b_h.keys() & a_h.keys():
+            bb, ab = b_h[addr], a_h[addr]
+            for fn in set(bb["fields"].keys()) | set(ab["fields"].keys()):
+                bv = bb["fields"].get(fn)
+                av = ab["fields"].get(fn)
+                if bv != av:
+                    changes.append(f"{ab['typename']}@0x{addr:x}.{fn}={self.fmt_diff_val(av)}")
+        # 变量变化
+        def var_map(snap):
+            m = {}
+            for fr in snap["frames"]:
+                for n, v in fr["vars"]:
+                    m[n] = v
+            return m
+        b_vars, a_vars = var_map(before), var_map(after)
+        for n in a_vars:
+            if n not in b_vars:
+                changes.append(f"声明变量 {n}")
+            elif a_vars[n]["value"] != b_vars[n]["value"]:
+                changes.append(f"{n}={self.fmt_diff_val(a_vars[n]['value'])}")
+        return changes
 
     def nearest_snap(self, snaps, line):
         if not snaps:

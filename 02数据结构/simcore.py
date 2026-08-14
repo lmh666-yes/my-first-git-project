@@ -865,14 +865,15 @@ class Frame:
 
 
 class HeapBlock:
-    __slots__ = ("addr", "typename", "fields", "size", "array_vals")
+    __slots__ = ("addr", "typename", "fields", "size", "array_vals", "is_stack")
 
-    def __init__(self, addr, typename, fields):
+    def __init__(self, addr, typename, fields, is_stack=False):
         self.addr = addr
         self.typename = typename
         self.fields = fields    # name -> Value
         self.size = max(1, len(fields)) * 4
         self.array_vals = None  # 若是 malloc 数组则用
+        self.is_stack = is_stack  # True=栈上的结构体变量；False=malloc 的堆内存
 
 
 class SimEngine:
@@ -904,8 +905,8 @@ class SimEngine:
         return None
 
     # ---- 内存 ----
-    def alloc(self, typename, count=1):
-        blk = HeapBlock(self.next_addr, typename, {})
+    def alloc(self, typename, count=1, is_stack=False):
+        blk = HeapBlock(self.next_addr, typename, {}, is_stack=is_stack)
         self.next_addr += 0x10
         if typename in self.structs:
             sd = self.structs[typename]
@@ -1465,8 +1466,8 @@ class SimEngine:
             frame.declare(st.name, vi)
             return None
         if st.vtype in self.structs:
-            # 结构体变量（栈上）：分配一块内存，变量指向它
-            blk = self.alloc(st.vtype, 1)
+            # 结构体变量（栈上）：分配一块“栈内存”，变量指向它
+            blk = self.alloc(st.vtype, 1, is_stack=True)
             vi = VarInfo(st.vtype, is_ptr=False, value=Value("addr", blk.addr))
             frame.declare(st.name, vi)
             return None
@@ -1503,14 +1504,17 @@ class SimEngine:
             for fn, v in blk.fields.items():
                 fields[fn] = self.describe_value(v)
             hb.append({"addr": addr, "typename": blk.typename, "fields": fields,
+                       "loc": "栈" if blk.is_stack else "堆",
                        "array": [self.describe_value(x) for x in blk.array_vals] if blk.array_vals else None})
         return {"frames": fr, "heap": hb}
 
     def describe_var(self, vi):
         if vi.is_array:
             return {"type": f"{vi.vtype}[{vi.arr_size}]", "value": "数组",
+                    "loc": "栈",
                     "arr": [self.describe_value(x) for x in (vi.value or [])]}
         return {"type": (vi.vtype if not vi.is_ptr else vi.vtype + "*"),
+                "loc": "栈",
                 "value": self.describe_value(vi.value)}
 
     def describe_value(self, v):

@@ -37,7 +37,7 @@ app = App(root)
 app._popup = False
 
 ok = fail = 0
-for path in targets:
+for idx, path in enumerate(targets, 1):
     try:
         with open(path, encoding="utf-8", errors="replace") as f:
             code = f.read()
@@ -52,13 +52,13 @@ for path in targets:
         name = os.path.basename(path)
         if hit > 0:
             ok += 1
-            print(f"  [OK]   {name}: {hit}/{len(lines)} 行可生成快照")
+            print(f"  [OK]   [{idx}/{len(targets)}] {name}: {hit}/{len(lines)} 行可生成快照")
         else:
             fail += 1
-            print(f"  [NO]   {name}: 无快照（空文件或无 main）")
+            print(f"  [NO]   [{idx}/{len(targets)}] {name}: 无快照（空文件或无 main）")
     except Exception as ex:
         fail += 1
-        print(f"  [FAIL] {os.path.basename(path)}: {ex}")
+        print(f"  [FAIL] [{idx}/{len(targets)}] {os.path.basename(path)}: {ex}")
 
 root.destroy()
 print()
