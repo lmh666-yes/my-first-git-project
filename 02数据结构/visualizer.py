@@ -181,22 +181,19 @@ class Drawer:
         heap = snap.get("heap", [])
         heap_by_addr = {b["addr"]: b for b in heap}
 
-        # ---- 上方：调用栈 / 变量面板（整行宽度，高度自适应，最多占 42%） ----
+        # ---- 上方：调用栈 / 变量面板（整行宽度，高度完全自适应，不截断） ----
         vx = 10
         vy = ty + 6
         vw = W - 20
         need_h = 26
         for fr in frames:
             need_h += 20 + len(fr["vars"]) * 17 + 6
-        ph = min(need_h + 10, int(H * 0.42))
-        ph = max(ph, 44)
+        ph = max(need_h + 10, 44)
         self.c.create_rectangle(vx, vy, vx + vw, vy + ph, outline="#bbbbbb",
                                 fill="#f4f6f8", width=1)
         self.c.create_text(vx + 8, vy + 4, anchor="nw", text="调用栈 / 变量（栈上）",
                            fill="#555555", font=("Microsoft YaHei", 10, "bold"))
         yy = vy + 24
-        # 变量横向按两列排布（节省纵向空间）
-        half = vw // 2
         for fr in frames:
             self.c.create_text(vx + 8, yy, anchor="nw", text="[ " + fr["func"] + " ]",
                                fill="#1a5276", font=("Microsoft YaHei", 10, "bold"))
@@ -207,14 +204,14 @@ class Drawer:
                                    fill="#333333", font=("Consolas", 9))
                 yy += 17
             yy += 5
-        # 提示：堆/栈图在下方，可滚动查看
-        self.c.create_text(vx + 8, vy + ph - 16, anchor="nw",
-                           text="▼ 下方为内存/结构图（横排，空间更大）",
+        # 提示：堆/栈图在下方（紧跟内容，避免与堆块重叠）
+        self.c.create_text(vx + 8, yy + 2, anchor="nw",
+                           text="▼ 下方为内存/结构图（可上下滚动查看）",
                            fill="#888888", font=("Microsoft YaHei", 9))
 
-        # ---- 下方：堆 / 链表结构（整行宽度横向铺开） ----
+        # ---- 下方：堆 / 链表结构（整行宽度横向铺开，起点基于变量区矩形底部，任意帧数都不重叠） ----
         hx0 = vx
-        htop = vy + ph + 14
+        htop = vy + ph + 16
         self.c.create_text(hx0, htop - 14, anchor="nw",
                            text="内存 / 结构（■堆 ■栈）",
                            fill="#555555", font=("Microsoft YaHei", 9, "bold"))
@@ -453,7 +450,11 @@ class App:
         main.add(left, minsize=430, width=560)
         main.add(right, minsize=380, width=580)
 
-        # 行号 + 代码
+        # 行号 + 代码（先 pack 滚动条，避免被 expand 的代码区挤成 1px）
+        self.scrolly = tk.Scrollbar(left, command=self.sync_scroll, width=18,
+                                    bg="#569cd6", troughcolor="#1e1e1e",
+                                    activebackground="#4a90c2")
+        self.scrolly.pack(side=tk.RIGHT, fill=tk.Y)
         self.line_canvas = tk.Canvas(left, width=40, bg="#1e1e1e",
                                      highlightthickness=0)
         self.line_canvas.pack(side=tk.LEFT, fill=tk.Y)
@@ -461,9 +462,7 @@ class App:
                             insertbackground="#d4d4d4", font=("Consolas", 12),
                             relief=tk.FLAT, padx=6, pady=4, undo=True)
         self.code.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrolly = tk.Scrollbar(left, command=self.sync_scroll, width=18, bg="#3a3a3a")
-        scrolly.pack(side=tk.RIGHT, fill=tk.Y)
-        self.code.config(yscrollcommand=lambda *a: (self._upd_lines(), scrolly.set(*a)))
+        self.code.config(yscrollcommand=lambda *a: (self._upd_lines(), self.scrolly.set(*a)))
         # 鼠标滚轮滚动代码区（快速上下查看）
         def _wheel(ev):
             self.code.yview_scroll(int(-ev.delta / 120), "units")
@@ -513,21 +512,21 @@ class App:
         self._upd_lines()
 
     def _upd_lines(self):
+        """按代码 Text 每行的实际像素位置绘制行号，保证严格对齐"""
         self.line_canvas.delete("all")
-        first = self.code.index("@0,0")
         try:
-            line = int(float(first))
+            first = int(float(self.code.index("@0,0")))
+            h = self.code.winfo_height()
+            last = int(float(self.code.index(f"@0,{h + 1}"))) + 1
         except Exception:
-            line = 1
-        # 显示可视区行号
-        height = int(self.line_canvas.cget("height"))
-        ln = line
-        y = 4
-        while y < height:
-            self.line_canvas.create_text(20, y, anchor="nw", text=str(ln),
-                                         fill="#858585", font=("Consolas", 11))
-            y += 19
-            ln += 1
+            first, last = 1, 30
+        for ln in range(max(1, first), max(1, last) + 1):
+            d = self.code.dlineinfo(f"{ln}.0")
+            if d:
+                _x, y, _w, lh, _bl = d
+                self.line_canvas.create_text(20, y + lh // 2, anchor="e",
+                                             text=str(ln), fill="#858585",
+                                             font=("Consolas", 11))
 
     def get_code(self):
         return self.code.get("1.0", "end-1c")
