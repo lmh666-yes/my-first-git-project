@@ -938,8 +938,12 @@ class Parser:
         return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims)
 
     def parse_decl_same(self, proto, semi=True):
-        """多变量声明：int a, b; 中 b 复用 a 的类型"""
+        """多变量声明：int a, b; 中 b 复用 a 的类型；支持 int *a, *b;"""
         line = self.peek().line
+        is_ptr = proto.is_ptr
+        if self.at("*"):
+            self.next()
+            is_ptr = True
         nt = self.next()
         if nt.kind != "id":
             raise SimError(nt.line, f"变量名错误 '{nt.text}'")
@@ -961,7 +965,7 @@ class Parser:
                 init = self.parse_expr()
         if semi:
             self.expect(";")
-        return DeclStmt(line, proto.vtype, name, init, proto.is_ptr, is_array, arr_size)
+        return DeclStmt(line, proto.vtype, name, init, is_ptr, is_array, arr_size)
 
     def _num_val(self, tk):
         t = tk.text
