@@ -764,6 +764,21 @@ static int match_score(const char *kw, const char *n, const char *d, const char 
     return 0;
 }
 
+/* 截断 GBK 文本到指定字节数（避免截断半个汉字），超出加 "..." */
+static void trunc_gbk(char *out, size_t outsz, const char *text, int maxbytes) {
+    size_t l = strlen(text);
+    if (l <= (size_t)maxbytes) {
+        snprintf(out, outsz, "%s", text);
+        return;
+    }
+    size_t n = (size_t)maxbytes;
+    if (n > 0 && n < l && (unsigned char)text[n-1] >= 0x81 && (unsigned char)text[n-1] <= 0xFE)
+        n--;
+    memcpy(out, text, n);
+    out[n] = '\0';
+    snprintf(out + n, outsz - n, "...");
+}
+
 static int cmp_score(const void *a, const void *b) {
     const MatchItem *x = (const MatchItem*)a;
     const MatchItem *y = (const MatchItem*)b;
@@ -878,7 +893,9 @@ static void refresh_list(void) {
         item.lParam = g_order[k].idx;
         int row = (int)ListView_InsertItem(g_hList, &item);
         ListView_SetItemText(g_hList, row, 1, (LPSTR)f->section);
-        ListView_SetItemText(g_hList, row, 2, (LPSTR)f->desc);
+        char dshort[64];
+        trunc_gbk(dshort, sizeof(dshort), f->desc, 18);   /* 功能列精简 */
+        ListView_SetItemText(g_hList, row, 2, dshort);
     }
 
     char cnt[192];
@@ -904,6 +921,8 @@ static void show_detail(int func_index) {
     Loc impl = find_impl(f->name);
     char *src = (impl.line > 0) ? extract_function_source(&impl) : NULL;
     char *doc = extract_doc_block(&decl);   /* 详细说明（@param/@return） */
+    char fshort[96];
+    trunc_gbk(fshort, sizeof(fshort), f->desc, 44);   /* 功能描述精简 */
 
     size_t need = 1024 + strlen(f->name) + strlen(f->section) + strlen(f->desc)
                 + strlen(f->example) + (src ? strlen(src) : 128) + (doc ? strlen(doc) : 64);
@@ -919,7 +938,7 @@ static void show_detail(int func_index) {
         "（单击查看详情 · 双击或点[打开实现]跳转 VS Code）\r\n"
         "\r\n---------- 实现源码 ----------\r\n%s"
         "\r\n---------- 详细说明 ----------\r\n%s",
-        f->name, f->section, f->desc, f->example,
+        f->name, f->section, fshort, f->example,
         decl.line > 0 ? g_docs[decl.doc].display : "-",
         decl.line,
         impl.line > 0 ? g_docs[impl.doc].display : "-",
@@ -1011,9 +1030,9 @@ static void create_controls(HWND hwnd) {
     LVCOLUMNA col;
     memset(&col, 0, sizeof(col));
     col.mask = LVCF_TEXT | LVCF_WIDTH;
-    col.pszText = "函数名"; col.cx = 240; ListView_InsertColumn(g_hList, 0, &col);
-    col.pszText = "分类";   col.cx = 150; ListView_InsertColumn(g_hList, 1, &col);
-    col.pszText = "功能";   col.cx = 380; ListView_InsertColumn(g_hList, 2, &col);
+    col.pszText = "函数名"; col.cx = 200; ListView_InsertColumn(g_hList, 0, &col);
+    col.pszText = "分类";   col.cx = 130; ListView_InsertColumn(g_hList, 1, &col);
+    col.pszText = "功能";   col.cx = 210; ListView_InsertColumn(g_hList, 2, &col);
 
     /* 详情（RichEdit，支持语法高亮，暗色背景） */
     g_hDetail = CreateWindowA("RichEdit20A", "",
@@ -1052,12 +1071,12 @@ static void create_controls(HWND hwnd) {
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE:
-        g_hFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
+        g_hFont = CreateFontA(-17, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH, "Microsoft YaHei");
-        g_hCodeFont = CreateFontA(-15, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
+        g_hCodeFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
-            FIXED_PITCH, "Consolas");
+            FIXED_PITCH, "Courier New");
         create_controls(hwnd);
         return 0;
 
@@ -1065,7 +1084,7 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         int w = LOWORD(lParam), h = HIWORD(lParam);
         int topY = 64;
         int statusH = 24;
-        int detailW = 450;
+        int detailW = 570;
         int listW = w - detailW - 25;
         if (listW < 320) listW = 320;
         MoveWindow(g_hList, 10, topY, listW, h - topY - statusH - 10, TRUE);
