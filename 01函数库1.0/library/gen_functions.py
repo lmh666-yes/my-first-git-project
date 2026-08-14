@@ -2442,6 +2442,15 @@ if '#include "utils_gen.c"' not in c:
     print('[OK] utils.c 已加入 #include "utils_gen.c"')
 
 # ---------- 重建 func_index.h ----------
+# 常用宏的功能描述（用于函数索引表，保证功能介绍准确）
+MACRO_DESC = {
+    'UTILS_MIN': '取两个数中较小值',
+    'UTILS_MAX': '取两个数中较大值',
+    'UTILS_ABS': '求绝对值',
+    'UTILS_ARRAY_SIZE': '求数组元素个数',
+    'UTILS_BIT': '生成位掩码（第 n 位为 1）',
+}
+
 def build_index():
     lines = h_text.split('\n')
     entries = []
@@ -2483,11 +2492,14 @@ def build_index():
             inner = s.lstrip('/').strip()
             if inner:
                 pending = inner
-        # 宏
+        # 宏（函数式宏，如 #define UTILS_MIN(a, b) ...）
         if s.startswith('#define'):
-            m = re.match(r'#define\s+([A-Za-z_]\w*)\s*\(', s)
+            m = re.match(r'#define\s+([A-Za-z_]\w*)\s*(\([^)]*\))', s)
             if m:
-                entries.append((m.group(1), '常用宏', '宏定义', m.group(1) + '(...)'))
+                name = m.group(1)
+                desc = MACRO_DESC.get(name, '宏定义')
+                example = name + m.group(2)
+                entries.append((name, '常用宏', desc, example))
                 pending = ''
         # 函数声明
         if s.endswith(';') and '(' in s and ')' in s and not s.startswith('typedef') and not s.startswith('#'):
