@@ -873,25 +873,59 @@ class Parser:
         vtype, ptr = self.parse_type()
         is_array = False
         arr_size = None
-        # 支持 int a[5];
+        # 支持 int a[5]; 与 int (*q)[5]; / int (*p)(int);
         nt = self.next()
-        if nt.kind != "id":
-            raise SimError(nt.line, f"变量名错误 '{nt.text}'")
-        name = nt.text
-        if self.at("["):
-            total = 1
+        if nt.text == "(":
+            # 指针声明：int (*q)[5]（数组指针） / int (*p)(int)（函数指针）
+            self.expect("*")
+            name_t = self.next()
+            if name_t.kind != "id":
+                raise SimError(name_t.line, f"变量名错误 '{name_t.text}'")
+            name = name_t.text
+            self.expect(")")
+            if self.at("["):
+                while self.at("["):
+                    self.next()
+                    sz = self.next()
+                    if sz.kind == "num":
+                        pass
+                    self.expect("]")
+            elif self.at("("):
+                d2 = 0
+                while True:
+                    tk = self.next()
+                    if tk is None:
+                        break
+                    if tk.text == "(":
+                        d2 += 1
+                    elif tk.text == ")":
+                        d2 -= 1
+                        if d2 == 0:
+                            break
+            ptr += 1
+            is_array = False
+            arr_size = None
             dims = []
-            while self.at("["):
-                self.next()
-                sz = self.next()
-                d = (int(sz.text) if sz.kind == "num" else 10)
-                total *= d
-                dims.append(d)
-                self.expect("]")
-            arr_size = total
-            is_array = True
         else:
-            dims = []
+            if nt.kind != "id":
+                raise SimError(nt.line, f"变量名错误 '{nt.text}'")
+            name = nt.text
+            if self.at("["):
+                total = 1
+                dims = []
+                while self.at("["):
+                    self.next()
+                    sz = self.next()
+                    d = (int(sz.text) if sz.kind == "num" else 10)
+                    total *= d
+                    dims.append(d)
+                    self.expect("]")
+                arr_size = total
+                is_array = True
+            else:
+                dims = []
+                is_array = False
+                arr_size = None
         init = None
         if self.at("="):
             self.next()
@@ -1158,11 +1192,19 @@ class Parser:
                             self.next()
                         self.expect(")")
                         return ("sizeofelem", st.text)
-                    while self.at("*"):
+                    if self.at(")"):
                         self.next()
+                        return ("sizeof", st.text)
+                    # sizeof(p+1) 等含表达式
+                    self.pos -= 1
+                    self.parse_expr()
                     self.expect(")")
-                    return ("sizeof", st.text)
-                raise SimError(t.line, "sizeof 参数错误")
+                    return ("sizeoflit", 4)
+                # sizeof(*p) / sizeof(表达式)
+                self.pos -= 1
+                self.parse_expr()
+                self.expect(")")
+                return ("sizeoflit", 4)
             return ("var", t.text)
         raise SimError(t.line, f"无法识别的表达式 '{t.text}'")
 
@@ -1256,6 +1298,11 @@ class SimEngine:
         self.stop_line = None   # 执行到该行后停止（GUI 点击）
         self.snap_enabled = True
         self.warnings = []      # 宽容模式提示（未定义函数等）
+        # 逐步回放：每条语句执行后的 (行号, 快照) 序列
+        self.step_snapshots = []
+        # 模拟输入（scanf 用）
+        self.inputs = []
+        self.input_pos = 0
         # 字符串字面量表（只读字符数组）
         self._str_addr = {}
         self.str_table = {}     # addr -> 字符串
@@ -1447,6 +1494,8 @@ class SimEngine:
             return Value("int", 4)
         if k == "sizeofelem":
             return Value("int", 4)   # sizeof(a[i]) 元素大小
+        if k == "sizeoflit":
+            return Value("int", 4)   # sizeof(表达式) 一律按 int 4B
         if k == "bin":
             op = e[1]
             if op == "&&":
@@ -1611,10 +1660,12 @@ class SimEngine:
             return Value("int", self.to_int(l) + self.to_int(r))
         if op == "-":
             if l.kind == "addr" or r.kind == "addr":
+                if l.kind == "addr" and r.kind in ("addr", "null"):
+                    return Value("int", (l.val - self.to_int(r)) // 4)   # 指针差：元素个数
                 if l.kind == "addr" and r.kind == "int":
                     return Value("addr", l.val - self.to_int(r) * 4)
-                if l.kind == "addr" and r.kind == "addr":
-                    return Value("int", (l.val - r.val) // 4)   # 指针差：元素个数
+                if l.kind in ("int", "null") and r.kind == "addr":
+                    return Value("addr", self.to_int(l) - r.val)
                 return Value("addr", self.to_int(l) - self.to_int(r))
             return Value("int", self.to_int(l) - self.to_int(r))
         if op == "&":
@@ -1675,6 +1726,15 @@ class SimEngine:
         if e[0] == "var":
             name = e[1]
             vi = self.lookup(name)
+            # 数组名 &arr：返回数组基址
+            if vi.is_array and vi.value is not None:
+                key = (self.frames[-1], name)
+                if key not in self.arr_base:
+                    a = self.next_arr_addr
+                    self.next_arr_addr += 0x10
+                    self.arr_base[key] = a
+                    self.arr_base_inv[a] = key
+                return Value("addr", self.arr_base[key])
             # 结构体变量：返回其堆块地址（可作指针传入函数）
             if vi.vtype in self.structs and not vi.is_ptr and not vi.is_array:
                 if vi.value.kind == "addr":
@@ -1973,8 +2033,47 @@ class SimEngine:
             a = self.to_int(self.eval_expr(args[0]))
             b = self.to_int(self.eval_expr(args[1]))
             return Value("int", max(a, b) if name == "MAX" else min(a, b))
+        if name == "realloc" and args:
+            # realloc：演示简化，返回原指针（数组仍可用）
+            return self.eval_expr(args[0])
         if name in self.funcs:
             return self.call_user(name, args)
+        # scanf：从模拟输入队列取值赋给变量（scanf("%d", &a) / &a, &b）
+        if name == "scanf" and len(args) >= 1:
+            for t in args[1:]:
+                if not isinstance(t, tuple) or not t:
+                    continue
+                val = 0
+                if self.input_pos < len(self.inputs):
+                    val = self.inputs[self.input_pos]
+                    self.input_pos += 1
+                tv = None
+                if t[0] == "unary" and len(t) >= 3 and t[1] == "&":
+                    inner = t[2]
+                    if isinstance(inner, tuple) and inner and inner[0] == "var":
+                        tv = inner[1]
+                elif t[0] == "var":
+                    tv = t[1]
+                elif t[0] == "index":
+                    # scanf("%d", &arr[i]) / arr[i]
+                    try:
+                        arr = self.eval_expr(t[1])
+                        idx = self.to_int(self.eval_expr(t[2]))
+                        if isinstance(arr, list) and 0 <= idx < len(arr):
+                            arr[idx] = Value("int", val)
+                        continue
+                    except Exception:
+                        pass
+                if tv is not None:
+                    try:
+                        vi = self.lookup(tv)
+                        if vi.is_array and isinstance(vi.value, list):
+                            pass   # 数组名作目标（如 scanf("%s", str)）保持数组
+                        else:
+                            vi.value = Value("int", val)
+                    except Exception:
+                        pass
+            return Value("int", 0)
         # 函数指针变量调用（如回调参数 op(x)）
         try:
             vi = self.lookup(name)
@@ -2011,6 +2110,12 @@ class SimEngine:
                         return 1
         if e[0] == "lit":
             return e[1]
+        if e[0] == "var":
+            # malloc(n) 变量
+            try:
+                return max(1, self.to_int(self.eval_expr(e)))
+            except Exception:
+                return 1
         return 1
 
     def sizeof_type(self, e):
@@ -2095,7 +2200,10 @@ class SimEngine:
                     raise SimError(st.line, "执行步数超限（疑似死循环）")
                 r = self.exec_stmt(st)
                 if self.snap_enabled:
-                    self.record_snap(st.line)
+                    snap = self.snapshot()
+                    self.snapshots[st.line] = snap
+                    if len(self.step_snapshots) < 20000:
+                        self.step_snapshots.append((st.line, snap))
                 if self.stop_line is not None and st.line == self.stop_line:
                     raise StopExec()
                 if r is not None:
@@ -2352,6 +2460,7 @@ class Simulator:
         self.structs = self.parser.structs
         self.engine = None
         self.snapshots = {}   # line -> snapshot
+        self.pending_inputs = []   # GUI 模拟输入（scanf 用）
 
     def main_name(self):
         if "main" in self.funcs:
@@ -2404,6 +2513,7 @@ class Simulator:
     def _make_engine(self, stop_line=None):
         eng = SimEngine(self.structs, self.funcs)
         eng.stop_line = stop_line
+        eng.inputs = list(self.pending_inputs)
         self.engine = eng
         m = self.main_name()
         if m is None:

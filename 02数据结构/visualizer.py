@@ -415,6 +415,11 @@ class App:
         self.code_lines = []
         self.sim = None
         self._popup = True   # 错误弹窗开关（测试时可关闭）
+        # 逐步回放（pythontutor 式）
+        self.step_list = []      # [(line, snapshot), ...]
+        self.step_idx = -1
+        self._pending_inputs = []     # scanf 模拟输入
+        self._input_requested = False
 
         # ---- 顶部工具栏 ----
         bar = tk.Frame(root, bg="#2c3e50")
@@ -424,6 +429,8 @@ class App:
                                       font=("Microsoft YaHei", 10))
         btn("打开文件", self.open_file).pack(side=tk.LEFT, padx=4, pady=4)
         btn("粘贴代码", self.paste_code).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("上一步", self.step_prev).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("下一步", self.step_next).pack(side=tk.LEFT, padx=4, pady=4)
         btn("运行全部", self.run_all).pack(side=tk.LEFT, padx=4, pady=4)
         btn("重置", self.reset).pack(side=tk.LEFT, padx=4, pady=4)
         tk.Label(bar, text="示例:", bg="#2c3e50", fg="white",
@@ -433,7 +440,7 @@ class App:
                           width=18, values=list(EXAMPLES.keys()))
         ex.pack(side=tk.LEFT, padx=2)
         ex.bind("<<ComboboxSelected>>", self.load_example)
-        tk.Label(bar, text="提示：点击左侧代码的任意一行，右侧显示该行执行后的内存/结构图",
+        tk.Label(bar, text="提示：点击左侧代码行 / 用“上一步、下一步”逐步运行 / “运行全部”看最终状态",
                  bg="#2c3e50", fg="#ecf0f1",
                  font=("Microsoft YaHei", 9)).pack(side=tk.RIGHT, padx=10)
 
@@ -454,9 +461,19 @@ class App:
                             insertbackground="#d4d4d4", font=("Consolas", 12),
                             relief=tk.FLAT, padx=6, pady=4, undo=True)
         self.code.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrolly = tk.Scrollbar(left, command=self.sync_scroll)
+        scrolly = tk.Scrollbar(left, command=self.sync_scroll, width=18, bg="#3a3a3a")
         scrolly.pack(side=tk.RIGHT, fill=tk.Y)
         self.code.config(yscrollcommand=lambda *a: (self._upd_lines(), scrolly.set(*a)))
+        # 鼠标滚轮滚动代码区（快速上下查看）
+        def _wheel(ev):
+            self.code.yview_scroll(int(-ev.delta / 120), "units")
+            self._upd_lines()
+        self.code.bind("<MouseWheel>", _wheel)
+        self.code.bind("<Button-4>", lambda ev: self.code.yview_scroll(-1, "units"))
+        self.code.bind("<Button-5>", lambda ev: self.code.yview_scroll(1, "units"))
+        self.line_canvas.bind("<MouseWheel>", _wheel)
+        self.line_canvas.bind("<Button-4>", lambda ev: self.code.yview_scroll(-1, "units"))
+        self.line_canvas.bind("<Button-5>", lambda ev: self.code.yview_scroll(1, "units"))
         self.code.tag_configure("hl", background="#264f78", foreground="#ffffff")
         self.code.tag_configure("kw", foreground="#569cd6")
         self.code.tag_configure("cm", foreground="#6a9955")
@@ -647,40 +664,150 @@ class App:
             best = keys[0]
         return snaps.get(best)
 
-    def run_all(self):
+    def _request_inputs(self):
+        """程序含 scanf 时弹出输入框（模拟输入）"""
+        import re
+        code = self.get_code()
+        if not re.search(r"\bscanf\b", code):
+            return
+        if not self._popup:
+            return
+        win = tk.Toplevel(self.root)
+        win.title("模拟输入 (scanf)")
+        win.geometry("440x160")
+        win.transient(self.root)
+        win.grab_set()
+        tk.Label(win, text="程序含 scanf 输入。请输入值（多个值用空格分隔）：",
+                 font=("Microsoft YaHei", 10)).pack(pady=(14, 6))
+        entry = tk.Entry(win, font=("Consolas", 12), width=44)
+        entry.pack(pady=4)
+        entry.focus_set()
+
+        def ok():
+            vals = []
+            for x in entry.get().replace(",", " ").split():
+                try:
+                    vals.append(int(x, 0))
+                except Exception:
+                    try:
+                        vals.append(int(float(x)))
+                    except Exception:
+                        pass
+            self._pending_inputs = vals
+            win.destroy()
+
+        tk.Button(win, text="确定", command=ok, width=12,
+                  font=("Microsoft YaHei", 10)).pack(pady=8)
+        entry.bind("<Return>", lambda e: ok())
+
+    def _exec_code(self):
+        """执行当前代码；返回 (snaps, err, steps)。含 scanf 时请求输入。"""
         code = self.get_code()
         if not code.strip():
-            return
+            return {}, None, []
+        if not self._input_requested:
+            self._request_inputs()
+            self._input_requested = True
         try:
             sim = Simulator(code)
+            sim.pending_inputs = list(self._pending_inputs)
             snaps = sim.run()
-            self.snapshots = snaps
             err = sim.engine.error if sim.engine else None
+            steps = list(sim.engine.step_snapshots) if sim.engine else []
+            self.sim = sim
+            return snaps, err, steps
         except SimError as ex:
-            self.set_status(f"语法错误：{ex}", True)
-            self.highlight_error(ex.line)
+            return {}, ex, []
+
+    def _show_step(self, idx):
+        line, snap = self.step_list[idx]
+        self.current_line = line
+        self.code.tag_remove("hl", "1.0", "end")
+        self.code.tag_remove("er", "1.0", "end")
+        self.code.tag_add("hl", f"{line}.0", f"{line}.end")
+        self.code.see(f"{line}.0")
+        if idx > 0:
+            diff = self.diff_snapshots(self.step_list[idx - 1][1], snap)
+        else:
+            diff = []
+        if diff:
+            diff_text = "本步修改内存：" + "；".join(diff[:8])
+            if len(diff) > 8:
+                diff_text += f" 等{len(diff)}处"
+        else:
+            diff_text = "本步未修改内存（声明 / 判断 / 函数调用等）"
+        self.drawer.draw(snap, f"第 {idx + 1} / {len(self.step_list)} 步 · 第 {line} 行执行后", diff_text)
+        self.set_status(f"第 {idx + 1}/{len(self.step_list)} 步：{diff_text}", False)
+        self.lineinfo.config(text=f"第 {line} 行")
+
+    def build_step_list(self):
+        """预先执行并记录每一步（供逐步回放）"""
+        snaps, err, steps = self._exec_code()
+        self.snapshots = snaps
+        self.step_list = steps
+        self.step_idx = -1
+        if err and not steps:
+            self.set_status(f"运行错误：{err.msg}", True)
+            self.highlight_error(err.line)
+            self.draw_empty()
+            return False
+        return True
+
+    def step_next(self):
+        """下一步：像 pythontutor 一样逐步运行（会进入函数内部）"""
+        if not self.step_list:
+            if not self.build_step_list():
+                return
+        if not self.step_list:
+            self.set_status("程序无执行步骤（可能没有 main / 函数）", True)
             return
+        if self.step_idx >= len(self.step_list) - 1:
+            self.set_status("已到最后一步；点“重置”可重新开始", False)
+            return
+        self.step_idx += 1
+        self._show_step(self.step_idx)
+
+    def step_prev(self):
+        if not self.step_list:
+            self.set_status("请先点“下一步”或“运行全部”", False)
+            return
+        if self.step_idx <= 0:
+            self.set_status("已在第一步", False)
+            return
+        self.step_idx -= 1
+        self._show_step(self.step_idx)
+
+    def run_all(self):
+        snaps, err, steps = self._exec_code()
         if err:
             self.set_status(f"运行错误：{err.msg}", True)
             self.highlight_error(err.line)
             self.draw_empty()
             return
+        self.snapshots = snaps
+        self.step_list = steps
         if not snaps:
             self.set_status("未发现可执行函数（需要 int main() 或函数定义）", True)
             return
+        self.step_idx = len(steps) - 1 if steps else -1
         last = max(snaps.keys())
         self.drawer.draw(snaps[last], "运行结束（最终状态）")
         self.code.tag_remove("hl", "1.0", "end")
         self.code.tag_add("hl", f"{last}.0", f"{last}.end")
-        self.set_status(f"运行完成，共 {len(snaps)} 个执行快照；点击任意代码行查看中间状态", False)
+        self.code.see(f"{last}.0")
+        self.set_status(f"运行完成，共 {len(snaps)} 个状态；可用“上一步/下一步”逐步回放（共 {len(steps)} 步）", False)
 
     def reset(self):
         self.current_line = None
         self.code.tag_remove("hl", "1.0", "end")
         self.code.tag_remove("er", "1.0", "end")
         self.snapshots = {}
+        self.step_list = []
+        self.step_idx = -1
+        self._input_requested = False
+        self._pending_inputs = []
         self.draw_empty()
-        self.set_status("已重置。点击代码行查看对应状态，或点击“运行全部”", False)
+        self.set_status("已重置。点击代码行 / “下一步”逐步运行 / “运行全部”查看最终状态", False)
 
     def draw_empty(self):
         self.canvas.delete("all")
@@ -740,6 +867,11 @@ class App:
         self.code.delete("1.0", "end")
         self.code.insert("1.0", text)
         self.code.edit_reset()
+        self.snapshots = {}
+        self.step_list = []
+        self.step_idx = -1
+        self._input_requested = False
+        self._pending_inputs = []
         self.current_line = None
         self.snapshots = {}
         self.code.tag_remove("hl", "1.0", "end")
