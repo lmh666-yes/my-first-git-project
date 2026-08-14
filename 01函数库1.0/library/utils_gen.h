@@ -3277,4 +3277,47 @@ int is_ugly(int n);
 /** 统计 [2, n] 范围内素数个数（埃氏筛） */
 int count_primes(int n);
 
+// ============================================================
+//                     链表进阶与循环链表（手动扩展）
+// ============================================================
+
+/** 返回链表中间节点（快慢指针；偶数个时返回靠后的那个） */
+ListNode* list_get_middle(ListNode *head);
+
+/** 返回倒数第 k 个节点（双指针），k 超出范围返回 NULL */
+ListNode* list_find_kth_from_end(ListNode *head, int k);
+
+/** 有序链表去重（相邻重复只保留一个），返回删除的节点数 */
+int list_remove_duplicates(ListNode **head);
+
+/** 判断链表是否为回文（会临时反转后半部分，改变原链表结构） */
+int list_is_palindrome(ListNode *head);
+
+/** 在指定位置 pos 插入节点（0 起），成功返回 0，越界返回 -1 */
+int list_insert_at(ListNode **head, int pos, int data);
+
+/** 删除指定位置 pos 的节点（0 起），成功返回 0，越界返回 -1 */
+int list_delete_at(ListNode **head, int pos);
+
+/** 创建循环链表（单节点时指向自身） */
+ListNode* clist_create(int data);
+
+/** 循环链表头部插入 */
+int clist_insert_head(ListNode **head, int data);
+
+/** 循环链表尾部追加 */
+int clist_append(ListNode **head, int data);
+
+/** 循环链表删除第一个等于 data 的节点，找到返回 0，未找到返回 -1 */
+int clist_remove_value(ListNode **head, int data);
+
+/** 循环链表长度 */
+int clist_length(ListNode *head);
+
+/** 打印循环链表（尾节点会回到头） */
+void clist_print(ListNode *head);
+
+/** 释放循环链表所有节点并置 head 为 NULL */
+void clist_free(ListNode **head);
+
 #endif /* UTILS_GEN_H */

@@ -6593,3 +6593,200 @@ int count_primes(int n) {
     return cnt;
 }
 
+/* ---------- 链表进阶（快慢指针等） ---------- */
+
+ListNode* list_get_middle(ListNode *head) {
+    if (!head) return NULL;
+    ListNode *slow = head, *fast = head;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+    return slow;
+}
+
+ListNode* list_find_kth_from_end(ListNode *head, int k) {
+    if (!head || k <= 0) return NULL;
+    ListNode *fast = head, *slow = head;
+    /* fast 先走 k 步 */
+    for (int i = 0; i < k; i++) {
+        if (!fast) return NULL;   /* 链表长度不足 k */
+        fast = fast->next;
+    }
+    /* 再一起走，fast 到末尾时 slow 即倒数第 k 个 */
+    while (fast) {
+        slow = slow->next;
+        fast = fast->next;
+    }
+    return slow;
+}
+
+int list_remove_duplicates(ListNode **head) {
+    if (!head || !*head) return 0;
+    int removed = 0;
+    ListNode *cur = *head;
+    while (cur && cur->next) {
+        if (cur->data == cur->next->data) {   /* 相邻重复，删掉后一个 */
+            ListNode *tmp = cur->next;
+            cur->next = tmp->next;
+            free(tmp);
+            removed++;
+        } else {
+            cur = cur->next;
+        }
+    }
+    return removed;
+}
+
+int list_is_palindrome(ListNode *head) {
+    if (!head || !head->next) return 1;
+    /* 快慢指针找中间 */
+    ListNode *slow = head, *fast = head;
+    while (fast && fast->next) {
+        slow = slow->next;
+        fast = fast->next->next;
+    }
+    /* 反转后半部分 */
+    ListNode *prev = NULL, *cur = slow;
+    while (cur) {
+        ListNode *nxt = cur->next;
+        cur->next = prev;
+        prev = cur;
+        cur = nxt;
+    }
+    /* 前半与反转后的后半逐项比较 */
+    ListNode *a = head, *b = prev;
+    while (b) {
+        if (a->data != b->data) return 0;
+        a = a->next;
+        b = b->next;
+    }
+    return 1;
+}
+
+int list_insert_at(ListNode **head, int pos, int data) {
+    if (!head || pos < 0) return -1;
+    if (pos == 0) { list_insert_head(head, data); return 0; }
+    ListNode *p = *head;
+    for (int i = 0; i < pos - 1 && p; i++) p = p->next;
+    if (!p) return -1;                         /* 位置越界 */
+    ListNode *node = list_create(data);
+    if (!node) return -1;
+    node->next = p->next;
+    p->next = node;
+    return 0;
+}
+
+int list_delete_at(ListNode **head, int pos) {
+    if (!head || !*head || pos < 0) return -1;
+    if (pos == 0) {
+        ListNode *tmp = *head;
+        *head = (*head)->next;
+        free(tmp);
+        return 0;
+    }
+    ListNode *p = *head;
+    for (int i = 0; i < pos - 1 && p->next; i++) p = p->next;
+    if (!p->next) return -1;
+    ListNode *tmp = p->next;
+    p->next = tmp->next;
+    free(tmp);
+    return 0;
+}
+
+/* ---------- 循环链表（尾节点指向头节点） ---------- */
+
+ListNode* clist_create(int data) {
+    ListNode *node = list_create(data);
+    if (node) node->next = node;   /* 单节点自成环 */
+    return node;
+}
+
+int clist_insert_head(ListNode **head, int data) {
+    if (!head) return -1;
+    ListNode *node = list_create(data);
+    if (!node) return -1;
+    if (!*head) { node->next = node; *head = node; return 0; }
+    ListNode *tail = *head;
+    while (tail->next != *head) tail = tail->next;   /* 找尾节点 */
+    node->next = *head;
+    tail->next = node;
+    *head = node;
+    return 0;
+}
+
+int clist_append(ListNode **head, int data) {
+    if (!head) return -1;
+    ListNode *node = list_create(data);
+    if (!node) return -1;
+    if (!*head) { node->next = node; *head = node; return 0; }
+    ListNode *tail = *head;
+    while (tail->next != *head) tail = tail->next;
+    tail->next = node;
+    node->next = *head;   /* 尾指向头，保持循环 */
+    return 0;
+}
+
+int clist_remove_value(ListNode **head, int data) {
+    if (!head || !*head) return -1;
+    ListNode *cur = *head;
+    ListNode *prev = NULL;
+    do {
+        if (cur->data == data) {
+            if (cur == *head) {
+                if (cur->next == *head) {   /* 只剩一个节点 */
+                    free(cur);
+                    *head = NULL;
+                    return 0;
+                }
+                /* 删除头节点：先找尾，尾指向新头 */
+                ListNode *tail = *head;
+                while (tail->next != *head) tail = tail->next;
+                *head = cur->next;
+                tail->next = *head;
+                free(cur);
+                return 0;
+            }
+            prev->next = cur->next;
+            free(cur);
+            return 0;
+        }
+        prev = cur;
+        cur = cur->next;
+    } while (cur != *head);
+    return -1;   /* 未找到 */
+}
+
+int clist_length(ListNode *head) {
+    if (!head) return 0;
+    int len = 1;
+    ListNode *p = head->next;
+    while (p != head) { len++; p = p->next; }
+    return len;
+}
+
+void clist_print(ListNode *head) {
+    if (!head) { printf("(empty)\n"); return; }
+    ListNode *p = head;
+    do {
+        printf("%d -> ", p->data);
+        p = p->next;
+    } while (p != head);
+    printf("(back to head)\n");
+}
+
+void clist_free(ListNode **head) {
+    if (!head || !*head) return;
+    /* 先断开环，避免释放时死循环 */
+    ListNode *tail = *head;
+    while (tail->next != *head) tail = tail->next;
+    tail->next = NULL;
+    ListNode *cur = *head;
+    while (cur) {
+        ListNode *nxt = cur->next;
+        free(cur);
+        cur = nxt;
+    }
+    *head = NULL;
+}
+

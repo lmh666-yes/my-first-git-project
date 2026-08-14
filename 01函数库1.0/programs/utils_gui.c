@@ -753,14 +753,15 @@ static int fuzzy_subseq(const char *kw, const char *text) {
     return 1;
 }
 
-/* 单个关键词的匹配分：0=不匹配；子串 > 模糊；名称 > 描述 > 分类 */
+/* 单个关键词的匹配分：0=不匹配；子串 > 模糊；名称 > 描述 > 分类。
+   注意：模糊子序列仅对 ASCII 名称有效——描述/分类是 GBK 中文，
+   逐字节模糊匹配会把汉字第二字节（可能等于 a-z）误判为命中，
+   导致中文描述被大量误匹配，因此描述/分类只做精确子串匹配。 */
 static int match_score(const char *kw, const char *n, const char *d, const char *s) {
     if (strstr(n, kw)) return 100;
     if (strstr(d, kw)) return 80;
     if (strstr(s, kw)) return 70;
     if (fuzzy_subseq(kw, n)) return 50;
-    if (fuzzy_subseq(kw, d)) return 40;
-    if (fuzzy_subseq(kw, s)) return 35;
     return 0;
 }
 
@@ -815,17 +816,15 @@ static void refresh_list(void) {
     }
     kw_low[i] = '\0';
 
-    /* 空格分隔的多关键词 */
+    /* 空格分隔的多关键词（tmp 为函数级变量，保证 terms 指针有效） */
+    char tmp[128];
     char *terms[16];
     int nterm = 0;
-    {
-        char tmp[128];
-        strncpy(tmp, kw_low, sizeof(tmp) - 1); tmp[sizeof(tmp)-1] = '\0';
-        char *tok = strtok(tmp, " ");
-        while (tok && nterm < 16) {
-            if (*tok) terms[nterm++] = tok;
-            tok = strtok(NULL, " ");
-        }
+    strncpy(tmp, kw_low, sizeof(tmp) - 1); tmp[sizeof(tmp)-1] = '\0';
+    char *tok = strtok(tmp, " ");
+    while (tok && nterm < 16) {
+        if (*tok) terms[nterm++] = tok;
+        tok = strtok(NULL, " ");
     }
 
     /* 当前分类（CB_GETITEMDATA 存原始分类名） */
@@ -1084,12 +1083,34 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         int w = LOWORD(lParam), h = HIWORD(lParam);
         int topY = 64;
         int statusH = 24;
-        int detailW = 570;
-        int listW = w - detailW - 25;
-        if (listW < 320) listW = 320;
+        int gap = 10;
+        /* 详情宽度约占窗口 42%，限制在 [430, 800]，避免过大/过小 */
+        int detailW = w * 42 / 100;
+        if (detailW < 430) detailW = 430;
+        if (detailW > 800) detailW = 800;
+        int listW = w - detailW - gap * 3 - 4;
+        if (listW < 320) {            /* 窗口过窄时保证列表最小宽 */
+            listW = 320;
+            detailW = w - listW - gap * 3 - 4;
+            if (detailW < 400) detailW = 400;
+        }
         MoveWindow(g_hList, 10, topY, listW, h - topY - statusH - 10, TRUE);
-        MoveWindow(g_hDetail, 10 + listW + 10, topY, w - listW - 25, h - topY - statusH - 10, TRUE);
+        MoveWindow(g_hDetail, 10 + listW + gap, topY, detailW, h - topY - statusH - 10, TRUE);
         MoveWindow(g_hStatus, 0, h - statusH, w, statusH, TRUE);
+        /* 列表列自适应：前两列固定，功能列自动填满剩余宽度，避免全屏留白；
+           窗口过窄时前两列按比例收缩，避免列总宽超出列表宽度 */ 
+        int c0 = 200, c1 = 130, need = c0 + c1 + 120 + 22;
+        if (listW < need) {                 /* 窄窗口按比例压缩前两列 */
+            c0 = listW * 200 / need;
+            c1 = listW * 130 / need;
+            if (c0 < 90) c0 = 90;
+            if (c1 < 70) c1 = 70;
+        }
+        ListView_SetColumnWidth(g_hList, 0, c0);
+        ListView_SetColumnWidth(g_hList, 1, c1);
+        int third = listW - c0 - c1 - 22;   /* 预留垂直滚动条与边距 */
+        if (third < 80) third = 80;
+        ListView_SetColumnWidth(g_hList, 2, third);
         return 0;
     }
 

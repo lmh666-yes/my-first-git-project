@@ -1157,6 +1157,19 @@ static const FuncInfo g_funcs[] = {
     {"is_perfect_square", "数论补充（手动扩展）", "判断是否为完全平方数", "is_perfect_square(int n)"},
     {"is_ugly", "数论补充（手动扩展）", "判断是否为丑数（质因子仅含 2、3、5 的正整数）", "is_ugly(int n)"},
     {"count_primes", "数论补充（手动扩展）", "统计 [2, n] 范围内素数个数（埃氏筛）", "count_primes(int n)"},
+    {"list_get_middle", "链表进阶与循环链表（手动扩展）", "返回链表中间节点（快慢指针；偶数个时返回靠后的那个）", "list_get_middle(ListNode *head)"},
+    {"list_find_kth_from_end", "链表进阶与循环链表（手动扩展）", "返回倒数第 k 个节点（双指针），k 超出范围返回 NULL", "list_find_kth_from_end(ListNode *head, int k)"},
+    {"list_remove_duplicates", "链表进阶与循环链表（手动扩展）", "有序链表去重（相邻重复只保留一个），返回删除的节点数", "list_remove_duplicates(ListNode **head)"},
+    {"list_is_palindrome", "链表进阶与循环链表（手动扩展）", "判断链表是否为回文（会临时反转后半部分，改变原链表结构）", "list_is_palindrome(ListNode *head)"},
+    {"list_insert_at", "链表进阶与循环链表（手动扩展）", "在指定位置 pos 插入节点（0 起），成功返回 0，越界返回 -1", "list_insert_at(ListNode **head, int pos, int data)"},
+    {"list_delete_at", "链表进阶与循环链表（手动扩展）", "删除指定位置 pos 的节点（0 起），成功返回 0，越界返回 -1", "list_delete_at(ListNode **head, int pos)"},
+    {"clist_create", "链表进阶与循环链表（手动扩展）", "创建循环链表（单节点时指向自身）", "clist_create(int data)"},
+    {"clist_insert_head", "链表进阶与循环链表（手动扩展）", "循环链表头部插入", "clist_insert_head(ListNode **head, int data)"},
+    {"clist_append", "链表进阶与循环链表（手动扩展）", "循环链表尾部追加", "clist_append(ListNode **head, int data)"},
+    {"clist_remove_value", "链表进阶与循环链表（手动扩展）", "循环链表删除第一个等于 data 的节点，找到返回 0，未找到返回 -1", "clist_remove_value(ListNode **head, int data)"},
+    {"clist_length", "链表进阶与循环链表（手动扩展）", "循环链表长度", "clist_length(ListNode *head)"},
+    {"clist_print", "链表进阶与循环链表（手动扩展）", "打印循环链表（尾节点会回到头）", "clist_print(ListNode *head)"},
+    {"clist_free", "链表进阶与循环链表（手动扩展）", "释放循环链表所有节点并置 head 为 NULL", "clist_free(ListNode **head)"},
 };
 
 #define FUNC_COUNT ((int)(sizeof(g_funcs) / sizeof(g_funcs[0])))
