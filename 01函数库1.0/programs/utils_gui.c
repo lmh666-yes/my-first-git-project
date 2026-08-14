@@ -9,7 +9,7 @@
  *      自动生成区的函数也能正常显示源码并跳转
  *
  *  编译运行（需要 MinGW gcc）：
- *    gcc -finput-charset=UTF-8 -fexec-charset=GBK -I..\lib \
+ *    gcc -finput-charset=UTF-8 -fexec-charset=GBK -I..\library \
  *        -o utils_gui.exe utils_gui.c -mwindows -lcomctl32 -lshell32
  * ============================================================ */
 
@@ -167,10 +167,6 @@ static void init_paths(void) {
             join_path(g_docs[i].path, MAX_PATH, dirs[d], names[i]);
             if (!file_exist(g_docs[i].path)) { ok = 0; break; }
         }
-    }
-    /* 兜底：exe 同目录 */
-    for (int i = 0; i < DOC_COUNT; i++) {
-        join_path(g_docs[i].path, MAX_PATH, exe_path, names[i]);
     }
     for (int i = 0; i < DOC_COUNT; i++) {
         snprintf(g_docs[i].display, sizeof(g_docs[i].display), "%s", names[i]);
