@@ -17,6 +17,7 @@ visualizer.py — C/C++ 数据结构可视化器（GUI）
 import os
 import sys
 import tkinter as tk
+import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
@@ -150,84 +151,136 @@ def loc_tag(blk):
 
 class Drawer:
     NODE_W = 132
-    NODE_H0 = 26          # 标题行高
-    FIELD_H = 20          # 每字段行高
-    GAP = 30              # 节点间距
+    NODE_H0 = 30          # 标题行高
+    FIELD_H = 22          # 每字段行高
+    GAP = 36              # 节点间距
 
     def __init__(self, canvas):
         self.c = canvas
+        self.zoom = 1.0
+        self.node_rects = {}        # addr -> (x, y, w, h)（缩放后画布坐标）
+        self.selected_addr = None   # 点击选中的内存块
+        self.info_win_id = None     # 右上角信息面板 window id
+        self.frames = []
+        self.heap_by_addr = {}
+        self._font_cache = {}
+        self._fo_cache = {}
+
+    # ---------- 字体（随缩放缩放） ----------
+    def F(self, size, bold=False, fam="Consolas"):
+        key = (fam, max(7, round(size * self.zoom)), bold)
+        if key not in self._font_cache:
+            self._font_cache[key] = (fam, max(7, round(size * self.zoom)),
+                                     "bold" if bold else "normal")
+        return self._font_cache[key]
+
+    def FM(self, size, bold=False):
+        return self.F(size, bold, "Microsoft YaHei")
+
+    def fo(self, font):
+        """缓存 Font 对象用于测量文字宽度"""
+        if font not in self._fo_cache:
+            try:
+                self._fo_cache[font] = tkfont.Font(font=font)
+            except Exception:
+                self._fo_cache[font] = None
+        return self._fo_cache[font]
+
+    def mw(self, text, font):
+        """测量文本宽度（像素）"""
+        f = self.fo(font)
+        if f is None:
+            return len(text) * round(9 * self.zoom)
+        return f.measure(text)
 
     def clear(self):
         self.c.delete("all")
+        self.info_win_id = None
 
     def draw(self, snap, msg="", diff_text=None):
-        """布局：上方「调用栈/变量」，下方「内存/链表结构」（横向空间更大）"""
+        """布局：上方「调用栈/变量」，下方「内存/链表结构」；支持缩放 zoom"""
         self.clear()
+        z = self.zoom
         W = int(self.c.cget("width"))
         H = int(self.c.cget("height"))
         if W < 50 or H < 50:
             self.fit()
             return
+        self.frames = snap.get("frames", [])
+        heap = snap.get("heap", [])
+        self.heap_by_addr = {b["addr"]: b for b in heap}
+        frames = self.frames
+        heap_by_addr = self.heap_by_addr
         # 标题（含变更摘要）
-        self.c.create_text(10, 8, anchor="nw", text=msg, fill="#333333",
-                           font=("Microsoft YaHei", 11, "bold"))
-        ty = 30
+        self.c.create_text(10 * z, 8 * z, anchor="nw", text=msg,
+                           fill="#1a5276", font=self.FM(12, True))
+        ty = 32 * z
         if diff_text:
             color = "#1a7f37" if "未修改" in diff_text else "#b35900"
-            self.c.create_text(10, ty, anchor="nw", text=diff_text, fill=color,
-                               font=("Microsoft YaHei", 9, "bold"))
-            ty += 18
-        frames = snap.get("frames", [])
-        heap = snap.get("heap", [])
-        heap_by_addr = {b["addr"]: b for b in heap}
+            self.c.create_text(10 * z, ty, anchor="nw", text=diff_text,
+                               fill=color, font=self.FM(10, True))
+            ty += 20 * z
 
-        # ---- 上方：调用栈 / 变量面板（整行宽度，高度完全自适应，不截断） ----
-        vx = 10
-        vy = ty + 6
-        vw = W - 20
-        need_h = 26
+        # ---- 上方：调用栈 / 变量面板（高度完全自适应，不截断） ----
+        vx = 10 * z
+        vy = ty + 6 * z
+        vw = W - 20 * z
+        need_h = 26 * z
         for fr in frames:
-            need_h += 20 + len(fr["vars"]) * 17 + 6
-        ph = max(need_h + 10, 44)
+            need_h += 22 * z + len(fr["vars"]) * 19 * z + 6 * z
+        ph = max(need_h + 10 * z, 44 * z)
         self.c.create_rectangle(vx, vy, vx + vw, vy + ph, outline="#bbbbbb",
                                 fill="#f4f6f8", width=1)
-        self.c.create_text(vx + 8, vy + 4, anchor="nw", text="调用栈 / 变量（栈上）",
-                           fill="#555555", font=("Microsoft YaHei", 10, "bold"))
-        yy = vy + 24
+        self.c.create_text(vx + 8 * z, vy + 4 * z, anchor="nw",
+                           text="调用栈 / 变量（栈上）",
+                           fill="#555555", font=self.FM(11, True))
+        yy = vy + 24 * z
         for fr in frames:
-            self.c.create_text(vx + 8, yy, anchor="nw", text="[ " + fr["func"] + " ]",
-                               fill="#1a5276", font=("Microsoft YaHei", 10, "bold"))
-            yy += 19
+            self.c.create_text(vx + 8 * z, yy, anchor="nw",
+                               text="[ " + fr["func"] + " ]",
+                               fill="#1a5276", font=self.FM(11, True))
+            yy += 19 * z
             for name, v in fr["vars"]:
                 line = self.fmt_var(name, v)
-                self.c.create_text(vx + 16, yy, anchor="nw", text=line,
-                                   fill="#333333", font=("Consolas", 9))
-                yy += 17
-            yy += 5
-        # 提示：堆/栈图在下方（紧跟内容，避免与堆块重叠）
-        self.c.create_text(vx + 8, yy + 2, anchor="nw",
-                           text="▼ 下方为内存/结构图（可上下滚动查看）",
-                           fill="#888888", font=("Microsoft YaHei", 9))
+                self.c.create_text(vx + 16 * z, yy, anchor="nw", text=line,
+                                   fill="#333333", font=self.F(10))
+                yy += 19 * z
+            yy += 5 * z
+        # 提示
+        self.c.create_text(vx + 8 * z, yy + 2 * z, anchor="nw",
+                           text="▼ 下方为内存/结构图：拖动平移 · Ctrl/左键+滚轮缩放 · 点击内存块看详情",
+                           fill="#888888", font=self.FM(9))
 
-        # ---- 下方：堆 / 链表结构（整行宽度横向铺开，起点基于变量区矩形底部，任意帧数都不重叠） ----
+        # ---- 下方：堆 / 链表结构（起点基于变量区矩形底部，任意帧数都不重叠） ----
         hx0 = vx
-        htop = vy + ph + 16
-        self.c.create_text(hx0, htop - 14, anchor="nw",
+        htop = vy + ph + 16 * z
+        self.c.create_text(hx0, htop - 14 * z, anchor="nw",
                            text="内存 / 结构（■堆 ■栈）",
-                           fill="#555555", font=("Microsoft YaHei", 9, "bold"))
+                           fill="#555555", font=self.FM(10, True))
         chain_heads = self.find_chains(frames, heap_by_addr)
         if chain_heads:
             self.draw_chains(chain_heads, heap_by_addr, hx0, htop, H)
         else:
             self.draw_heap_blocks(heap_by_addr, hx0, htop, H)
+        self._draw_info_panel()
         self.fit()
 
     def fit(self):
-        """根据 Canvas 上所有元素自动设置滚动范围"""
+        """根据 Canvas 上所有元素自动设置滚动范围（排除右上角信息面板 window）"""
         try:
-            bb = self.c.bbox("all")
-            if bb:
-                self.c.configure(scrollregion=(0, 0, bb[2] + 40, bb[3] + 40))
+            coords = []
+            for it in self.c.find_all():
+                if self.c.type(it) == "window":
+                    continue
+                b = self.c.bbox(it)
+                if b:
+                    coords.append(b)
+            if coords:
+                x1 = min(c[0] for c in coords)
+                y1 = min(c[1] for c in coords)
+                x2 = max(c[2] for c in coords)
+                y2 = max(c[3] for c in coords)
+                self.c.configure(scrollregion=(x1, y1, x2 + 40, y2 + 40))
             else:
                 self.c.configure(scrollregion="0 0 300 200")
         except Exception:
@@ -306,10 +359,12 @@ class Drawer:
 
     def node_height(self, blk):
         n = len(blk["fields"])
-        return self.NODE_H0 + max(1, n) * self.FIELD_H + 8
+        return (self.NODE_H0 + max(1, n) * self.FIELD_H + 8) * self.zoom
 
     def draw_node(self, x, y, addr, blk, heap_by_addr):
-        """画一个内存块矩形（按堆/栈区分颜色），返回 (右边缘x, 底部y)"""
+        """画一个内存块矩形（堆/栈分色，宽度按内容自适应，文字永不越界）
+        返回 (右边缘x, 底部y)"""
+        z = self.zoom
         h = self.node_height(blk)
         loc = blk.get("loc", "堆")
         if loc == "栈":
@@ -318,29 +373,42 @@ class Drawer:
         else:
             outline, fill = "#b8860b", "#fff8dc"   # 黄 = 堆(malloc)
             loc_txt = "堆"
-        self.c.create_rectangle(x, y, x + self.NODE_W, y + h,
-                                outline=outline, fill=fill, width=2)
-        self.c.create_text(x + 6, y + 5, anchor="nw",
-                           text=f"{blk['typename']} @0x{addr:x} [{loc_txt}]",
-                               fill="#5d4037" if loc == "栈" else "#8b4513",
-                               font=("Consolas", 9, "bold"))
-        yy = y + self.NODE_H0
+        title = f"{blk['typename']} @0x{addr:x} [{loc_txt}]"
+        tf = self.F(10, True)
+        ff = self.F(10)
+        title_w = self.mw(title, tf)
+        field_lines = []
         for fn, disp, tgt in self.field_rows(blk):
-            if tgt is not None:
-                self.c.create_text(x + 6, yy, anchor="nw",
-                                   text=f"{fn} -> {disp}",
-                                   fill="#1a5276", font=("Consolas", 9))
-            else:
-                self.c.create_text(x + 6, yy, anchor="nw",
-                                   text=f"{fn} = {disp}",
-                                   fill="#333333", font=("Consolas", 9))
-            yy += self.FIELD_H
-        return x + self.NODE_W, y + h
+            field_lines.append(f"{fn} -> {disp}" if tgt is not None else f"{fn} = {disp}")
+        max_fw = max((self.mw(t, ff) for t in field_lines), default=0)
+        w = max(self.NODE_W * z, title_w + 14 * z, max_fw + 14 * z)
+        # 标题超宽则截断
+        while self.mw(title + "…", tf) > w - 8 * z and len(title) > 1:
+            title = title[:-1]
+        title += "…"
+        self.c.create_rectangle(x, y, x + w, y + h, outline=outline, fill=fill,
+                                width=2)
+        self.c.create_text(x + 6 * z, y + 5 * z, anchor="nw", text=title,
+                           fill="#5d4037" if loc == "栈" else "#8b4513",
+                           font=tf)
+        yy = y + self.NODE_H0 * z
+        for txt in field_lines:
+            # 字段超宽则截断
+            while self.mw(txt + "…", ff) > w - 8 * z and len(txt) > 1:
+                txt = txt[:-1]
+            txt += "…"
+            self.c.create_text(x + 6 * z, yy, anchor="nw", text=txt,
+                               fill="#1565c0" if "->" in txt else "#333333",
+                               font=ff)
+            yy += self.FIELD_H * z
+        self.node_rects[addr] = (x, y, w, h)
+        return x + w, y + h
 
     def draw_chains(self, heads, heap_by_addr, x0, y0, H):
-        """画链表：超宽自动换行，横向宽度控制在约一屏，保证水平滚动条滑块大小合理可拖拽"""
-        cw = int(self.c.cget("width"))
-        max_w = max(680, cw - 60)      # 每行宽度上限
+        """画链表：宽度适配可视区自动换行，横向不溢出，滚动条滑块大"""
+        z = self.zoom
+        vis_w = int(self.c.cget("width")) / z          # 可视宽度（内容坐标）
+        max_w = max(260, vis_w - 60)                    # 每行宽度上限
         for addr, label in heads:
             x = x0
             y = y0
@@ -356,12 +424,12 @@ class Drawer:
                 # 超出行宽 -> 换行，画向下续接标记
                 if prev is not None and x > x0 + max_w:
                     _paddr, prx, pby = prev
-                    self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 26,
-                                       fill="#1a5276", width=2, arrow=tk.LAST)
-                    self.c.create_text(x0 + 2, pby + 28, anchor="nw",
-                                       text="↘ 续接", fill="#1a5276",
-                                       font=("Microsoft YaHei", 9, "bold"))
-                    y = pby + 26 + 10
+                    self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 26 * z,
+                                       fill="#1565c0", width=2, arrow=tk.LAST)
+                    self.c.create_text(x0 + 2, pby + 28 * z, anchor="nw",
+                                       text="↘ 续接", fill="#1565c0",
+                                       font=self.FM(9, True))
+                    y = pby + 26 * z + 10 * z
                     x = x0
                 rx, by = self.draw_node(x, y, cur, blk, heap_by_addr)
                 pos[cur] = (x, y, rx, by)
@@ -375,13 +443,13 @@ class Drawer:
                 if tgt in heap_by_addr:
                     prev = (cur, rx, by)
                     cur = tgt
-                    x = rx + self.GAP
+                    x = rx + self.GAP * z
                     steps += 1
                 else:
                     # 画 NULL 尾
-                    self.c.create_text(x + self.NODE_W + 10, y + 14,
+                    self.c.create_text(x + self.NODE_W * z + 10 * z, y + 14 * z,
                                        anchor="nw", text="NULL",
-                                       fill="#999999", font=("Consolas", 9))
+                                       fill="#999999", font=self.F(9, True))
                     break
             # 画箭头：仅同一视觉行内连线（跨行由 ↘ 标记连接）
             for a, (bx, by, rx, _bh) in pos.items():
@@ -394,27 +462,81 @@ class Drawer:
                 if tgt in pos:
                     tx, ty, trx, _ = pos[tgt]
                     if abs(ty - by) < 2:
-                        self.arrow(rx - 4, by + self.NODE_H0 + 6,
-                                   tx + 6, ty + self.NODE_H0 + 6)
-            self.c.create_text(x0, chain_bottom + 8, anchor="nw",
+                        self.arrow(rx - 4, by + self.NODE_H0 * z + 6 * z,
+                                   tx + 6, ty + self.NODE_H0 * z + 6 * z)
+            self.c.create_text(x0, chain_bottom + 8 * z, anchor="nw",
                                text=f"← {label}",
-                               fill="#666666", font=("Microsoft YaHei", 9))
-            y0 = chain_bottom + 44     # 下一条链从本链底部下方开始
+                               fill="#666666", font=self.FM(10, True))
+            y0 = chain_bottom + 44 * z   # 下一条链从本链底部下方开始
 
     def draw_heap_blocks(self, heap_by_addr, x0, y0, H):
+        z = self.zoom
         x = x0
         y = y0
+        vis_w = int(self.c.cget("width")) / z
         for addr in sorted(heap_by_addr.keys()):
             blk = heap_by_addr[addr]
             rx, by = self.draw_node(x, y, addr, blk, heap_by_addr)
-            x = rx + self.GAP
-            if x > int(self.c.cget("width")) - 160:
+            x = rx + self.GAP * z
+            if x > x0 + vis_w - 60:
                 x = x0
-                y = by + 40
+                y = by + 40 * z
 
     def arrow(self, x1, y1, x2, y2):
-        self.c.create_line(x1, y1, x2, y2, fill="#1a5276", width=2,
-                           arrow=tk.LAST, arrowshape=(9, 11, 5))
+        self.c.create_line(x1, y1, x2, y2, fill="#1565c0",
+                           width=max(2, round(2 * self.zoom)),
+                           arrow=tk.LAST, arrowshape=(12, 15, 7))
+
+    # ---------- 右上角信息面板：点击内存块后显示“属于哪个变量 + 当前状态” ----------
+    def _draw_info_panel(self):
+        if self.info_win_id:
+            try:
+                self.c.delete(self.info_win_id)
+            except Exception:
+                pass
+            self.info_win_id = None
+        addr = self.selected_addr
+        if addr is None:
+            return
+        blk = self.heap_by_addr.get(addr)
+        if blk is None:
+            return
+        frame = tk.Frame(self.c, bg="#ffffff", highlightbackground="#1a5276",
+                         highlightthickness=1)
+        owners = []
+        for fr in self.frames:
+            for name, v in fr["vars"]:
+                val = v.get("value")
+                if val and val[0] == "ptr" and val[1] == addr:
+                    owners.append(name)
+        loc = blk.get("loc", "堆")
+        loc_cn = "栈(结构体变量)" if loc == "栈" else "堆(malloc)"
+        tk.Label(frame, text=f"◆ {blk['typename']} @0x{addr:x}  [{loc_cn}]",
+                 bg="#1a5276", fg="#ffffff", font=("Microsoft YaHei", 11, "bold"),
+                 anchor="w", padx=10, pady=4).pack(fill=tk.X)
+        owner_txt = "被变量引用: " + ", ".join(owners) if owners else "未被任何变量直接引用"
+        tk.Label(frame, text=owner_txt, bg="#ffffff", fg="#0d47a1",
+                 font=("Microsoft YaHei", 10, "bold"), anchor="w",
+                 padx=10).pack(fill=tk.X)
+        rows = self.field_rows(blk)
+        extra = 0
+        if len(rows) > 12:
+            rows, extra = rows[:12], len(rows) - 12
+        for fn, disp, tgt in rows:
+            if tgt is not None:
+                line = f"  {fn}  ->  0x{tgt:x}  (指向堆块)"
+            else:
+                line = f"  {fn}  =  {disp}"
+            tk.Label(frame, text=line, bg="#ffffff", fg="#333333",
+                     font=("Consolas", 10), anchor="w", padx=10).pack(fill=tk.X)
+        if extra:
+            tk.Label(frame, text=f"  … 等 {extra} 个字段", bg="#ffffff",
+                     fg="#888888", font=("Microsoft YaHei", 9),
+                     anchor="w", padx=10).pack(fill=tk.X)
+        cw = self.c.winfo_width()
+        x0 = self.c.canvasx(cw - 14)
+        y0 = self.c.canvasy(14)
+        self.info_win_id = self.c.create_window(x0, y0, anchor="ne", window=frame)
 
 
 # ---------------------------------------------------------------
@@ -477,7 +599,7 @@ class App:
                                      highlightthickness=0)
         self.line_canvas.pack(side=tk.LEFT, fill=tk.Y)
         self.code = tk.Text(left, wrap="none", bg="#1e1e1e", fg="#d4d4d4",
-                            insertbackground="#d4d4d4", font=("Consolas", 12),
+                            insertbackground="#d4d4d4", font=("Consolas", 13),
                             relief=tk.FLAT, padx=6, pady=4, undo=True)
         self.code.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         self.code.config(yscrollcommand=lambda *a: (self._upd_lines(), self.scrolly.set(*a)))
@@ -500,20 +622,31 @@ class App:
         self.code.bind("<KeyRelease>", lambda e: self._upd_lines())
 
         # 右侧画布（带水平/垂直滚动条，内容超出时可滚动查看）
-        self.canvas = tk.Canvas(right, bg="#ffffff", highlightthickness=0)
+        self.canvas = tk.Canvas(right, bg="#ffffff", highlightthickness=0,
+                                cursor="hand2")
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb = tk.Scrollbar(right, orient=tk.VERTICAL, command=self.canvas.yview,
+        vsb = tk.Scrollbar(right, orient=tk.VERTICAL, command=self._cv_yview,
                            width=20, bg="#569cd6", troughcolor="#e0e0e0",
                            activebackground="#4a90c2")
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        hsb = tk.Scrollbar(right, orient=tk.HORIZONTAL, command=self.canvas.xview,
+        hsb = tk.Scrollbar(right, orient=tk.HORIZONTAL, command=self._cv_xview,
                            width=20, bg="#569cd6", troughcolor="#e0e0e0",
                            activebackground="#4a90c2")
         hsb.pack(side=tk.BOTTOM, fill=tk.X)
         self.vsb, self.hsb = vsb, hsb
         self.canvas.config(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         self.canvas.bind("<Configure>", lambda e: self.redraw())
+        # 交互：滚轮(点哪滚哪)、左键+滚轮或 Ctrl+滚轮缩放、拖拽平移、点击看详情
+        self.canvas.bind("<MouseWheel>", self._cv_wheel)
+        self.canvas.bind("<Button-4>", self._cv_wheel_lin)
+        self.canvas.bind("<Button-5>", self._cv_wheel_lin)
+        self.canvas.bind("<ButtonPress-1>", self._cv_press)
+        self.canvas.bind("<B1-Motion>", self._cv_drag)
+        self.canvas.bind("<ButtonRelease-1>", self._cv_release)
         self.drawer = Drawer(self.canvas)
+        self._canvas_mouse_down = False
+        self._dragging = False
+        self._press_x = self._press_y = 0
 
         # ---- 底部状态栏 ----
         status = tk.Frame(root, bg="#f0f0f0")
@@ -549,7 +682,7 @@ class App:
                 _x, y, _w, lh, _bl = d
                 self.line_canvas.create_text(20, y + lh // 2, anchor="e",
                                              text=str(ln), fill="#858585",
-                                             font=("Consolas", 11))
+                                             font=("Consolas", 12))
 
     def get_code(self):
         return self.code.get("1.0", "end-1c")
@@ -832,6 +965,9 @@ class App:
         self.set_status("已重置。点击代码行 / “下一步”逐步运行 / “运行全部”查看最终状态", False)
 
     def draw_empty(self):
+        self.drawer.selected_addr = None
+        self.drawer.node_rects = {}
+        self.drawer.info_win_id = None
         self.canvas.delete("all")
         self.canvas.create_text(20, 40, anchor="nw",
                                 text="（暂无图形。点击左侧代码行，或点击“运行全部”）",
@@ -844,6 +980,107 @@ class App:
                 self.snapshots, self.current_line)
             if snap:
                 self.drawer.draw(snap, f"执行到第 {self.current_line} 行（该行执行后）")
+
+    # ---------- 右侧画布交互：滚轮(点哪滚哪) / 拖拽平移 / 缩放 / 点击看详情 ----------
+    def _cv_yview(self, *a):
+        self.canvas.yview(*a)
+        self._keep_panel()
+
+    def _cv_xview(self, *a):
+        self.canvas.xview(*a)
+        self._keep_panel()
+
+    def _keep_panel(self):
+        """让右上角信息面板始终固定在可视区右上角（不随滚动移动）"""
+        d = self.drawer
+        if d.info_win_id:
+            try:
+                x0 = self.canvas.canvasx(0)
+                y0 = self.canvas.canvasy(0)
+                cw = self.canvas.winfo_width()
+                self.canvas.coords(d.info_win_id, x0 + cw - 14, y0 + 14)
+            except Exception:
+                pass
+
+    def _cv_wheel(self, ev):
+        """画布滚轮：左键按住 或 Ctrl → 缩放；Shift → 水平滚；否则垂直滚"""
+        if ev.state & 0x0004 or self._canvas_mouse_down:
+            factor = 1.12 if ev.delta > 0 else 1 / 1.12
+            self._zoom_at(factor, ev.x, ev.y)
+        elif ev.state & 0x0001:
+            self.canvas.xview_scroll(int(-ev.delta / 120), "units")
+            self._keep_panel()
+        else:
+            self.canvas.yview_scroll(int(-ev.delta / 120), "units")
+            self._keep_panel()
+        return "break"
+
+    def _cv_wheel_lin(self, ev):
+        """Linux 滚轮 Button-4/5"""
+        if self._canvas_mouse_down:
+            factor = 1.12 if ev.num == 4 else 1 / 1.12
+            self._zoom_at(factor, ev.x, ev.y)
+        else:
+            self.canvas.yview_scroll(-1 if ev.num == 4 else 1, "units")
+            self._keep_panel()
+        return "break"
+
+    def _zoom_at(self, factor, mx, my):
+        """以鼠标位置为中心缩放画布"""
+        d = self.drawer
+        old = d.zoom
+        new = min(4.0, max(0.3, old * factor))
+        if abs(new - old) < 1e-6:
+            return
+        cx = self.canvas.canvasx(mx)
+        cy = self.canvas.canvasy(my)
+        ratio = new / old
+        d.zoom = new
+        self.redraw()
+        self.canvas.update_idletasks()
+        bb = self.canvas.bbox("all")
+        if bb:
+            reg_w, reg_h = bb[2], bb[3]
+            if reg_w > 0:
+                self.canvas.xview_moveto(max(0.0, (cx * ratio - mx) / reg_w))
+            if reg_h > 0:
+                self.canvas.yview_moveto(max(0.0, (cy * ratio - my) / reg_h))
+        self._keep_panel()
+
+    def _cv_press(self, ev):
+        self._canvas_mouse_down = True
+        self._press_x, self._press_y = ev.x, ev.y
+        self._dragging = False
+        self.canvas.scan_mark(ev.x, ev.y)
+        self.canvas.config(cursor="fleur")
+
+    def _cv_drag(self, ev):
+        """按住左键拖动画布平移（像查看图片）"""
+        if abs(ev.x - self._press_x) > 4 or abs(ev.y - self._press_y) > 4:
+            self._dragging = True
+        if self._dragging:
+            self.canvas.scan_dragto(ev.x, ev.y, gain=1)
+            self._keep_panel()
+        return "break"
+
+    def _cv_release(self, ev):
+        self._canvas_mouse_down = False
+        self.canvas.config(cursor="hand2")
+        if not self._dragging:
+            self._cv_click(ev)
+        self._dragging = False
+
+    def _cv_click(self, ev):
+        """单击内存块 → 右上角显示该块属于哪个变量 + 当前状态"""
+        cx = self.canvas.canvasx(ev.x)
+        cy = self.canvas.canvasy(ev.y)
+        hit = None
+        for addr, (x, y, w, h) in self.drawer.node_rects.items():
+            if x <= cx <= x + w and y <= cy <= y + h:
+                hit = addr
+                break
+        self.drawer.selected_addr = hit
+        self.redraw()
 
     # ---------- 文件 / 粘贴 / 示例 ----------
     def open_file(self):
@@ -896,6 +1133,9 @@ class App:
         self._pending_inputs = []
         self.current_line = None
         self.snapshots = {}
+        self.drawer.zoom = 1.0
+        self.drawer.selected_addr = None
+        self.drawer.node_rects = {}
         self.code.tag_remove("hl", "1.0", "end")
         self.code.tag_remove("er", "1.0", "end")
         self.highlight_syntax()
