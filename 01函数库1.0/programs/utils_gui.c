@@ -1,4 +1,4 @@
-/* ============================================================
+﻿/* ============================================================
  *  utils_gui.c — UTILS 函数库 · 图形化查找工具 v2.1（Windows GUI）
  * ------------------------------------------------------------
  *  功能：
@@ -111,6 +111,7 @@ static Theme     g_theme;
 static int       g_sortMode = 0;   /* 0 原始顺序, 1 按名称, 2 按分类 */
 static MatchItem *g_order = NULL;  /* 排序后的显示序列 */
 static int       g_order_cap = 0;
+static int       g_hoverRow = -1;  /* 鼠标悬停行（-1 表示无） */
 
 /* ============ B. 文件读取与编码转换 ============ */
 
@@ -447,19 +448,20 @@ static COLORREF parse_color(const char *s) {
 
 /* 内置默认配色：VS Code Dark+ 风格 */
 static void theme_default(Theme *t) {
-    t->background = rgb(0x1E, 0x1E, 0x1E);
-    t->default_txt= rgb(0xD4, 0xD4, 0xD4);
-    t->meta       = rgb(0x8B, 0xC3, 0x4A);   /* 介绍文字：亮绿 */
-    t->keyword    = rgb(0x56, 0x9C, 0xD6);
-    t->control    = rgb(0xC5, 0x86, 0xC0);
-    t->type       = rgb(0x4E, 0xC9, 0xB0);
-    t->func       = rgb(0xDC, 0xDC, 0xAA);
-    t->param      = rgb(0x9C, 0xDC, 0xFE);
-    t->string     = rgb(0xCE, 0x91, 0x78);
-    t->number     = rgb(0xB5, 0xCE, 0xA8);
-    t->comment    = rgb(0x6A, 0x99, 0x55);
-    t->macro      = rgb(0xC5, 0x86, 0xC0);
-    t->header     = rgb(0xCE, 0x91, 0x78);
+    /* Notepad++ 默认风格（白底黑字） */
+    t->background = rgb(0xFF, 0xFF, 0xFF);
+    t->default_txt= rgb(0x00, 0x00, 0x00);
+    t->meta       = rgb(0x00, 0x80, 0x00);   /* 介绍/详细说明：注释绿 */
+    t->keyword    = rgb(0x00, 0x00, 0xFF);
+    t->control    = rgb(0x7F, 0x00, 0x55);
+    t->type       = rgb(0x2F, 0x6F, 0x9F);
+    t->func       = rgb(0x00, 0x00, 0xC0);
+    t->param      = rgb(0x00, 0x00, 0x00);
+    t->string     = rgb(0x80, 0x80, 0x80);
+    t->number     = rgb(0x00, 0x00, 0x00);
+    t->comment    = rgb(0x00, 0x80, 0x00);
+    t->macro      = rgb(0x7F, 0x00, 0x55);
+    t->header     = rgb(0x2F, 0x6F, 0x9F);
 }
 
 /* 从 theme.ini 读取配色（格式：# 注释 / key=RRGGBB） */
@@ -587,21 +589,24 @@ static int keyword_class(const char *w) {
 }
 
 /* 对详情文本做语法高亮；code_start 为“实现源码”正文起始位置 */
-static void highlight_code(const char *text, int code_start) {
+static void highlight_code(const char *text, int code_start, int code_end) {
     int len = (int)strlen(text);
-    apply_rich_color(0, code_start, g_theme.meta, 0);          /* 元信息：灰 */
-    apply_rich_color(code_start, len, g_theme.default_txt, 0); /* 代码默认 */
+    if (code_end < code_start) code_end = code_start;
+    if (code_end > len) code_end = len;
+    apply_rich_color(0, code_start, g_theme.meta, 0);          /* 介绍：绿 */
+    apply_rich_color(code_end, len, g_theme.meta, 0);          /* 详细说明：绿 */
+    apply_rich_color(code_start, code_end, g_theme.default_txt, 0);
 
     int first_func = 1;   /* 代码区第一个函数名为定义处，括号内为形参 */
     int prev_struct = 0;  /* 上一个 token 是 struct/enum/union */
     int i = code_start;
-    while (i < len) {
+    while (i < code_end) {
         char c = text[i];
 
         /* 行注释 */
         if (c == '/' && i + 1 < len && text[i+1] == '/') {
             int s = i;
-            while (i < len && text[i] != '\n') i++;
+            while (i < code_end && text[i] != '\n') i++;
             apply_rich_color(s, i, g_theme.comment, 0);
             continue;
         }
@@ -609,30 +614,30 @@ static void highlight_code(const char *text, int code_start) {
         if (c == '/' && i + 1 < len && text[i+1] == '*') {
             int s = i; i += 2;
             while (i + 1 < len && !(text[i] == '*' && text[i+1] == '/')) i++;
-            i += 2; if (i > len) i = len;
+            i += 2; if (i > code_end) i = code_end;
             apply_rich_color(s, i, g_theme.comment, 0);
             continue;
         }
         /* 字符串 */
         if (c == '"') {
             int s = i; i++;
-            while (i < len && text[i] != '"' && text[i] != '\n') i++;
-            if (i < len && text[i] == '"') i++;
+            while (i < code_end && text[i] != '"' && text[i] != '\n') i++;
+            if (i < code_end && text[i] == '"') i++;
             apply_rich_color(s, i, g_theme.string, 0);
             continue;
         }
         /* 字符字面量 */
         if (c == '\'') {
             int s = i; i++;
-            while (i < len && text[i] != '\'' && text[i] != '\n') i++;
-            if (i < len && text[i] == '\'') i++;
+            while (i < code_end && text[i] != '\'' && text[i] != '\n') i++;
+            if (i < code_end && text[i] == '\'') i++;
             apply_rich_color(s, i, g_theme.string, 0);
             continue;
         }
         /* 预处理 / 宏 */
         if (c == '#') {
             int s = i;
-            while (i < len && text[i] != '\n') i++;
+            while (i < code_end && text[i] != '\n') i++;
             int e = i;
             apply_rich_color(s, e, g_theme.macro, 0);
             /* #include <头文件>：尖括号内容用 header 色加粗 */
@@ -648,14 +653,14 @@ static void highlight_code(const char *text, int code_start) {
         /* 数字 */
         if (c >= '0' && c <= '9') {
             int s = i;
-            while (i < len && (is_ident_char(text[i]) || text[i] == '.')) i++;
+            while (i < code_end && (is_ident_char(text[i]) || text[i] == '.')) i++;
             apply_rich_color(s, i, g_theme.number, 0);
             continue;
         }
         /* 标识符 */
         if (is_ident_char(c)) {
             int s = i;
-            while (i < len && is_ident_char(text[i])) i++;
+            while (i < code_end && is_ident_char(text[i])) i++;
             int e = i;
             char word[64];
             size_t wl = (size_t)(e - s);
@@ -678,19 +683,19 @@ static void highlight_code(const char *text, int code_start) {
 
             /* 非关键字：是否为函数名（后跟 '('，允许空白） */
             int j = e;
-            while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
-            if (j < len && text[j] == '(') {
+            while (j < code_end && (text[j] == ' ' || text[j] == '\t')) j++;
+            if (j < code_end && text[j] == '(') {
                 apply_rich_color(s, e, g_theme.func, 1);   /* 函数名：黄加粗 */
                 if (first_func) {
                     /* 定义处参数列表：类型=蓝，形参名=浅蓝加粗 */
                     int depth = 1;
                     int k = j + 1;
-                    while (k < len && depth > 0) {
+                    while (k < code_end && depth > 0) {
                         if (text[k] == '(') depth++;
                         else if (text[k] == ')') { depth--; if (depth == 0) break; }
                         else if (depth == 1 && is_ident_char(text[k])) {
                             int ps = k;
-                            while (k < len && is_ident_char(text[k])) k++;
+                            while (k < code_end && is_ident_char(text[k])) k++;
                             int pe = k;
                             char w2[64];
                             size_t l2 = (size_t)(pe - ps);
@@ -909,27 +914,30 @@ static void show_detail(int func_index) {
         "分类   : %s\r\n"
         "功能   : %s\r\n"
         "示例   : %s\r\n"
-        "详细说明:\r\n%s\r\n"
         "声明位置: %s 第 %d 行\r\n"
         "实现位置: %s 第 %d 行\r\n"
         "（单击查看详情 · 双击或点[打开实现]跳转 VS Code）\r\n"
-        "\r\n---------- 实现源码 ----------\r\n%s",
+        "\r\n---------- 实现源码 ----------\r\n%s"
+        "\r\n---------- 详细说明 ----------\r\n%s",
         f->name, f->section, f->desc, f->example,
-        doc ? doc : "（无详细注释）",
         decl.line > 0 ? g_docs[decl.doc].display : "-",
         decl.line,
         impl.line > 0 ? g_docs[impl.doc].display : "-",
         impl.line,
-        src ? src : "(未能提取源码：请确认 utils.c / utils_gen.c 与 utils_gui.exe 在同一目录)");
+        src ? src : "(未能提取源码：请确认 utils.c / utils_gen.c 与 utils_gui.exe 在同一目录)",
+        doc ? doc : "（无详细注释）");
     (void)len;
     SetWindowTextA(g_hDetail, buf);
-    /* 语法高亮：仅对“实现源码”正文着色 */
+    /* 语法高亮：源码区着色，介绍与详细说明为绿色 */
     {
-        const char *marker = "---------- 实现源码 ----------\r\n";
-        const char *m = strstr(buf, marker);
-        int code_start = m ? (int)(m - buf) + (int)strlen(marker) : 0;
+        const char *m1 = "---------- 实现源码 ----------\r\n";
+        const char *p1 = strstr(buf, m1);
+        int cs = p1 ? (int)(p1 - buf) + (int)strlen(m1) : 0;
+        const char *m2 = "---------- 详细说明 ----------\r\n";
+        const char *p2 = strstr(buf, m2);
+        int ce = p2 ? (int)(p2 - buf) : (int)strlen(buf);
         SendMessage(g_hDetail, WM_SETREDRAW, FALSE, 0);
-        highlight_code(buf, code_start);
+        highlight_code(buf, cs, ce);
         SendMessage(g_hDetail, WM_SETREDRAW, TRUE, 0);
         InvalidateRect(g_hDetail, NULL, TRUE);
     }
@@ -1066,6 +1074,30 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         return 0;
     }
 
+    case WM_MOUSEMOVE: {
+        /* 跟踪鼠标悬停行，用于列表高亮 */
+        POINT sp = { (short)LOWORD(lParam), (short)HIWORD(lParam) };
+        ClientToScreen(hwnd, &sp);
+        RECT lr;
+        GetWindowRect(g_hList, &lr);
+        if (PtInRect(&lr, sp)) {
+            POINT lp = sp;
+            ScreenToClient(g_hList, &lp);
+            LVHITTESTINFO hi;
+            memset(&hi, 0, sizeof(hi));
+            hi.pt = lp;
+            int row = ListView_HitTest(g_hList, &hi);
+            if (row != g_hoverRow) {
+                g_hoverRow = row;
+                InvalidateRect(g_hList, NULL, TRUE);
+            }
+        } else if (g_hoverRow != -1) {
+            g_hoverRow = -1;
+            InvalidateRect(g_hList, NULL, TRUE);
+        }
+        break;
+    }
+
     case WM_CTLCOLORSTATIC: {
         HDC hdc = (HDC)wParam;
         SetBkColor(hdc, RGB(255, 255, 255));
@@ -1150,17 +1182,26 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 update_sort_buttons();
                 refresh_list();
             } else if (nm->code == NM_CUSTOMDRAW) {
-                /* 列表斑马纹 + 选中项高亮（深蓝底白字，始终醒目） */
+                /* 列表三态：普通条纹 / 悬停亮色 / 选中深色（失焦淡一点） */
                 NMLVCUSTOMDRAW *lvd = (NMLVCUSTOMDRAW*)lParam;
                 if (lvd->nmcd.dwDrawStage == CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
                 if (lvd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
                     int row = (int)lvd->nmcd.dwItemSpec;
-                    if (lvd->nmcd.uItemState & CDIS_SELECTED) {
-                        lvd->clrText = RGB(255, 255, 255);
-                        lvd->clrTextBk = RGB(0, 100, 170);
-                    } else {
+                    UINT st = lvd->nmcd.uItemState;
+                    if (st & CDIS_SELECTED) {
+                        if (st & CDIS_FOCUS) {   /* 选中且焦点：最深 */
+                            lvd->clrText = RGB(255, 255, 255);
+                            lvd->clrTextBk = RGB(0, 80, 160);
+                        } else {                 /* 选中但失焦：淡一点 */
+                            lvd->clrText = RGB(255, 255, 255);
+                            lvd->clrTextBk = RGB(100, 150, 205);
+                        }
+                    } else if (row == g_hoverRow) {   /* 鼠标悬停：亮色 */
+                        lvd->clrText = RGB(20, 20, 20);
+                        lvd->clrTextBk = RGB(200, 226, 250);
+                    } else {                         /* 普通：白底 / 加深灰底条纹 */
                         lvd->clrText = RGB(25, 25, 25);
-                        lvd->clrTextBk = (row % 2 == 0) ? RGB(255, 255, 255) : RGB(222, 232, 243);
+                        lvd->clrTextBk = (row % 2 == 0) ? RGB(255, 255, 255) : RGB(219, 226, 235);
                     }
                     return CDRF_NEWFONT;
                 }
