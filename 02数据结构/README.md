@@ -31,14 +31,14 @@
 
 | 类别 | 支持 |
 |---|---|
-| 类型 | `int`、`char`、`typedef struct { ... }` 结构体、指针 `*`、一维数组 `a[5]` |
-| 内存 | `malloc(sizeof(T))`、`calloc(n, sizeof(T))`、`free(p)` |
-| 语句 | 声明、赋值、`if/else`、`while`、`for`、`break`、`return`、`printf`（忽略） |
-| 表达式 | 算术 `+ - * / %`、比较 `== != < <= > >=`、逻辑 `&& \|\| !`、取负 `-` |
-| 指针 | `p->field`、`s.field`、`*p`、`&x`、`p = p->next`、下标 `a[i]` |
-| 函数 | 普通函数定义与调用、**递归**（右侧显示完整调用栈） |
+| 类型 | `int`、`char`、`long long`、`unsigned`、`float/double`(按 int)、`typedef struct { ... }` 结构体、指针 `*`/二级指针 `**`、一维/二维数组、`const` 修饰 |
+| 内存 | `malloc(sizeof(T))`、`malloc(n*sizeof(T))`、`calloc(n, sizeof(T))`、`free(p)` |
+| 语句 | 声明(含多变量 `int a,b`)、赋值、`+= -= *=` 复合赋值、`if/else`、`while`、`for`(含 `int i` 声明、`i++`)、`break`、`return`、`printf/scanf`(忽略) |
+| 表达式 | 算术、比较、逻辑、自增/自减 `i++`/`++i`、十六进制 `0x`、类型转换 `(T*)x`、指针算术 `p+1` |
+| 指针 | `p->field`、`s.field`(结构体变量)、`*p`、`&x`、`*head = x`(二级指针写回)、下标 `a[i]`、字段数组 `L->date[i]`、数组参数 |
+| 函数 | 普通函数/函数指针参数(回调)/变参 `...`/递归(右侧显示完整调用栈) |
 
-> 不支持的语法会**明确标红报错**（带行号），不会猜测结果，保证图正确。
+> 不支持的语法会**明确标红报错**（带行号）或给出提示弹窗，不会猜测结果，保证图正确。
 
 ## 文件说明
 

@@ -265,6 +265,22 @@ class Drawer:
                 rows.append((fn, f"0x{fv[1]:x}", fv[1]))
             elif fv[0] == "null":
                 rows.append((fn, "NULL", None))
+            elif fv[0] == "arr":
+                # 数组字段：date[0]=3, date[1]=7, ...
+                vals = fv[1]
+                shown = []
+                for x in vals:
+                    if x[0] == "int":
+                        shown.append(str(x[1]))
+                    elif x[0] == "ptr":
+                        shown.append(f"0x{x[1]:x}")
+                    else:
+                        shown.append("NULL")
+                # 只显示前 12 个，避免字段过长
+                disp = ", ".join(shown[:12])
+                if len(shown) > 12:
+                    disp += f", ...({len(shown)}项)"
+                rows.append((fn, f"[{disp}]", None))
             else:
                 rows.append((fn, str(fv[1]), None))
         return rows

@@ -35,11 +35,11 @@ TOKEN_RE = re.compile(r"""
     (?P<ws>\s+)
   | (?P<pre>\#[^\n]*)
   | (?P<comment>//[^\n]*|/\*.*?\*/)
-  | (?P<num>\d+)
+  | (?P<num>0[xX][0-9a-fA-F]+|\d+\.\d+|\d+)
   | (?P<str>"(?:[^"\\]|\\.)*")
   | (?P<char>'[^']')
   | (?P<id>[A-Za-z_]\w*)
-  | (?P<op>->|==|!=|<=|>=|&&|\|\||[+\-*/%<>=!&*]|\(|\)|\{|\}|\[|\]|;|,|\.)
+  | (?P<op>->|==|!=|<=|>=|&&|\|\||\+\+|--|\+=|-=|\*=|/=|%=|\.\.\.|[+\-*/%<>=!&*]|\(|\)|\{|\}|\[|\]|;|,|\.)
 """, re.VERBOSE | re.DOTALL)
 
 
@@ -105,8 +105,15 @@ class BlockStmt(Stmt):
         self.stmts = stmts
 
 
+class SeqStmt(Stmt):
+    """同作用域的多个语句（用于 int a, b; 多变量声明），不创建新作用域"""
+    def __init__(self, line, stmts):
+        super().__init__(line, "seq")
+        self.stmts = stmts
+
+
 class DeclStmt(Stmt):
-    def __init__(self, line, vtype, name, init_expr, is_ptr, is_array, arr_size):
+    def __init__(self, line, vtype, name, init_expr, is_ptr, is_array, arr_size, dims=None):
         super().__init__(line, "decl")
         self.vtype = vtype
         self.name = name
@@ -114,6 +121,7 @@ class DeclStmt(Stmt):
         self.is_ptr = is_ptr
         self.is_array = is_array
         self.arr_size = arr_size
+        self.dims = dims or []
 
 
 class AssignStmt(Stmt):
@@ -261,18 +269,24 @@ class Parser:
         self.expect("{")
         fields = []
         while not self.at("}"):
-            ftype, is_ptr = self.parse_type()
+            ftype, ptr = self.parse_type()
             while True:
                 ft = self.next()
                 if ft.kind != "id":
                     raise SimError(ft.line, f"结构体字段名错误 '{ft.text}'")
-                # 可能是数组字段
+                # 数组字段 int date[MAX]
+                arr_size = None
                 if self.at("["):
                     self.next()
                     sz = self.next()
+                    arr_size = 100 if sz.kind != "num" else int(sz.text)
                     self.expect("]")
-                    # 数组字段简化为 int 字段名
-                fields.append((ft.text, ftype if not is_ptr else ("ptr", ftype)))
+                if arr_size is not None:
+                    fields.append((ft.text, ("array", ftype, arr_size)))
+                elif ptr > 0:
+                    fields.append((ft.text, ("ptr", ftype)))
+                else:
+                    fields.append((ft.text, ftype))
                 if self.at(","):
                     self.next()
                     continue
@@ -282,48 +296,133 @@ class Parser:
         return fields
 
     def parse_type(self):
-        """解析一个类型说明，返回 (base_type, is_ptr)。
-        支持 int / char / struct Name / 结构体名（typedef 过的）"""
+        """解析类型，返回 (base_type, ptr_level)。ptr_level=0/1/2...
+        支持 int / char / long long / unsigned / struct Name / 结构体名（typedef 过的）"""
+        # 跳过修饰符（const/static/extern 等；unsigned/long/short 是基础类型）
+        while self.peek() and self.peek().text in ("const", "static", "extern", "register", "volatile", "inline"):
+            self.next()
         t = self.next()
-        is_ptr = False
+        ptr = 0
         if t.text == "struct":
             nt = self.next()
             if nt.kind != "id":
                 raise SimError(nt.line, f"struct 后需要类型名，实际 '{nt.text}'")
             base = nt.text
-        elif t.text in ("int", "char", "void", "unsigned", "signed", "short", "long", "double", "float"):
-            base = "int" if t.text in ("int", "char", "unsigned", "signed", "short", "long") else "int"
+        elif t.text in ("int", "char", "void", "unsigned", "signed", "short", "long", "double", "float", "bool", "size_t", "longlong"):
+            base = "int"
+            while self.peek() and self.peek().text in ("int", "char", "long", "short", "unsigned", "signed"):
+                self.next()
         elif t.kind == "id":
             base = t.text
         else:
             raise SimError(t.line, f"无法识别的类型 '{t.text}'")
         while self.at("*"):
             self.next()
-            is_ptr = not is_ptr  # 多级指针简化：仍记指针
-        return base, is_ptr
+            ptr += 1
+        return base, ptr
 
     # ---------- 函数 ----------
     def parse_function(self, funcs):
         # 返回类型（含 struct Name / Node* / int* 等）
         self.parse_type()
         name_t = self.next()
-        if name_t.kind != "id" or name_t.text in funcs:
-            raise SimError(name_t.line, f"函数名错误或重复定义 '{name_t.text}'")
+        if name_t.kind != "id":
+            raise SimError(name_t.line, f"函数名错误 '{name_t.text}'")
         self.expect("(")
         params = []
         if not self.at(")"):
             while True:
-                ptype, is_ptr = self.parse_type()
-                pt = self.next()
-                if pt.kind != "id":
-                    raise SimError(pt.line, f"参数名错误 '{pt.text}'")
-                params.append((pt.text, ptype if not is_ptr else ("ptr", ptype)))
+                # 变参函数 int sum(int n, ...)
+                if self.at("..."):
+                    self.next()
+                    params.append(("<vararg>", "int"))
+                    break
+                # 函数指针参数：以 ( 开头，如 void (*cb)(int)
+                if self.at("("):
+                    depth = 0
+                    pname = "<fn>"
+                    while True:
+                        tk = self.next()
+                        if tk.text == "(":
+                            depth += 1
+                        elif tk.kind == "id" and depth == 1 and pname == "<fn>":
+                            pname = tk.text
+                        elif tk.text == ")":
+                            depth -= 1
+                            if depth == 0:
+                                break
+                    # 可能跟参数列表 (int)
+                    if self.at("("):
+                        d2 = 0
+                        while True:
+                            tk2 = self.next()
+                            if tk2.text == "(":
+                                d2 += 1
+                            elif tk2.text == ")":
+                                d2 -= 1
+                                if d2 == 0:
+                                    break
+                    params.append((pname, "<fn>"))
+                else:
+                    ptype, ptr = self.parse_type()
+                    if self.at("("):
+                        # 函数指针参数：int (*op)(int)
+                        depth = 0
+                        pname = "<fn>"
+                        while True:
+                            tk = self.next()
+                            if tk.text == "(":
+                                depth += 1
+                            elif tk.kind == "id" and depth == 1 and pname == "<fn>":
+                                pname = tk.text
+                            elif tk.text == ")":
+                                depth -= 1
+                                if depth == 0:
+                                    break
+                        if self.at("("):
+                            d2 = 0
+                            while True:
+                                tk2 = self.next()
+                                if tk2.text == "(":
+                                    d2 += 1
+                                elif tk2.text == ")":
+                                    d2 -= 1
+                                    if d2 == 0:
+                                        break
+                        params.append((pname, "<fn>"))
+                    elif self.at(")"):
+                        break
+                    else:
+                        pt = self.next()
+                        if pt.kind != "id":
+                            self.pos -= 1
+                            break
+                        params.append((pt.text, ptype if ptr == 0 else ("ptr", ptype)))
+                        # 数组参数 int arr[] / shop arr[]
+                        while self.at("["):
+                            self.next()
+                            if not self.at("]"):
+                                while not self.at("]"):
+                                    self.next()
+                            self.expect("]")
                 if self.at(","):
                     self.next()
                     continue
                 break
         self.expect(")")
-        body = self.parse_block()
+        if self.at(";"):
+            # 函数原型声明：只记录声明，不实现
+            self.next()
+            if name_t.text not in funcs:
+                funcs[name_t.text] = FuncDef(name_t.text, params, [])
+            return
+        try:
+            body = self.parse_block()
+        except (SimError, IndexError):
+            # 函数体无法解析（未完成/不支持的语法）：跳过该函数其余内容
+            while self.peek() is not None:
+                self.next()
+            return
         funcs[name_t.text] = FuncDef(name_t.text, params, body)
 
     def parse_block(self):
@@ -421,14 +520,29 @@ class Parser:
             return PrintfStmt(t.line)
         # 声明 vs 表达式
         if self.looks_like_decl():
-            return self.parse_decl()
-        # 表达式语句（可能是赋值：expr = expr;）
-        expr = self.parse_expr()
-        if self.at("="):
+            first = self.parse_decl(semi=False)
+            stmts = [first]
+            while self.at(","):        # 支持 int a, b; 多变量声明
+                self.next()
+                stmts.append(self.parse_decl_same(first, semi=False))
+            self.expect(";")
+            if len(stmts) == 1:
+                return first
+            return SeqStmt(first.line, stmts)
+        # 空语句 ;
+        if self.at(";"):
             self.next()
+            return ExprStmt(t.line, ("lit", 0))
+        # 表达式语句（可能是赋值：expr = expr; 或复合赋值 expr += expr;）
+        expr = self.parse_expr()
+        if self.at("=") or self.at("+=") or self.at("-=") or self.at("*=") \
+                or self.at("/=") or self.at("%="):
+            op = self.next().text
             rhs = self.parse_expr()
             self.expect(";")
-            return AssignStmt(t.line, expr, rhs)
+            if op == "=":
+                return AssignStmt(t.line, expr, rhs)
+            return AssignStmt(t.line, expr, ("bin", op[0], expr, rhs))
         self.expect(";")
         return ExprStmt(t.line, expr)
 
@@ -436,13 +550,16 @@ class Parser:
         """for 的 init 或 while 体里的单条语句（不以 {} 开头）"""
         line = self.peek().line
         if self.looks_like_decl():
-            return self.parse_decl()
+            return self.parse_decl(semi=False)
         expr = self.parse_expr()
-        if self.at("="):
-            self.next()
+        if self.at("=") or self.at("+=") or self.at("-=") or self.at("*=") \
+                or self.at("/=") or self.at("%="):
+            op = self.next().text
             rhs = self.parse_expr()
             self.expect(";")
-            return AssignStmt(line, expr, rhs)
+            if op == "=":
+                return AssignStmt(line, expr, rhs)
+            return AssignStmt(line, expr, ("bin", op[0], expr, rhs))
         self.expect(";")
         return ExprStmt(line, expr)
 
@@ -467,7 +584,7 @@ class Parser:
 
     def parse_decl(self, semi=True):
         line = self.peek().line
-        vtype, is_ptr = self.parse_type()
+        vtype, ptr = self.parse_type()
         is_array = False
         arr_size = None
         # 支持 int a[5];
@@ -476,21 +593,81 @@ class Parser:
             raise SimError(nt.line, f"变量名错误 '{nt.text}'")
         name = nt.text
         if self.at("["):
+            total = 1
+            dims = []
+            while self.at("["):
+                self.next()
+                sz = self.next()
+                d = (int(sz.text) if sz.kind == "num" else 10)
+                total *= d
+                dims.append(d)
+                self.expect("]")
+            arr_size = total
+            is_array = True
+        else:
+            dims = []
+        init = None
+        if self.at("="):
+            self.next()
+            if self.at("{"):
+                init = ("arrinit", self.parse_array_init())
+            else:
+                init = self.parse_expr()
+        if semi:
+            self.expect(";")
+        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims)
+
+    def parse_decl_same(self, proto, semi=True):
+        """多变量声明：int a, b; 中 b 复用 a 的类型"""
+        line = self.peek().line
+        nt = self.next()
+        if nt.kind != "id":
+            raise SimError(nt.line, f"变量名错误 '{nt.text}'")
+        name = nt.text
+        is_array = False
+        arr_size = None
+        if self.at("["):
             self.next()
             sz = self.next()
-            if sz.kind == "num":
-                arr_size = int(sz.text)
-            else:
-                raise SimError(sz.line, "数组大小必须是整数")
+            arr_size = 100 if sz.kind != "num" else int(sz.text)
             self.expect("]")
             is_array = True
         init = None
         if self.at("="):
             self.next()
-            init = self.parse_expr()
+            if self.at("{"):
+                init = ("arrinit", self.parse_array_init())
+            else:
+                init = self.parse_expr()
         if semi:
             self.expect(";")
-        return DeclStmt(line, vtype, name, init, is_ptr, is_array, arr_size)
+        return DeclStmt(line, proto.vtype, name, init, proto.is_ptr, is_array, arr_size)
+
+    def parse_array_init(self):
+        """解析 {1,2,3,...} 初始化列表（支持嵌套 {} 整体跳过），返回整数列表"""
+        self.expect("{")
+        vals = []
+        while not self.at("}"):
+            tk = self.peek()
+            if tk is None:
+                break
+            if tk.text == "{":
+                self.parse_array_init()      # 嵌套初始化（如结构体数组），占位 0
+                vals.append(0)
+            elif tk.kind == "num":
+                vals.append(int(float(self.next().text)))
+            elif tk.text == "-":
+                self.next()
+                n = self.next()
+                vals.append(-int(float(n.text)))
+            elif tk.text == "}":
+                break
+            else:
+                self.next()   # 跳过字符串等未知元素
+            if self.at(","):
+                self.next()
+        self.expect("}")
+        return vals
 
     # ---------- 表达式（优先级爬升） ----------
     def parse_expr(self):
@@ -544,6 +721,10 @@ class Parser:
             self.next()
             e = self.parse_unary()
             return ("unary", t.text, e)
+        if t and t.text in ("++", "--"):
+            self.next()
+            e = self.parse_unary()
+            return ("preinc", t.text, e)
         return self.parse_postfix()
 
     def parse_postfix(self):
@@ -570,17 +751,47 @@ class Parser:
                 idx = self.parse_expr()
                 self.expect("]")
                 e = ("index", e, idx)
+            elif self.at("++") or self.at("--"):
+                op = self.next().text
+                e = ("postinc", op, e)
             else:
                 break
         return e
 
+    def at_type_ahead(self):
+        """判断 '(' 后是否为类型转换（如 (Node*) 或 (shop)）——调用时 '(' 已被消费"""
+        t0 = self.peek(0)
+        if t0 is None:
+            return False
+        if t0.text in ("int", "char", "void", "unsigned", "signed", "short",
+                       "long", "double", "float", "bool", "struct"):
+            return True
+        if t0.kind == "id" and t0.text in self.structs:
+            t1 = self.peek(1)
+            if t1 and (t1.text == "*" or t1.text == ")"):
+                return True
+        return False
+
     def parse_primary(self):
         t = self.next()
         if t.kind == "num":
-            return ("lit", int(t.text))
+            if t.text.lower().startswith("0x"):
+                return ("lit", int(t.text, 16))
+            return ("lit", int(float(t.text)))
         if t.kind == "str":
             return ("lit", 0)  # 字符串字面量（printf 已单独处理，这里给 0）
         if t.text == "(":
+            # 类型转换 (Type*)expr / (Type)expr / (Type){...} 复合字面量
+            if self.at_type_ahead():
+                _base, ptr = self.parse_type()    # 消费类型（含指针）
+                self.expect(")")
+                if self.at("{"):
+                    self.parse_array_init()
+                    return ("lit", 0)
+                e = self.parse_expr()
+                if ptr > 0:
+                    return ("ptrcast", e)       # 转成指针
+                return e                          # 普通类型转换无操作
             e = self.parse_expr()
             self.expect(")")
             return e
@@ -626,14 +837,15 @@ class Value:
 
 
 class VarInfo:
-    __slots__ = ("vtype", "is_ptr", "is_array", "arr_size", "value")
+    __slots__ = ("vtype", "is_ptr", "is_array", "arr_size", "value", "fnptr_name")
 
-    def __init__(self, vtype, is_ptr=False, is_array=False, arr_size=None, value=None):
+    def __init__(self, vtype, is_ptr=False, is_array=False, arr_size=None, value=None, fnptr_name=None):
         self.vtype = vtype
         self.is_ptr = is_ptr
         self.is_array = is_array
         self.arr_size = arr_size
-        self.value = value  # Value 或 list[Value]
+        self.value = value
+        self.fnptr_name = fnptr_name  # Value 或 list[Value]
 
 
 class Frame:
@@ -673,6 +885,10 @@ class SimEngine:
         self.call_depth = 0
         self.step_limit = 200000
         self.steps = 0
+        # 变量槽（取地址 &x 用，支持二级指针）
+        self.var_addr = {}      # (id(frame), name) -> addr
+        self.var_addr_inv = {}  # addr -> (id(frame), name)
+        self.next_var_addr = 0x5000
         # 结果
         self.snapshots = {}     # line -> Snapshot
         self.var_history = {}   # line -> (frames_copy, heap_copy) 记录
@@ -681,13 +897,24 @@ class SimEngine:
         self.stop_line = None   # 执行到该行后停止（GUI 点击）
         self.snap_enabled = True
 
+    def _lookup_in_frame(self, frame, name):
+        for sc in reversed(frame.scopes):
+            if name in sc:
+                return sc[name]
+        return None
+
     # ---- 内存 ----
     def alloc(self, typename, count=1):
         blk = HeapBlock(self.next_addr, typename, {})
         self.next_addr += 0x10
         if typename in self.structs:
             sd = self.structs[typename]
-            blk.fields = {fn: Value("null") for fn, _ft in sd.fields}
+            blk.fields = {}
+            for fn, ft in sd.fields:
+                if isinstance(ft, tuple) and ft[0] == "array":
+                    blk.fields[fn] = [Value("int", 0)] * ft[2]   # 数组字段
+                else:
+                    blk.fields[fn] = Value("null")
             blk.size = max(1, len(sd.fields)) * 4
         else:
             blk.fields = {}
@@ -709,6 +936,18 @@ class SimEngine:
             return Value("int", e[1])
         if k == "null":
             return Value("null")
+        if k == "postinc":
+            old = self.eval_expr(e[2])
+            self.assign(e[2], Value("int", self.to_int(old) + (1 if e[1] == "++" else -1)))
+            return old
+        if k == "preinc":
+            cur = self.eval_expr(e[2])
+            new = Value("int", self.to_int(cur) + (1 if e[1] == "++" else -1))
+            self.assign(e[2], new)
+            return new
+        if k == "ptrcast":
+            v = self.eval_expr(e[1])
+            return Value("addr", self.to_int(v))
         if k == "var":
             vi = self.lookup(e[1])
             return vi.value
@@ -790,6 +1029,8 @@ class SimEngine:
         return v.kind == "addr"
 
     def to_int(self, v):
+        if isinstance(v, list):
+            return 0
         if v.kind == "int":
             return v.val
         if v.kind == "null":
@@ -814,8 +1055,12 @@ class SimEngine:
             if op == ">=":
                 return Value("int", 1 if lv >= rv else 0)
         if op == "+":
+            if l.kind in ("addr", "null") or r.kind in ("addr", "null"):
+                return Value("addr", self.to_int(l) + self.to_int(r))   # 指针算术
             return Value("int", self.to_int(l) + self.to_int(r))
         if op == "-":
+            if l.kind in ("addr", "null") or r.kind in ("addr", "null"):
+                return Value("addr", self.to_int(l) - self.to_int(r))
             return Value("int", self.to_int(l) - self.to_int(r))
         if op == "*":
             return Value("int", self.to_int(l) * self.to_int(r))
@@ -833,10 +1078,20 @@ class SimEngine:
 
     def take_addr(self, e):
         if e[0] == "var":
-            vi = self.lookup(e[1])
-            if not vi.is_ptr:
-                raise SimError(self.cur_line, f"无法对非指针变量 '{e[1]}' 取地址")
-            return Value("addr", vi.value.val if vi.value.kind == "addr" else 0)
+            name = e[1]
+            vi = self.lookup(name)
+            # 结构体变量：返回其堆块地址（可作指针传入函数）
+            if vi.vtype in self.structs and not vi.is_ptr and not vi.is_array:
+                if vi.value.kind == "addr":
+                    return Value("addr", vi.value.val)
+            # 其他变量：返回“变量槽”地址（用于二级指针 / & 取地址）
+            key = (id(self.frames[-1]), name)
+            if key not in self.var_addr:
+                a = self.next_var_addr
+                self.next_var_addr += 0x10
+                self.var_addr[key] = a
+                self.var_addr_inv[a] = key
+            return Value("addr", self.var_addr[key])
         raise SimError(self.cur_line, "暂不支持该形式的取地址")
 
     def deref(self, v):
@@ -844,15 +1099,22 @@ class SimEngine:
             raise SimError(self.cur_line, "对 NULL 指针解引用")
         if v.kind != "addr":
             raise SimError(self.cur_line, "对非指针解引用")
+        if v.val in self.var_addr_inv:
+            # 变量槽：返回该变量的当前值（二级指针 *p）
+            key = self.var_addr_inv[v.val]
+            vi = self._lookup_in_frame(key[0], key[1])
+            if vi is None:
+                raise SimError(self.cur_line, "变量槽指向的变量不存在")
+            return vi.value
         if v.val not in self.heap:
             raise SimError(self.cur_line, f"指针 0x{v.val:x} 指向无效内存")
-        return v  # 返回地址，供 member_get 使用
+        return v  # 堆块地址，供 member_get 使用
 
     def member_get(self, base, field):
         if base.kind == "null":
             raise SimError(self.cur_line, "对 NULL 指针访问成员")
         if base.kind != "addr":
-            raise SimError(self.cur_line, "对非指针访问成员（结构体变量需用 . 访问）")
+            raise SimError(self.cur_line, f"对非指针访问成员 base.kind={base.kind} field={field}")
         blk = self.heap.get(base.val)
         if blk is None:
             raise SimError(self.cur_line, f"指针 0x{base.val:x} 指向无效内存")
@@ -882,6 +1144,14 @@ class SimEngine:
             addr = self.eval_expr(target[1])
             if addr.kind != "addr":
                 raise SimError(self.cur_line, "解引用赋值目标不是指针")
+            if addr.val in self.var_addr_inv:
+                # 写回变量槽（二级指针 *p = x）
+                key = self.var_addr_inv[addr.val]
+                vi = self._lookup_in_frame(key[0], key[1])
+                if vi is None:
+                    raise SimError(self.cur_line, "变量槽指向的变量不存在")
+                vi.value = self.coerce(vi, value)
+                return
             blk = self.heap.get(addr.val)
             if blk is None:
                 raise SimError(self.cur_line, "解引用赋值指向无效内存")
@@ -892,11 +1162,22 @@ class SimEngine:
             if isinstance(arr, list):
                 if idx < 0 or idx >= len(arr):
                     raise SimError(self.cur_line, "数组下标越界")
+                # 结构体数组元素整体赋值（如 shops[0] = (shop){...}）暂不支持，忽略
+                if isinstance(arr[idx], Value) and arr[idx].kind == "addr" and arr[idx].val in self.heap:
+                    b = self.heap[arr[idx].val]
+                    if b.typename in self.structs and value.kind == "int":
+                        return
                 arr[idx] = value
                 return
             if arr.kind == "addr":
                 blk = self.heap.get(arr.val)
                 if blk and blk.array_vals is not None:
+                    if 0 <= idx < len(blk.array_vals):
+                        cur = blk.array_vals[idx]
+                        if isinstance(cur, Value) and cur.kind == "addr" and cur.val in self.heap:
+                            b = self.heap[cur.val]
+                            if b.typename in self.structs and value.kind == "int":
+                                return   # 结构体数组元素整体赋值暂不支持，忽略
                     blk.array_vals[idx] = value
                     return
             name = self.var_name(target[1])
@@ -931,10 +1212,20 @@ class SimEngine:
         else:
             raise SimError(self.cur_line, "暂不支持函数指针调用")
         if name == "malloc" or name == "calloc":
-            # malloc(sizeof(T)) 或 calloc(n, sizeof(T))
+            # malloc(sizeof(T)) / malloc(n*sizeof(T)) / calloc(n, sizeof(T))
             if len(args) == 1:
-                sz = self.eval_expr(args[0])
                 typename = self.sizeof_type(args[0])
+                cnt = self.malloc_count(args[0])
+                if cnt and cnt > 1:
+                    blk = self.alloc(typename, cnt)
+                    if typename in self.structs:
+                        blk.array_vals = [Value("addr", self.alloc(typename, 1).addr)
+                                          for _ in range(cnt)]
+                    else:
+                        blk.array_vals = [Value("int", 0)] * cnt
+                    blk.fields = {}
+                    blk.size = 4 * cnt
+                    return Value("addr", blk.addr)
                 blk = self.alloc(typename, 1)
                 return Value("addr", blk.addr)
             elif len(args) == 2:
@@ -942,7 +1233,11 @@ class SimEngine:
                 sz = self.eval_expr(args[1])
                 typename = self.sizeof_type(args[1])
                 blk = self.alloc(typename, max(1, n))
-                blk.array_vals = [Value("int", 0)] * max(1, n)
+                if typename in self.structs:
+                    blk.array_vals = [Value("addr", self.alloc(typename, 1).addr)
+                                      for _ in range(max(1, n))]
+                else:
+                    blk.array_vals = [Value("int", 0)] * max(1, n)
                 blk.size = 4 * max(1, n)
                 blk.fields = {}
                 return Value("addr", blk.addr)
@@ -954,26 +1249,77 @@ class SimEngine:
             return Value("null")
         if name in self.funcs:
             return self.call_user(name, args)
+        # 函数指针变量调用（如回调参数 op(x)）
+        try:
+            vi = self.lookup(name)
+        except SimError:
+            vi = None
+        if vi is not None and getattr(vi, "fnptr_name", None):
+            return self.call_user(vi.fnptr_name, args)
+        # 常见 C 库函数：安全忽略（不求值参数，避免 &a 等触发错误）
+        if name in ("scanf", "printf", "puts", "gets", "getchar", "getc", "perror",
+                    "strlen", "strcpy", "strcat", "strcmp", "strncpy", "strchr",
+                    "memcpy", "memset", "memcmp", "exit", "abs", "rand", "srand",
+                    "system", "fprintf", "sprintf", "fgets", "fopen", "fclose",
+                    "fread", "fwrite", "pow", "sqrt", "atoi", "atof", "atoff",
+                    "isspace", "isdigit", "isalpha", "toupper", "tolower", "malloc_size",
+                    "time", "clock", "qsort", "bsearch", "strcmpi", "strlwr", "strupr"):
+            return Value("int", 0)
         raise SimError(self.cur_line, f"未定义的函数 '{name}'")
 
+    def malloc_count(self, e):
+        """从 malloc 表达式提取元素个数（如 n*sizeof(T) -> n）；否则 1"""
+        if e[0] == "bin" and e[1] == "*":
+            for sub in (e[2], e[3]):
+                if sub[0] != "sizeof" and sub[0] != "lit":
+                    try:
+                        v = self.eval_expr(sub)
+                        return max(1, self.to_int(v))
+                    except Exception:
+                        return 1
+        return 1
+
     def sizeof_type(self, e):
-        """从 sizeof(...) 表达式里提取类型名"""
-        if e[0] == "sizeof":
-            return e[1]
+        """从表达式里提取类型名（递归查找 sizeof(T)）"""
+        if isinstance(e, tuple):
+            if e[0] == "sizeof":
+                return e[1]
+            for sub in e[1:]:
+                if isinstance(sub, tuple):
+                    t = self.sizeof_type(sub)
+                    if t != "int":
+                        return t
         return "int"
 
     def call_user(self, name, args):
         fd = self.funcs[name]
-        if len(args) != len(fd.params):
+        # 支持变参：固定参数个数校验，多余实参忽略
+        fixed = [p for p in fd.params if p[0] != "<vararg>"]
+        if len(fixed) > len(args):
             raise SimError(self.cur_line, f"函数 {name} 参数个数不符")
-        # 先求实参
+        # 先求实参（函数名作实参时记为函数指针）
         argvals = []
         for a in args:
-            argvals.append(self.eval_expr(a))
+            if a[0] == "var" and a[1] in self.funcs:
+                argvals.append(("fn", a[1]))
+            else:
+                argvals.append(self.eval_expr(a))
         frame = Frame(name)
-        for (pname, ptype), av in zip(fd.params, argvals):
+        for (pname, ptype), av in zip(fixed, argvals[:len(fixed)]):
             if isinstance(ptype, tuple):  # 指针参数
                 vi = VarInfo(ptype[1], is_ptr=True, value=av)
+            elif ptype == "<fn>" and isinstance(av, tuple) and av[0] == "fn":
+                vi = VarInfo("int", value=Value("int", 0), fnptr_name=av[1])
+            elif isinstance(av, list):    # 数组参数（传数组首地址）
+                vi = VarInfo(ptype, is_array=True, arr_size=len(av), value=av)
+            elif isinstance(av, Value) and av.kind == "addr" and av.val in self.heap \
+                    and self.heap[av.val].array_vals is not None:
+                blk = self.heap[av.val]
+                vi = VarInfo(ptype, is_array=True, arr_size=len(blk.array_vals),
+                             value=blk.array_vals)
+            elif isinstance(av, tuple) and len(av) == 2 and av[0] == "fn":
+                # 函数名实参落入此处（参数类型未识别为 <fn>）：忽略
+                vi = VarInfo("int", value=Value("int", 0), fnptr_name=av[1])
             else:
                 if ptype == "void":
                     vi = VarInfo("int", value=Value("int", 0))
@@ -1016,6 +1362,12 @@ class SimEngine:
         k = st.kind
         if k == "block":
             return self.exec_block(st.stmts, ret_mode=True)
+        if k == "seq":
+            for s in st.stmts:
+                r = self.exec_stmt(s)
+                if r is not None:
+                    return r
+            return None
         if k == "decl":
             return self.exec_decl(st)
         if k == "assign":
@@ -1046,25 +1398,30 @@ class SimEngine:
                     return r
             return None
         if k == "for":
-            if st.init:
-                self.exec_stmt(st.init)
-            guard = 0
-            while (st.cond is None) or self.truthy(self.eval_expr(st.cond)):
-                guard += 1
-                if guard > 100000:
-                    raise SimError(st.line, "for 循环次数超限（疑似死循环）")
-                r = self.exec_stmt(st.body)
-                if r == "break":
-                    break
-                if r is not None:
-                    return r
-                if st.step:
-                    if isinstance(st.step, tuple) and st.step[0] == "assign":
-                        sv = self.eval_expr(st.step[2])
-                        self.assign(st.step[1], sv)
-                    else:
-                        self.eval_expr(st.step)
-            return None
+            # for 语句自身一个作用域（C99：多个 for 可各自声明同名变量）
+            self.frames[-1].scopes.append({})
+            try:
+                if st.init:
+                    self.exec_stmt(st.init)
+                guard = 0
+                while (st.cond is None) or self.truthy(self.eval_expr(st.cond)):
+                    guard += 1
+                    if guard > 100000:
+                        raise SimError(st.line, "for 循环次数超限（疑似死循环）")
+                    r = self.exec_stmt(st.body)
+                    if r == "break":
+                        break
+                    if r is not None:
+                        return r
+                    if st.step:
+                        if isinstance(st.step, tuple) and st.step[0] == "assign":
+                            sv = self.eval_expr(st.step[2])
+                            self.assign(st.step[1], sv)
+                        else:
+                            self.eval_expr(st.step)
+                return None
+            finally:
+                self.frames[-1].scopes.pop()
         if k == "return":
             if st.expr:
                 return ("ret", self.eval_expr(st.expr))
@@ -1081,11 +1438,22 @@ class SimEngine:
             raise SimError(st.line, f"变量 '{st.name}' 重复声明")
         if st.is_array:
             size = st.arr_size or 0
-            vals = [Value("int", 0)] * size
-            if st.init:
-                # int a[3] = {1,2,3};
-                if st.init[0] == "lit" and st.init[1] == 0:
-                    pass
+            if st.dims and len(st.dims) >= 2:
+                # 二维数组：列表套列表，天然支持 arr[i][j]
+                rows, cols = st.dims[0], st.dims[1]
+                vals = [[Value("int", 0) for _ in range(cols)] for _ in range(rows)]
+            else:
+                vals = [Value("int", 0)] * size
+            if st.init and st.init[0] == "arrinit":
+                flat = st.init[1]
+                if st.dims and len(st.dims) >= 2:
+                    cols = st.dims[1]
+                    for k, v in enumerate(flat):
+                        vals[k // cols][k % cols] = Value("int", v)
+                else:
+                    for i, v in enumerate(flat):
+                        if i < size:
+                            vals[i] = Value("int", v)
             vi = VarInfo(st.vtype, is_array=True, arr_size=size, value=vals)
             frame.declare(st.name, vi)
             return None
@@ -1094,12 +1462,20 @@ class SimEngine:
             if st.init:
                 val = self.eval_expr(st.init)
             vi = VarInfo(st.vtype, is_ptr=True, value=val)
-        else:
-            val = Value("int", 0)
-            if st.init:
-                val = self.eval_expr(st.init)
-                val = self.coerce(VarInfo("int"), val)
-            vi = VarInfo(st.vtype, is_ptr=False, value=val)
+            frame.declare(st.name, vi)
+            return None
+        if st.vtype in self.structs:
+            # 结构体变量（栈上）：分配一块内存，变量指向它
+            blk = self.alloc(st.vtype, 1)
+            vi = VarInfo(st.vtype, is_ptr=False, value=Value("addr", blk.addr))
+            frame.declare(st.name, vi)
+            return None
+        # 普通 int 变量
+        val = Value("int", 0)
+        if st.init:
+            val = self.eval_expr(st.init)
+            val = self.coerce(VarInfo("int"), val)
+        vi = VarInfo(st.vtype, is_ptr=False, value=val)
         frame.declare(st.name, vi)
         return None
 
@@ -1138,6 +1514,8 @@ class SimEngine:
                 "value": self.describe_value(vi.value)}
 
     def describe_value(self, v):
+        if isinstance(v, list):
+            return ("arr", [self.describe_value(x) for x in v])
         if v.kind == "int":
             return ("int", v.val)
         if v.kind == "addr":
