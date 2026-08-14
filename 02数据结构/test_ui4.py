@@ -82,6 +82,9 @@ print("[%s] 68行节点无重叠" % ("PASS" if ok68 else "FAIL"))
 # ---- 3. 点击内存块 → 右上角信息面板 ----
 app.show_line(68)
 root.update()
+app.canvas.xview_moveto(0)
+app.canvas.yview_moveto(0)
+root.update()
 app.drawer.selected_addr = None
 d = app.drawer
 assert d.node_rects, "node_rects 为空"

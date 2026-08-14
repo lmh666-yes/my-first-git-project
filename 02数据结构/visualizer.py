@@ -259,7 +259,7 @@ class Drawer:
             yy += 5 * z
         # 提示
         self.c.create_text(vx + 8 * z, yy + 2 * z, anchor="nw",
-                           text="▼ 下方为内存/结构图：拖动平移 · Ctrl/左键+滚轮缩放 · 点击内存块看详情",
+                           text="▼ 下方为内存/结构图：拖动平移 · Ctrl+滚轮缩放 · 双击复位 · 点击内存块看详情",
                            fill="#888888", font=self.FM(9))
 
         # ---- 下方：堆 / 链表结构（起点在标题之下，标题不被第一排节点遮挡） ----
@@ -277,7 +277,8 @@ class Drawer:
         self.fit()
 
     def fit(self):
-        """根据 Canvas 上所有元素自动设置滚动范围（排除右上角信息面板 window）"""
+        """根据 Canvas 上所有元素自动设置滚动范围（排除右上角信息面板 window；
+        scrollregion 始终从 (0,0) 开始，保证 canvasx/canvasy 与内容坐标一致，点击命中准确）"""
         try:
             coords = []
             for it in self.c.find_all():
@@ -287,11 +288,9 @@ class Drawer:
                 if b:
                     coords.append(b)
             if coords:
-                x1 = min(c[0] for c in coords)
-                y1 = min(c[1] for c in coords)
                 x2 = max(c[2] for c in coords)
                 y2 = max(c[3] for c in coords)
-                self.c.configure(scrollregion=(x1, y1, x2 + 40, y2 + 40))
+                self.c.configure(scrollregion=(0, 0, x2 + 40, y2 + 40))
             else:
                 self.c.configure(scrollregion="0 0 300 200")
         except Exception:
@@ -437,23 +436,41 @@ class Drawer:
         return 0
 
     def draw_chains(self, heads, heap_by_addr, x0, y0, H):
-        """画链表：宽度适配可视区自动换行，横向不溢出；每个节点 next 都画箭头
-        (指向堆内节点 / 指向 NULL / 野指针红色)，并记录审计数据"""
+        """画链表：只画主链(优先级最高的 head)，其他指向同一链节点的变量作引用标注，
+        避免同一堆块被重复绘制导致箭头错乱；独立链单独绘制，接入已画节点时断链标注。
+        宽度适配可视区自动换行。"""
         z = self.zoom
         vis_w = int(self.c.cget("width")) / z          # 可视宽度（内容坐标）
         max_w = max(260, vis_w - 60)                    # 每行宽度上限
         self.last_audit["chains"] = len(heads)
-        for addr, label in heads:
+        if not heads:
+            return
+        # 引用映射: addr -> [变量名]（除主链 label 外的所有指向）
+        main_addr, main_label = heads[0]
+        refs = {}
+        for haddr, hlabel in heads:
+            if haddr != main_addr or hlabel != main_label:
+                refs.setdefault(haddr, []).append(hlabel)
+        global_visited = set()
+        for head_addr, head_label in heads:
+            if head_addr in global_visited:
+                continue
             x = x0
             y = y0
             visited = set()
             pos = {}
-            cur = addr
+            cur = head_addr
             steps = 0
             prev = None                # (addr, rx, by) 上一节点，用于换行续接标记
             chain_bottom = y
             while cur in heap_by_addr and cur not in visited and steps < 200:
                 visited.add(cur)
+                if cur in global_visited:
+                    # 链在此接入已画节点：断链标注
+                    self.c.create_text(x + 2, y - 16 * z, anchor="nw",
+                                       text="↑ 接上方已画块", fill="#666666",
+                                       font=self.FM(9, True))
+                    break
                 blk = heap_by_addr[cur]
                 # 超出行宽 -> 换行，画向下续接标记（与下一行错开，不遮挡节点）
                 if prev is not None and x > x0 + max_w:
@@ -470,6 +487,12 @@ class Drawer:
                 pos[cur] = (x, y, rx, by)
                 chain_bottom = max(chain_bottom, by)
                 self.last_audit["nodes"] += 1
+                # 引用标注：其他变量也指向该块（只标注一次，不重复画链）
+                if cur in refs:
+                    tag = "← " + ", ".join(refs[cur])
+                    self.c.create_text(x - 6 * z, y + self.NODE_H0 * z,
+                                       anchor="se", text=tag, fill="#666666",
+                                       font=self.FM(9, True))
                 # next 字段目标
                 tgt = self._next_target(blk)
                 if tgt in heap_by_addr:
@@ -478,39 +501,53 @@ class Drawer:
                     x = rx + self.GAP * z
                     steps += 1
                 else:
-                    # next 为 NULL 或野指针 → 画带箭头的指向标记
-                    self._draw_next_target(rx, by, tgt, z)
+                    # next 为 NULL 或野指针 → 画带箭头的指向标记（与 next 字段行对齐）
+                    self._draw_next_target(rx, y, self._next_field_idx(blk), tgt, z)
                     break
-            # 画箭头：同一视觉行内连线（跨行由 ↘ 标记连接）
+            # 画箭头：同一视觉行内连线（跨行由 ↘ 标记连接），高度对准 next 字段行
             for a, (bx, by, rx, _bh) in pos.items():
                 blk = heap_by_addr[a]
                 tgt = self._next_target(blk)
                 if tgt in pos:
                     tx, ty, trx, _ = pos[tgt]
                     if abs(ty - by) < 2:
-                        self.arrow(rx - 4, by + self.NODE_H0 * z + 6 * z,
-                                   tx + 6, ty + self.NODE_H0 * z + 6 * z)
+                        idx = self._next_field_idx(blk)
+                        y1 = self._field_line_y(by, idx, z)
+                        y2 = self._field_line_y(ty, idx, z)
+                        self.arrow(rx + 1, y1, tx + 6, y2)
                         self.last_audit["arrows"] += 1
             self.c.create_text(x0, chain_bottom + 8 * z, anchor="nw",
-                               text=f"← {label}",
+                               text=f"← {head_label}",
                                fill="#666666", font=self.FM(10, True))
             y0 = chain_bottom + 44 * z   # 下一条链从本链底部下方开始
+            global_visited.update(visited)
 
-    def _draw_next_target(self, rx, by, tgt, z):
-        """画 next 指向 NULL 或野指针的标记（带箭头），指针指向一目了然"""
-        y_arrow = by + self.NODE_H0 * z + 6 * z
-        nx = rx + 10 * z
+    def _next_field_idx(self, blk):
+        """返回第一个指针(next)字段的序号，用于箭头与该行对齐"""
+        for i, fn in enumerate(blk["fields"]):
+            if blk["fields"][fn][0] == "ptr":
+                return i
+        return 0
+
+    def _field_line_y(self, y_top, idx, z):
+        """节点内第 idx 个字段行的中心 y（绝对坐标）"""
+        return y_top + self.NODE_H0 * z + idx * self.FIELD_H * z + self.FIELD_H * z / 2
+
+    def _draw_next_target(self, rx, y_top, idx, tgt, z):
+        """画 next 指向 NULL 或野指针的标记：箭头从 next 字段行水平引出，与 NULL 对齐"""
+        yline = self._field_line_y(y_top, idx, z)
+        nx = rx + 8 * z
         if tgt == 0:
-            self.c.create_text(nx + 6, y_arrow - 7 * z, anchor="nw",
+            self.c.create_text(nx + 6, yline - 7 * z, anchor="nw",
                                text="NULL", fill="#8a8a8a",
                                font=self.F(9, True))
-            self.arrow(rx - 4, y_arrow, nx + 2, y_arrow, color="#8a8a8a")
+            self.arrow(rx + 1, yline, nx + 4, yline, color="#8a8a8a")
             self.last_audit["nulls"] += 1
         else:
-            self.c.create_text(nx + 6, y_arrow - 7 * z, anchor="nw",
+            self.c.create_text(nx + 6, yline - 7 * z, anchor="nw",
                                text=f"⚠野指针 0x{tgt:x}", fill="#c62828",
                                font=self.F(9, True))
-            self.arrow(rx - 4, y_arrow, nx + 2, y_arrow, color="#c62828")
+            self.arrow(rx + 1, yline, nx + 4, yline, color="#c62828")
             self.last_audit["wilds"] += 1
 
     def draw_heap_blocks(self, heap_by_addr, x0, y0, H):
@@ -680,13 +717,14 @@ class App:
         self.vsb, self.hsb = vsb, hsb
         self.canvas.config(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         self.canvas.bind("<Configure>", lambda e: self.redraw())
-        # 交互：滚轮(点哪滚哪)、左键+滚轮或 Ctrl+滚轮缩放、拖拽平移、点击看详情
+        # 交互：滚轮(点哪滚哪)、Ctrl+滚轮缩放、拖拽平移、单击看详情、双击复位缩放
         self.canvas.bind("<MouseWheel>", self._cv_wheel)
         self.canvas.bind("<Button-4>", self._cv_wheel_lin)
         self.canvas.bind("<Button-5>", self._cv_wheel_lin)
         self.canvas.bind("<ButtonPress-1>", self._cv_press)
         self.canvas.bind("<B1-Motion>", self._cv_drag)
         self.canvas.bind("<ButtonRelease-1>", self._cv_release)
+        self.canvas.bind("<Double-Button-1>", self._zoom_reset)
         self.drawer = Drawer(self.canvas)
         self._canvas_mouse_down = False
         self._dragging = False
@@ -1047,8 +1085,8 @@ class App:
                 pass
 
     def _cv_wheel(self, ev):
-        """画布滚轮：左键按住 或 Ctrl → 缩放；Shift → 水平滚；否则垂直滚"""
-        if ev.state & 0x0004 or self._canvas_mouse_down:
+        """画布滚轮：Ctrl → 缩放；Shift → 水平滚；否则垂直滚"""
+        if ev.state & 0x0004:
             factor = 1.12 if ev.delta > 0 else 1 / 1.12
             self._zoom_at(factor, ev.x, ev.y)
         elif ev.state & 0x0001:
@@ -1060,8 +1098,8 @@ class App:
         return "break"
 
     def _cv_wheel_lin(self, ev):
-        """Linux 滚轮 Button-4/5"""
-        if self._canvas_mouse_down:
+        """Linux 滚轮 Button-4/5：Ctrl 缩放，否则垂直滚"""
+        if ev.state & 0x0004:
             factor = 1.12 if ev.num == 4 else 1 / 1.12
             self._zoom_at(factor, ev.x, ev.y)
         else:
@@ -1090,6 +1128,26 @@ class App:
             if reg_h > 0:
                 self.canvas.yview_moveto(max(0.0, (cy * ratio - my) / reg_h))
         self._keep_panel()
+        try:
+            self.set_status(f"缩放 {round(d.zoom * 100)}%  （双击画布恢复 100%）", False)
+        except Exception:
+            pass
+
+    def _zoom_reset(self, ev=None):
+        """双击画布：恢复 100% 缩放并回到左上角"""
+        d = self.drawer
+        if abs(d.zoom - 1.0) < 0.01:
+            return
+        d.zoom = 1.0
+        self.redraw()
+        self.canvas.update_idletasks()
+        self.canvas.xview_moveto(0)
+        self.canvas.yview_moveto(0)
+        self._keep_panel()
+        try:
+            self.set_status("已恢复 100% 缩放", False)
+        except Exception:
+            pass
 
     def _cv_press(self, ev):
         self._canvas_mouse_down = True
