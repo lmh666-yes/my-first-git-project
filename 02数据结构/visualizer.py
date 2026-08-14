@@ -165,6 +165,8 @@ class Drawer:
         self.heap_by_addr = {}
         self._font_cache = {}
         self._fo_cache = {}
+        self.last_audit = {"chains": 0, "nodes": 0, "arrows": 0,
+                           "nulls": 0, "wilds": 0, "wraps": 0}
 
     # ---------- 字体（随缩放缩放） ----------
     def F(self, size, bold=False, fam="Consolas"):
@@ -211,6 +213,8 @@ class Drawer:
         self.heap_by_addr = {b["addr"]: b for b in heap}
         frames = self.frames
         heap_by_addr = self.heap_by_addr
+        self.last_audit = {"chains": 0, "nodes": 0, "arrows": 0,
+                           "nulls": 0, "wilds": 0, "wraps": 0}
         # 标题（含变更摘要）
         self.c.create_text(10 * z, 8 * z, anchor="nw", text=msg,
                            fill="#1a5276", font=self.FM(12, True))
@@ -242,8 +246,15 @@ class Drawer:
             yy += 19 * z
             for name, v in fr["vars"]:
                 line = self.fmt_var(name, v)
+                warn = self._dangling_warn(v, heap_by_addr)
                 self.c.create_text(vx + 16 * z, yy, anchor="nw", text=line,
-                                   fill="#333333", font=self.F(10))
+                                   fill="#c62828" if warn else "#333333",
+                                   font=self.F(10))
+                if warn:
+                    self.c.create_text(vx + 16 * z + self.mw(line, self.F(10)) + 14 * z,
+                                       yy, anchor="nw",
+                                       text="⚠指向未分配内存(野指针/已释放)",
+                                       fill="#c62828", font=self.FM(9, True))
                 yy += 19 * z
             yy += 5 * z
         # 提示
@@ -251,10 +262,10 @@ class Drawer:
                            text="▼ 下方为内存/结构图：拖动平移 · Ctrl/左键+滚轮缩放 · 点击内存块看详情",
                            fill="#888888", font=self.FM(9))
 
-        # ---- 下方：堆 / 链表结构（起点基于变量区矩形底部，任意帧数都不重叠） ----
+        # ---- 下方：堆 / 链表结构（起点在标题之下，标题不被第一排节点遮挡） ----
         hx0 = vx
-        htop = vy + ph + 16 * z
-        self.c.create_text(hx0, htop - 14 * z, anchor="nw",
+        htop = vy + ph + 34 * z
+        self.c.create_text(hx0, htop - 16 * z, anchor="nw",
                            text="内存 / 结构（■堆 ■栈）",
                            fill="#555555", font=self.FM(10, True))
         chain_heads = self.find_chains(frames, heap_by_addr)
@@ -404,11 +415,34 @@ class Drawer:
         self.node_rects[addr] = (x, y, w, h)
         return x + w, y + h
 
+    def _dangling_warn(self, v, heap_by_addr):
+        """指针变量指向堆外且非 NULL → 野指针/已释放警告"""
+        val = v.get("value")
+        if not val or val[0] != "ptr":
+            return False
+        addr = val[1]
+        if addr == 0:
+            return False
+        if addr in heap_by_addr:
+            return False
+        if v.get("loc") == "栈" and val[0] == "ptr":
+            return False
+        return True
+
+    def _next_target(self, blk):
+        """返回该块第一个指针字段的目标地址(0=无/NULL, 非0=地址)"""
+        for fn, fv in blk["fields"].items():
+            if fv[0] == "ptr":
+                return fv[1]
+        return 0
+
     def draw_chains(self, heads, heap_by_addr, x0, y0, H):
-        """画链表：宽度适配可视区自动换行，横向不溢出，滚动条滑块大"""
+        """画链表：宽度适配可视区自动换行，横向不溢出；每个节点 next 都画箭头
+        (指向堆内节点 / 指向 NULL / 野指针红色)，并记录审计数据"""
         z = self.zoom
         vis_w = int(self.c.cget("width")) / z          # 可视宽度（内容坐标）
         max_w = max(260, vis_w - 60)                    # 每行宽度上限
+        self.last_audit["chains"] = len(heads)
         for addr, label in heads:
             x = x0
             y = y0
@@ -421,53 +455,63 @@ class Drawer:
             while cur in heap_by_addr and cur not in visited and steps < 200:
                 visited.add(cur)
                 blk = heap_by_addr[cur]
-                # 超出行宽 -> 换行，画向下续接标记
+                # 超出行宽 -> 换行，画向下续接标记（与下一行错开，不遮挡节点）
                 if prev is not None and x > x0 + max_w:
                     _paddr, prx, pby = prev
-                    self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 26 * z,
+                    self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 20 * z,
                                        fill="#1565c0", width=2, arrow=tk.LAST)
-                    self.c.create_text(x0 + 2, pby + 28 * z, anchor="nw",
+                    self.c.create_text(x0 + 2, pby + 22 * z, anchor="nw",
                                        text="↘ 续接", fill="#1565c0",
                                        font=self.FM(9, True))
-                    y = pby + 26 * z + 10 * z
+                    y = pby + 40 * z
                     x = x0
+                    self.last_audit["wraps"] += 1
                 rx, by = self.draw_node(x, y, cur, blk, heap_by_addr)
                 pos[cur] = (x, y, rx, by)
                 chain_bottom = max(chain_bottom, by)
+                self.last_audit["nodes"] += 1
                 # next 字段目标
-                tgt = None
-                for fn, fv in blk["fields"].items():
-                    if fv[0] == "ptr":
-                        tgt = fv[1]
-                        break
+                tgt = self._next_target(blk)
                 if tgt in heap_by_addr:
                     prev = (cur, rx, by)
                     cur = tgt
                     x = rx + self.GAP * z
                     steps += 1
                 else:
-                    # 画 NULL 尾
-                    self.c.create_text(x + self.NODE_W * z + 10 * z, y + 14 * z,
-                                       anchor="nw", text="NULL",
-                                       fill="#999999", font=self.F(9, True))
+                    # next 为 NULL 或野指针 → 画带箭头的指向标记
+                    self._draw_next_target(rx, by, tgt, z)
                     break
-            # 画箭头：仅同一视觉行内连线（跨行由 ↘ 标记连接）
+            # 画箭头：同一视觉行内连线（跨行由 ↘ 标记连接）
             for a, (bx, by, rx, _bh) in pos.items():
                 blk = heap_by_addr[a]
-                tgt = None
-                for fn, fv in blk["fields"].items():
-                    if fv[0] == "ptr":
-                        tgt = fv[1]
-                        break
+                tgt = self._next_target(blk)
                 if tgt in pos:
                     tx, ty, trx, _ = pos[tgt]
                     if abs(ty - by) < 2:
                         self.arrow(rx - 4, by + self.NODE_H0 * z + 6 * z,
                                    tx + 6, ty + self.NODE_H0 * z + 6 * z)
+                        self.last_audit["arrows"] += 1
             self.c.create_text(x0, chain_bottom + 8 * z, anchor="nw",
                                text=f"← {label}",
                                fill="#666666", font=self.FM(10, True))
             y0 = chain_bottom + 44 * z   # 下一条链从本链底部下方开始
+
+    def _draw_next_target(self, rx, by, tgt, z):
+        """画 next 指向 NULL 或野指针的标记（带箭头），指针指向一目了然"""
+        y_arrow = by + self.NODE_H0 * z + 6 * z
+        nx = rx + 10 * z
+        if tgt == 0:
+            self.c.create_text(nx + 6, y_arrow - 7 * z, anchor="nw",
+                               text="NULL", fill="#8a8a8a",
+                               font=self.F(9, True))
+            self.arrow(rx - 4, y_arrow, nx + 2, y_arrow, color="#8a8a8a")
+            self.last_audit["nulls"] += 1
+        else:
+            self.c.create_text(nx + 6, y_arrow - 7 * z, anchor="nw",
+                               text=f"⚠野指针 0x{tgt:x}", fill="#c62828",
+                               font=self.F(9, True))
+            self.arrow(rx - 4, y_arrow, nx + 2, y_arrow, color="#c62828")
+            self.last_audit["wilds"] += 1
 
     def draw_heap_blocks(self, heap_by_addr, x0, y0, H):
         z = self.zoom
@@ -482,8 +526,8 @@ class Drawer:
                 x = x0
                 y = by + 40 * z
 
-    def arrow(self, x1, y1, x2, y2):
-        self.c.create_line(x1, y1, x2, y2, fill="#1565c0",
+    def arrow(self, x1, y1, x2, y2, color="#1565c0"):
+        self.c.create_line(x1, y1, x2, y2, fill=color,
                            width=max(2, round(2 * self.zoom)),
                            arrow=tk.LAST, arrowshape=(12, 15, 7))
 
