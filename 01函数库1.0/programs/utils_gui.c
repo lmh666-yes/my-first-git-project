@@ -289,7 +289,8 @@ static Loc find_impl(const char *name) {
     return find_decl(name);
 }
 
-/* 提取完整实现源码（定义行到花括号闭合；宏等无花括号时取整行） */
+/* 提取完整实现源码（定义行到花括号闭合）。
+ * 注意：会跳过字符串/字符/注释，避免其中的花括号干扰配对 */
 static char* extract_function_source(const Loc *loc) {
     if (loc->line <= 0) return NULL;
     const char *text = g_docs[loc->doc].text;
@@ -305,8 +306,37 @@ static char* extract_function_source(const Loc *loc) {
     const char *p = pos;
     const char *end = p;
     while (*p) {
-        if (*p == '{') { depth++; started = 1; }
-        else if (*p == '}') {
+        char c = *p;
+        if (c == '/' && p[1] == '/') {          /* 行注释 */
+            while (*p && *p != '\n') p++;
+            continue;
+        }
+        if (c == '/' && p[1] == '*') {          /* 块注释 */
+            p += 2;
+            while (*p && !(p[0] == '*' && p[1] == '/')) p++;
+            if (*p) p += 2;
+            continue;
+        }
+        if (c == '"') {                         /* 字符串 */
+            p++;
+            while (*p && *p != '"' && *p != '\n') {
+                if (*p == '\\' && p[1]) p++;
+                p++;
+            }
+            if (*p == '"') p++;
+            continue;
+        }
+        if (c == '\'') {                        /* 字符字面量 */
+            p++;
+            while (*p && *p != '\'' && *p != '\n') {
+                if (*p == '\\' && p[1]) p++;
+                p++;
+            }
+            if (*p == '\'') p++;
+            continue;
+        }
+        if (c == '{') { depth++; started = 1; }
+        else if (c == '}') {
             depth--;
             if (started && depth == 0) { end = p + 1; break; }
         }
@@ -328,6 +358,69 @@ static char* extract_function_source(const Loc *loc) {
     memcpy(src, pos, len);
     src[len] = '\0';
     return src;
+}
+
+/* 提取函数声明前的文档注释块（含 @param / @return 等），返回清理后的文本 */
+static char* extract_doc_block(const Loc *decl) {
+    if (decl->line <= 0) return NULL;
+    const char *text = g_docs[decl->doc].text;
+    const char *pos = text;
+    int line = 1;
+    while (line < decl->line) {
+        const char *nl = strchr(pos, '\n');
+        if (!nl) return NULL;
+        pos = nl + 1;
+        line++;
+    }
+    /* 从文本开头到声明行，找最后一个文档注释起始标记（斜杠+双星号） */
+    const char *p = text;
+    const char *last = NULL;
+    while (p < pos) {
+        if (p[0] == '/' && p[1] == '*' && p[2] == '*') last = p;
+        p++;
+    }
+    if (!last) return NULL;
+    /* 找注释结束标记（星号+斜杠） */
+    const char *q = last + 3;
+    const char *end = NULL;
+    while (q + 1 < pos) {
+        if (q[0] == '*' && q[1] == '/') { end = q; break; }
+        q++;
+    }
+    if (!end) return NULL;
+
+    size_t cap = (size_t)(end - last) + 4;
+    char *out = (char*)malloc(cap);
+    if (!out) return NULL;
+    size_t o = 0;
+    const char *ln = last;
+    while (ln < end) {
+        const char *nl2 = strchr(ln, '\n');
+        const char *le = (nl2 && nl2 < end) ? nl2 : end;
+        const char *a = ln;
+        const char *b = le;
+        while (a < b && (*a == ' ' || *a == '\t')) a++;
+        if (a < b && *a == '*') {
+            a++;
+            if (a < b && *a == ' ') a++;
+        }
+        while (b > a && (b[-1] == ' ' || b[-1] == '\t' || b[-1] == '\r')) b--;
+        size_t linelen = (size_t)(b - a);
+        if (linelen > 0) {
+            if (o + linelen + 3 > cap) break;
+            memcpy(out + o, a, linelen);
+            o += linelen;
+            out[o++] = '\r';
+            out[o++] = '\n';
+        }
+        if (!nl2) break;
+        ln = nl2 + 1;
+    }
+    if (o > 0 && out[o-1] == '\n') o--;
+    if (o > 0 && out[o-1] == '\r') o--;
+    out[o] = '\0';
+    if (o == 0) { free(out); return NULL; }
+    return out;
 }
 
 /* ============ E. 主题配色（theme.ini + 默认值） ============ */
@@ -356,7 +449,7 @@ static COLORREF parse_color(const char *s) {
 static void theme_default(Theme *t) {
     t->background = rgb(0x1E, 0x1E, 0x1E);
     t->default_txt= rgb(0xD4, 0xD4, 0xD4);
-    t->meta       = rgb(0x6E, 0x76, 0x81);
+    t->meta       = rgb(0x8B, 0xC3, 0x4A);   /* 介绍文字：亮绿 */
     t->keyword    = rgb(0x56, 0x9C, 0xD6);
     t->control    = rgb(0xC5, 0x86, 0xC0);
     t->type       = rgb(0x4E, 0xC9, 0xB0);
@@ -620,9 +713,9 @@ static void highlight_code(const char *text, int code_start) {
                 continue;
             }
 
-            /* 普通标识符：struct 名用 type 色，否则默认色 */
+            /* 普通标识符：struct 名用 type 色，变量用 param 浅蓝 */
             if (prev_struct) { apply_rich_color(s, e, g_theme.type, 0); prev_struct = 0; }
-            else             { apply_rich_color(s, e, g_theme.default_txt, 0); }
+            else             { apply_rich_color(s, e, g_theme.param, 0); }
             continue;
         }
         i++;
@@ -805,21 +898,24 @@ static void show_detail(int func_index) {
     Loc decl = find_decl(f->name);
     Loc impl = find_impl(f->name);
     char *src = (impl.line > 0) ? extract_function_source(&impl) : NULL;
+    char *doc = extract_doc_block(&decl);   /* 详细说明（@param/@return） */
 
     size_t need = 1024 + strlen(f->name) + strlen(f->section) + strlen(f->desc)
-                + strlen(f->example) + (src ? strlen(src) : 128);
+                + strlen(f->example) + (src ? strlen(src) : 128) + (doc ? strlen(doc) : 64);
     char *buf = (char*)malloc(need);
-    if (!buf) { free(src); return; }
+    if (!buf) { free(src); free(doc); return; }
     int len = snprintf(buf, need,
         "函数名 : %s\r\n"
         "分类   : %s\r\n"
         "功能   : %s\r\n"
         "示例   : %s\r\n"
+        "详细说明:\r\n%s\r\n"
         "声明位置: %s 第 %d 行\r\n"
         "实现位置: %s 第 %d 行\r\n"
         "（单击查看详情 · 双击或点[打开实现]跳转 VS Code）\r\n"
         "\r\n---------- 实现源码 ----------\r\n%s",
         f->name, f->section, f->desc, f->example,
+        doc ? doc : "（无详细注释）",
         decl.line > 0 ? g_docs[decl.doc].display : "-",
         decl.line,
         impl.line > 0 ? g_docs[impl.doc].display : "-",
@@ -839,6 +935,7 @@ static void show_detail(int func_index) {
     }
     free(buf);
     free(src);
+    free(doc);
 }
 
 /* ---------- 分类下拉（带数量） ---------- */
@@ -947,10 +1044,10 @@ static void create_controls(HWND hwnd) {
 static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lParam) {
     switch (msg) {
     case WM_CREATE:
-        g_hFont = CreateFontA(-16, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+        g_hFont = CreateFontA(-16, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             DEFAULT_PITCH, "Microsoft YaHei");
-        g_hCodeFont = CreateFontA(-15, 0, 0, 0, FW_NORMAL, 0, 0, 0, DEFAULT_CHARSET,
+        g_hCodeFont = CreateFontA(-15, 0, 0, 0, FW_BOLD, 0, 0, 0, DEFAULT_CHARSET,
             OUT_DEFAULT_PRECIS, CLIP_DEFAULT_PRECIS, CLEARTYPE_QUALITY,
             FIXED_PITCH, "Consolas");
         create_controls(hwnd);
@@ -1053,13 +1150,18 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 update_sort_buttons();
                 refresh_list();
             } else if (nm->code == NM_CUSTOMDRAW) {
-                /* 列表斑马纹 */
+                /* 列表斑马纹 + 选中项高亮（深蓝底白字，始终醒目） */
                 NMLVCUSTOMDRAW *lvd = (NMLVCUSTOMDRAW*)lParam;
                 if (lvd->nmcd.dwDrawStage == CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
                 if (lvd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
                     int row = (int)lvd->nmcd.dwItemSpec;
-                    lvd->clrText = RGB(30, 30, 30);
-                    lvd->clrTextBk = (row % 2 == 0) ? RGB(255, 255, 255) : RGB(240, 245, 251);
+                    if (lvd->nmcd.uItemState & CDIS_SELECTED) {
+                        lvd->clrText = RGB(255, 255, 255);
+                        lvd->clrTextBk = RGB(0, 100, 170);
+                    } else {
+                        lvd->clrText = RGB(25, 25, 25);
+                        lvd->clrTextBk = (row % 2 == 0) ? RGB(255, 255, 255) : RGB(222, 232, 243);
+                    }
                     return CDRF_NEWFONT;
                 }
             }

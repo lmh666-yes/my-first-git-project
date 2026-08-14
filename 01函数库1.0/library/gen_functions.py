@@ -2461,9 +2461,22 @@ def build_index():
                     title = title.replace('（自动生成）', '').strip()
                     if title:
                         section = title
-        # 文档注释
+        # 文档注释（支持单行 /** xxx */ 和多行 /** ... */）
         if s.startswith('/**'):
             inner = s[3:].strip().rstrip('*/').strip()
+            if not inner:
+                # 多行注释：取第一行非空描述
+                j = i + 1
+                while j < len(lines):
+                    t = lines[j].strip()
+                    if '*/' in t:
+                        if not inner:
+                            inner = t.split('*/')[0].strip().lstrip('*').strip()
+                        break
+                    t = t.lstrip('*').strip()
+                    if t and not inner:
+                        inner = t
+                    j += 1
             if inner:
                 pending = inner
         elif s.startswith('//') and not s.startswith('//='):

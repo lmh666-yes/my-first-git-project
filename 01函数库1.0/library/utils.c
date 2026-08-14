@@ -22,17 +22,12 @@ void print_int_array(int arr[], int size) {
     printf("\n");
 }
 
-/**************************** CodeGeeX Inline Diff ****************************/
 void print_double_array(double array[], int length) {
     for (int index = 0; index < length; index++) {
         printf("%.2f ", array[index]);
-void print_double_array(double arr[], int size) {
-    for (int i = 0; i < size; i++) {
-        printf("%.2f ", arr[i]);
     }
     printf("\n");
 }
-/******************** 4362b0a4-f076-4106-ab3e-5ea37b38aad1 ********************/
 
 void fill_int_array(int arr[], int size, int value) {
     for (int i = 0; i < size; i++) {
@@ -53,10 +48,11 @@ void fill_random_range(int arr[], int size, int min, int max) {
 }
 
 void reverse_int_array(int arr[], int size) {
+    /* 首尾对称交换，只需遍历前半部分 */
     for (int i = 0; i < size / 2; i++) {
-        int temp = arr[i];
-        arr[i] = arr[size - 1 - i];
-        arr[size - 1 - i] = temp;
+        int temp = arr[i];              /* 暂存左端元素 */
+        arr[i] = arr[size - 1 - i];     /* 左端换成右端元素 */
+        arr[size - 1 - i] = temp;       /* 右端换成左端元素 */
     }
 }
 
@@ -114,17 +110,19 @@ int min_int_array(int arr[], int size) {
 }
 
 void bubble_sort(int arr[], int size) {
+    /* 外层循环：最多需要 size-1 轮 */
     for (int i = 0; i < size - 1; i++) {
-        int swapped = 0;
+        int swapped = 0;   /* 标记本轮是否发生过交换 */
+        /* 内层循环：把当前未排序部分的最大元素“冒泡”到末尾 */
         for (int j = 0; j < size - 1 - i; j++) {
-            if (arr[j] > arr[j + 1]) {
+            if (arr[j] > arr[j + 1]) {        /* 前一个比后一个大则交换 */
                 int temp = arr[j];
                 arr[j] = arr[j + 1];
                 arr[j + 1] = temp;
                 swapped = 1;
             }
         }
-        if (!swapped) break;
+        if (!swapped) break;   /* 一轮没有交换说明已经有序，提前结束 */
     }
 }
 
@@ -155,14 +153,14 @@ void selection_sort(int arr[], int size) {
 }
 
 int binary_search(int arr[], int size, int target) {
-    int left = 0, right = size - 1;
-    while (left <= right) {
-        int mid = left + (right - left) / 2;
-        if (arr[mid] == target) return mid;
-        if (arr[mid] < target) left = mid + 1;
-        else right = mid - 1;
+    int left = 0, right = size - 1;        /* 当前查找区间 [left, right] */
+    while (left <= right) {                /* 区间非空则继续查找 */
+        int mid = left + (right - left) / 2;   /* 取中间下标（避免溢出） */
+        if (arr[mid] == target) return mid;    /* 命中，返回下标 */
+        if (arr[mid] < target) left = mid + 1; /* 目标在右半区，收缩左边界 */
+        else right = mid - 1;                  /* 目标在左半区，收缩右边界 */
     }
-    return -1;
+    return -1;                               /* 未找到返回 -1 */
 }
 
 int* merge_sorted_arrays(int arr1[], int size1, int arr2[], int size2, int *out_size) {
@@ -354,13 +352,13 @@ int is_prime(int n) {
 }
 
 int gcd(int a, int b) {
-    a = abs(a); b = abs(b);
-    while (b) {
-        int t = a % b;
-        a = b;
-        b = t;
+    a = abs(a); b = abs(b);   /* 先取绝对值，负数也能正确计算 */
+    while (b) {               /* 辗转相除：直到余数为 0 */
+        int t = a % b;        /* 求余数 */
+        a = b;                /* 原来的除数成为新的被除数 */
+        b = t;                /* 余数成为新的除数 */
     }
-    return a;
+    return a;                 /* 余数为 0 时 a 即最大公约数 */
 }
 
 int lcm(int a, int b) {
@@ -812,24 +810,26 @@ int is_palindrome_num(int n) {
 //                     排序算法函数实现
 // ============================================================
 
+/* 分区：以最后一个元素为基准，小的放左边、大的放右边，返回基准最终下标 */
 static int qs_partition(int arr[], int low, int high) {
-    int pivot = arr[high];
-    int i = low - 1;
+    int pivot = arr[high];       /* 基准值取区间最后一个元素 */
+    int i = low - 1;             /* i 指向“已排好的小值区”末尾 */
     for (int j = low; j < high; j++) {
-        if (arr[j] < pivot) {
+        if (arr[j] < pivot) {    /* 比基准小则交换到左边区域 */
             i++;
             int temp = arr[i]; arr[i] = arr[j]; arr[j] = temp;
         }
     }
+    /* 把基准放到正确位置（i+1 处） */
     int temp = arr[i + 1]; arr[i + 1] = arr[high]; arr[high] = temp;
-    return i + 1;
+    return i + 1;                /* 返回基准最终下标 */
 }
 
 static void qs_recursive(int arr[], int low, int high) {
     if (low < high) {
-        int pi = qs_partition(arr, low, high);
-        qs_recursive(arr, low, pi - 1);
-        qs_recursive(arr, pi + 1, high);
+        int pi = qs_partition(arr, low, high);  /* 分区，得到基准位置 */
+        qs_recursive(arr, low, pi - 1);         /* 递归排序左半部分 */
+        qs_recursive(arr, pi + 1, high);        /* 递归排序右半部分 */
     }
 }
 
@@ -1038,17 +1038,19 @@ void list_insert_tail(ListNode **head, int data) {
 
 void list_insert_sorted(ListNode **head, int data) {
     if (!head) return;
-    ListNode *node = list_create(data);
+    ListNode *node = list_create(data);   /* 新建节点 */
     if (!node) return;
+    /* 链表为空，或新值比头节点还小 → 插入到头部 */
     if (*head == NULL || (*head)->data >= data) {
         node->next = *head;
         *head = node;
         return;
     }
+    /* 从头部向后找插入位置：第一个值 >= data 的节点之前 */
     ListNode *p = *head;
     while (p->next && p->next->data < data) p = p->next;
-    node->next = p->next;
-    p->next = node;
+    node->next = p->next;   /* 新节点先指向后一个节点 */
+    p->next = node;         /* 前一个节点再指向新节点 */
 }
 
 void list_delete_value(ListNode **head, int data) {
@@ -1199,10 +1201,10 @@ void queue_destroy(Queue *q) {
 }
 
 int queue_enqueue(Queue *q, int value) {
-    if (!q || q->size >= q->capacity) return -1;
-    q->data[q->rear] = value;
-    q->rear = (q->rear + 1) % q->capacity;
-    q->size++;
+    if (!q || q->size >= q->capacity) return -1;  /* 队列已满则失败 */
+    q->data[q->rear] = value;                     /* 元素写入队尾位置 */
+    q->rear = (q->rear + 1) % q->capacity;        /* 队尾后移（环形回绕） */
+    q->size++;                                    /* 元素个数 +1 */
     return 0;
 }
 
