@@ -304,9 +304,8 @@ class Parser:
 
     # ---------- 函数 ----------
     def parse_function(self, funcs):
-        ret_t = self.next()
-        if ret_t.text == "struct":
-            self.next()  # 结构体名
+        # 返回类型（含 struct Name / Node* / int* 等）
+        self.parse_type()
         name_t = self.next()
         if name_t.kind != "id" or name_t.text in funcs:
             raise SimError(name_t.line, f"函数名错误或重复定义 '{name_t.text}'")
@@ -1174,8 +1173,16 @@ class Simulator:
         m = self.main_name()
         if m is None:
             return None
-        eng.frames.append(Frame(m))
-        return self.funcs[m]
+        fd = self.funcs[m]
+        frame = Frame(m)
+        # 入口函数（无 main 时取第一个函数）参数给默认值，便于直接分析片段
+        for pname, ptype in fd.params:
+            if isinstance(ptype, tuple):  # 指针参数默认 NULL
+                frame.declare(pname, VarInfo(ptype[1], is_ptr=True, value=Value("null")))
+            else:
+                frame.declare(pname, VarInfo(ptype, is_ptr=False, value=Value("int", 0)))
+        eng.frames.append(frame)
+        return fd
 
     def run(self):
         """全量执行；返回 {line: snapshot}（该行执行后的状态）"""

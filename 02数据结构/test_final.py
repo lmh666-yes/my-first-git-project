@@ -17,6 +17,7 @@ def check(cond, msg):
 root = tk.Tk()
 root.withdraw()
 app = App(root)
+app._popup = False  # 测试时关闭错误弹窗
 
 # 1. 外部 examples 文件
 ex_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")

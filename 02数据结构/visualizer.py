@@ -160,6 +160,7 @@ class Drawer:
         W = int(self.c.cget("width"))
         H = int(self.c.cget("height"))
         if W < 50 or H < 50:
+            self.fit()
             return
         # 标题
         self.c.create_text(10, 10, anchor="nw", text=msg, fill="#333333",
@@ -168,11 +169,16 @@ class Drawer:
         heap = snap.get("heap", [])
         heap_by_addr = {b["addr"]: b for b in heap}
 
-        # ---- 左侧：调用栈 / 变量面板 ----
+        # ---- 左侧：调用栈 / 变量面板（高度自适应内容，靠滚动查看） ----
         vx = 10
         vy = 40
         vw = 210
-        self.c.create_rectangle(vx, vy, vx + vw, H - 10, outline="#bbbbbb",
+        # 先算出面板所需高度
+        need_h = vy + 26
+        for fr in frames:
+            need_h += 20 + len(fr["vars"]) * 17 + 6
+        ph = max(need_h + 8, 120)
+        self.c.create_rectangle(vx, vy, vx + vw, vy + ph, outline="#bbbbbb",
                                 fill="#f4f6f8", width=1)
         self.c.create_text(vx + 6, vy + 4, anchor="nw", text="调用栈 / 变量",
                            fill="#555555", font=("Microsoft YaHei", 10, "bold"))
@@ -187,8 +193,6 @@ class Drawer:
                                    fill="#333333", font=("Consolas", 9))
                 yy += 17
             yy += 6
-            if yy > H - 20:
-                break
 
         # ---- 右侧：堆 / 链表结构 ----
         hx0 = vx + vw + 30
@@ -198,6 +202,19 @@ class Drawer:
             self.draw_chains(chain_heads, heap_by_addr, hx0, 40, H)
         else:
             self.draw_heap_blocks(heap_by_addr, hx0, 40, H)
+        # 根据所有已绘制内容自动扩展滚动范围（内容超出窗口时可滚动查看）
+        self.fit()
+
+    def fit(self):
+        """根据 Canvas 上所有元素自动设置滚动范围"""
+        try:
+            bb = self.c.bbox("all")
+            if bb:
+                self.c.configure(scrollregion=(0, 0, bb[2] + 40, bb[3] + 40))
+            else:
+                self.c.configure(scrollregion="0 0 300 200")
+        except Exception:
+            self.c.configure(scrollregion="0 0 300 200")
 
     def fmt_var(self, name, v):
         t = v.get("type", "")
@@ -351,6 +368,7 @@ class App:
         self.current_line = None
         self.code_lines = []
         self.sim = None
+        self._popup = True   # 错误弹窗开关（测试时可关闭）
 
         # ---- 顶部工具栏 ----
         bar = tk.Frame(root, bg="#2c3e50")
@@ -401,9 +419,14 @@ class App:
         self.code.bind("<Button-1>", self.on_code_click)
         self.code.bind("<KeyRelease>", lambda e: self._upd_lines())
 
-        # 右侧画布
+        # 右侧画布（带水平/垂直滚动条，内容超出时可滚动查看）
         self.canvas = tk.Canvas(right, bg="#ffffff", highlightthickness=0)
-        self.canvas.pack(fill=tk.BOTH, expand=True)
+        self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        vsb = tk.Scrollbar(right, orient=tk.VERTICAL, command=self.canvas.yview)
+        vsb.pack(side=tk.RIGHT, fill=tk.Y)
+        hsb = tk.Scrollbar(right, orient=tk.HORIZONTAL, command=self.canvas.xview)
+        hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        self.canvas.config(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         self.canvas.bind("<Configure>", lambda e: self.redraw())
         self.drawer = Drawer(self.canvas)
 
@@ -543,6 +566,7 @@ class App:
         self.canvas.create_text(20, 40, anchor="nw",
                                 text="（暂无图形。点击左侧代码行，或点击“运行全部”）",
                                 fill="#999999", font=("Microsoft YaHei", 12))
+        self.drawer.fit()
 
     def redraw(self):
         if self.current_line and self.snapshots:
@@ -601,8 +625,73 @@ class App:
         self.code.tag_remove("er", "1.0", "end")
         self.highlight_syntax()
         self._upd_lines()
+        # 载入后自动执行到第一条语句并立即显示，避免“没反应”
+        self._auto_first()
+        self.set_status(f"已载入代码（{len(text.splitlines())} 行）。点击代码行查看每一步状态", False)
+
+    # 检测常见 C++ 特性，给出友好提示（本工具仅支持 C 子集）
+    CPP_HINTS = ["cout", "cin", "endl", "::", "new ", "delete ",
+                 "class ", "namespace", "template", "vector<",
+                 "std::", "using namespace", "public:", "private:",
+                 ".push_back", "->push_back", "#include <iostream>",
+                 "#include <string>"]
+
+    def detect_cpp_hint(self, code):
+        for h in self.CPP_HINTS:
+            if h in code:
+                return h
+        return None
+
+    def _auto_first(self):
+        """载入代码后自动执行第一行并显示；失败时给出明确提示（弹窗 + 标红）"""
+        code = self.get_code()
+        if not code.strip():
+            self.draw_empty()
+            return
+        # C++ 特性提示
+        hint = self.detect_cpp_hint(code)
+        try:
+            sim = Simulator(code)
+            if sim.main_name() is None:
+                self.draw_empty()
+                msg = "没有找到 int main() 或任何函数定义，无法执行。\n请粘贴包含函数定义的完整代码片段。"
+                self.set_status("未找到可执行函数", True)
+                messagebox.showwarning("无法分析", msg)
+                return
+            snaps = sim.run()
+            err = sim.engine.error if sim.engine else None
+        except SimError as ex:
+            self._show_load_error(ex, hint)
+            return
+        if err:
+            self._show_load_error(SimError(err.line, err.msg), hint)
+            return
+        if not snaps:
+            self.draw_empty()
+            self.set_status("代码中没有可执行的语句", True)
+            return
+        first = min(snaps.keys())
+        self.snapshots = snaps
+        self.current_line = first
+        self.code.tag_remove("hl", "1.0", "end")
+        self.code.tag_add("hl", f"{first}.0", f"{first}.end")
+        self.code.see(f"{first}.0")
+        self.drawer.draw(snaps[first], f"执行到第 {first} 行（该行执行后）")
+        if hint:
+            self.set_status(f"提示：检测到 C++ 写法 '{hint}'，本工具主要支持 C 子集，部分内容可能无法模拟", True)
+        else:
+            self.set_status(f"已自动执行到第 {first} 行；点击任意代码行查看对应状态", False)
+
+    def _show_load_error(self, ex, hint):
         self.draw_empty()
-        self.set_status(f"已载入代码（{len(text.splitlines())} 行）。点击代码行查看执行状态", False)
+        self.highlight_error(ex.line)
+        msg = f"无法分析该代码：\n{ex.msg}\n\n"
+        if hint:
+            msg += f"检测到 C++ 写法 '{hint}'，本工具目前支持 C 子集\n（结构体/指针/malloc/if/while/for/递归/数组）。\n"
+        msg += "可参考内置示例的写法。"
+        self.set_status(f"错误：{ex.msg}", True)
+        if self._popup:
+            messagebox.showwarning("无法分析该代码", msg)
 
     # ---------- 语法高亮（简单） ----------
     KEYWORDS = {"int", "char", "void", "struct", "typedef", "if", "else",

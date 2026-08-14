@@ -17,6 +17,7 @@ def check(cond, msg):
 root = tk.Tk()
 root.withdraw()  # 不显示
 app = App(root)
+app._popup = False  # 测试时关闭错误弹窗
 
 for name, code in EXAMPLES.items():
     try:
