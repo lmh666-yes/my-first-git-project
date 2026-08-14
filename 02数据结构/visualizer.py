@@ -338,19 +338,34 @@ class Drawer:
         return x + self.NODE_W, y + h
 
     def draw_chains(self, heads, heap_by_addr, x0, y0, H):
-        row = 0
+        """画链表：超宽自动换行，横向宽度控制在约一屏，保证水平滚动条滑块大小合理可拖拽"""
+        cw = int(self.c.cget("width"))
+        max_w = max(680, cw - 60)      # 每行宽度上限
         for addr, label in heads:
             x = x0
-            y = y0 + row * 170
+            y = y0
             visited = set()
             pos = {}
             cur = addr
             steps = 0
+            prev = None                # (addr, rx, by) 上一节点，用于换行续接标记
+            chain_bottom = y
             while cur in heap_by_addr and cur not in visited and steps < 200:
                 visited.add(cur)
                 blk = heap_by_addr[cur]
+                # 超出行宽 -> 换行，画向下续接标记
+                if prev is not None and x > x0 + max_w:
+                    _paddr, prx, pby = prev
+                    self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 26,
+                                       fill="#1a5276", width=2, arrow=tk.LAST)
+                    self.c.create_text(x0 + 2, pby + 28, anchor="nw",
+                                       text="↘ 续接", fill="#1a5276",
+                                       font=("Microsoft YaHei", 9, "bold"))
+                    y = pby + 26 + 10
+                    x = x0
                 rx, by = self.draw_node(x, y, cur, blk, heap_by_addr)
                 pos[cur] = (x, y, rx, by)
+                chain_bottom = max(chain_bottom, by)
                 # next 字段目标
                 tgt = None
                 for fn, fv in blk["fields"].items():
@@ -358,6 +373,7 @@ class Drawer:
                         tgt = fv[1]
                         break
                 if tgt in heap_by_addr:
+                    prev = (cur, rx, by)
                     cur = tgt
                     x = rx + self.GAP
                     steps += 1
@@ -367,7 +383,7 @@ class Drawer:
                                        anchor="nw", text="NULL",
                                        fill="#999999", font=("Consolas", 9))
                     break
-            # 画箭头
+            # 画箭头：仅同一视觉行内连线（跨行由 ↘ 标记连接）
             for a, (bx, by, rx, _bh) in pos.items():
                 blk = heap_by_addr[a]
                 tgt = None
@@ -377,11 +393,13 @@ class Drawer:
                         break
                 if tgt in pos:
                     tx, ty, trx, _ = pos[tgt]
-                    self.arrow(rx - 4, by + self.NODE_H0 + 6, tx + 6, ty + self.NODE_H0 + 6)
-            self.c.create_text(x0, y + self.node_height(heap_by_addr[addr]) + 6,
-                               anchor="nw", text=f"← {label}",
+                    if abs(ty - by) < 2:
+                        self.arrow(rx - 4, by + self.NODE_H0 + 6,
+                                   tx + 6, ty + self.NODE_H0 + 6)
+            self.c.create_text(x0, chain_bottom + 8, anchor="nw",
+                               text=f"← {label}",
                                fill="#666666", font=("Microsoft YaHei", 9))
-            row += 1
+            y0 = chain_bottom + 44     # 下一条链从本链底部下方开始
 
     def draw_heap_blocks(self, heap_by_addr, x0, y0, H):
         x = x0
@@ -484,10 +502,15 @@ class App:
         # 右侧画布（带水平/垂直滚动条，内容超出时可滚动查看）
         self.canvas = tk.Canvas(right, bg="#ffffff", highlightthickness=0)
         self.canvas.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        vsb = tk.Scrollbar(right, orient=tk.VERTICAL, command=self.canvas.yview)
+        vsb = tk.Scrollbar(right, orient=tk.VERTICAL, command=self.canvas.yview,
+                           width=20, bg="#569cd6", troughcolor="#e0e0e0",
+                           activebackground="#4a90c2")
         vsb.pack(side=tk.RIGHT, fill=tk.Y)
-        hsb = tk.Scrollbar(right, orient=tk.HORIZONTAL, command=self.canvas.xview)
+        hsb = tk.Scrollbar(right, orient=tk.HORIZONTAL, command=self.canvas.xview,
+                           width=20, bg="#569cd6", troughcolor="#e0e0e0",
+                           activebackground="#4a90c2")
         hsb.pack(side=tk.BOTTOM, fill=tk.X)
+        self.vsb, self.hsb = vsb, hsb
         self.canvas.config(yscrollcommand=vsb.set, xscrollcommand=hsb.set)
         self.canvas.bind("<Configure>", lambda e: self.redraw())
         self.drawer = Drawer(self.canvas)
