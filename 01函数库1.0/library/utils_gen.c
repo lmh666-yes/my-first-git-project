@@ -6790,3 +6790,391 @@ void clist_free(ListNode **head) {
     *head = NULL;
 }
 
+// ============================================================
+//                     回调函数（手动扩展）
+// ============================================================
+
+/**
+ * 把一元函数 f 依次应用到数组每个元素，结果写入 out（可与 arr 相同实现原地变换）
+ * @param arr 输入数组
+ * @param n 数组长度
+ * @param f 回调函数（接收 int，返回 int）
+ * @param out 输出缓冲区（长度至少 n）
+ * @return 0 成功；-1 参数无效
+ */
+int array_map(const int *arr, int n, int (*f)(int), int *out) {
+    if (!arr || !out || !f || n <= 0) return -1;
+    for (int i = 0; i < n; i++) out[i] = f(arr[i]);
+    return 0;
+}
+
+/**
+ * 原地过滤：保留满足谓词 pred 的元素（保持原顺序），返回新长度
+ * @param arr 数组（会被改写）
+ * @param n 原长度
+ * @param pred 谓词回调（返回非 0 表示保留）
+ * @return 过滤后的长度；-1 参数无效
+ */
+int array_filter(int *arr, int n, int (*pred)(int)) {
+    if (!arr || !pred || n < 0) return -1;
+    int w = 0;
+    for (int i = 0; i < n; i++)
+        if (pred(arr[i])) arr[w++] = arr[i];
+    return w;
+}
+
+/**
+ * 归约：acc = init，然后依次 acc = f(acc, arr[i])，返回最终 acc
+ * @param arr 数组
+ * @param n 长度
+ * @param f 二元回调（两个 int，返回 int）
+ * @param init 初始值（如求和传 0、求积传 1）
+ * @return 归约结果
+ */
+int array_reduce(const int *arr, int n, int (*f)(int, int), int init) {
+    if (!arr || !f || n <= 0) return init;
+    int acc = init;
+    for (int i = 0; i < n; i++) acc = f(acc, arr[i]);
+    return acc;
+}
+
+/**
+ * 统计数组中满足谓词 pred 的元素个数
+ * @param arr 数组
+ * @param n 长度
+ * @param pred 谓词回调
+ * @return 满足条件的个数
+ */
+int count_if(const int *arr, int n, int (*pred)(int)) {
+    if (!arr || !pred || n < 0) return 0;
+    int c = 0;
+    for (int i = 0; i < n; i++) if (pred(arr[i])) c++;
+    return c;
+}
+
+/**
+ * 遍历链表，对每个节点的数据调用回调 fn
+ * @param head 链表头
+ * @param fn 回调（接收 int 数据）
+ */
+void list_foreach(ListNode *head, void (*fn)(int)) {
+    if (!fn) return;
+    for (ListNode *p = head; p; p = p->next) fn(p->data);
+}
+
+/**
+ * 带比较器的冒泡排序：升序/降序由 cmp 决定（cmp(a,b)<0 表示 a 排在 b 前）
+ * @param arr 数组（原地排序）
+ * @param n 长度
+ * @param cmp 比较器回调：返回负/零/正
+ */
+void bubble_sort_cmp(int *arr, int n, int (*cmp)(int, int)) {
+    if (!arr || !cmp || n <= 1) return;
+    for (int i = 0; i < n - 1; i++)
+        for (int j = 0; j < n - 1 - i; j++)
+            if (cmp(arr[j], arr[j + 1]) > 0) {
+                int t = arr[j]; arr[j] = arr[j + 1]; arr[j + 1] = t;
+            }
+}
+
+/**
+ * 带比较器的二分查找（要求数组已按 cmp 有序）
+ * @param arr 有序数组
+ * @param n 长度
+ * @param target 目标值
+ * @param cmp 比较器回调（决定序关系）
+ * @return 目标索引；未找到返回 -1
+ */
+int binary_search_cmp(const int *arr, int n, int target, int (*cmp)(int, int)) {
+    if (!arr || !cmp || n <= 0) return -1;
+    int lo = 0, hi = n - 1;
+    while (lo <= hi) {
+        int mid = lo + (hi - lo) / 2;
+        int c = cmp(arr[mid], target);
+        if (c == 0) return mid;
+        if (c < 0) lo = mid + 1;
+        else hi = mid - 1;
+    }
+    return -1;
+}
+
+/**
+ * 对数组闭区间 [lo, hi] 的每个元素应用回调 f（原地变换）
+ * @param arr 数组
+ * @param lo 起始下标
+ * @param hi 结束下标（含）
+ * @param f 回调函数
+ */
+void apply_to_range(int *arr, int lo, int hi, int (*f)(int)) {
+    if (!arr || !f || lo > hi) return;
+    for (int i = lo; i <= hi; i++) arr[i] = f(arr[i]);
+}
+
+// ============================================================
+//                     变参函数（手动扩展）
+// ============================================================
+
+/**
+ * 变参求和：sum_variadic(3, 1, 2, 3) == 6
+ * @param count 参数个数（不含 count 本身）
+ * @param ... 若干 int
+ * @return 所有参数之和
+ */
+long long sum_variadic(int count, ...) {
+    va_list ap;
+    va_start(ap, count);
+    long long s = 0;
+    for (int i = 0; i < count; i++) s += va_arg(ap, int);
+    va_end(ap);
+    return s;
+}
+
+/**
+ * 变参求最大值：max_variadic(4, 3, 9, 2, 7) == 9
+ * @param count 参数个数
+ * @param ... 若干 int
+ * @return 最大值
+ */
+int max_variadic(int count, ...) {
+    va_list ap;
+    va_start(ap, count);
+    int m = va_arg(ap, int);
+    for (int i = 1; i < count; i++) {
+        int v = va_arg(ap, int);
+        if (v > m) m = v;
+    }
+    va_end(ap);
+    return m;
+}
+
+/**
+ * 变参求最小值
+ * @param count 参数个数
+ * @param ... 若干 int
+ * @return 最小值
+ */
+int min_variadic(int count, ...) {
+    va_list ap;
+    va_start(ap, count);
+    int m = va_arg(ap, int);
+    for (int i = 1; i < count; i++) {
+        int v = va_arg(ap, int);
+        if (v < m) m = v;
+    }
+    va_end(ap);
+    return m;
+}
+
+/**
+ * 变参求平均值
+ * @param count 参数个数
+ * @param ... 若干 int
+ * @return 平均值（double），count<=0 返回 0
+ */
+double avg_variadic(int count, ...) {
+    va_list ap;
+    va_start(ap, count);
+    long long s = 0;
+    for (int i = 0; i < count; i++) s += va_arg(ap, int);
+    va_end(ap);
+    return count > 0 ? (double)s / count : 0.0;
+}
+
+/**
+ * 变参求乘积
+ * @param count 参数个数
+ * @param ... 若干 int
+ * @return 乘积（long long）
+ */
+long long mul_variadic(int count, ...) {
+    va_list ap;
+    va_start(ap, count);
+    long long p = 1;
+    for (int i = 0; i < count; i++) p *= va_arg(ap, int);
+    va_end(ap);
+    return p;
+}
+
+/**
+ * 拼接多个字符串到新分配的内存，最后一个参数传 NULL 结束
+ * 示例：str_concat_va("Hello", " ", "World", NULL) -> "Hello World"
+ * @param first 第一个字符串（必填）
+ * @param ... 后续字符串，以 NULL 结尾
+ * @return 新字符串（需 free 释放）；失败返回 NULL
+ */
+char* str_concat_va(const char *first, ...) {
+    if (!first) return NULL;
+    va_list ap;
+    /* 第一遍：统计总长度（内部调用 strlen） */
+    va_start(ap, first);
+    size_t len = strlen(first);
+    const char *s = va_arg(ap, const char*);
+    while (s) { len += strlen(s); s = va_arg(ap, const char*); }
+    va_end(ap);
+    char *out = (char*)malloc(len + 1);
+    if (!out) return NULL;
+    /* 第二遍：依次拷贝（内部调用 strcpy/strcat） */
+    strcpy(out, first);
+    va_start(ap, first);
+    s = va_arg(ap, const char*);
+    while (s) { strcat(out, s); s = va_arg(ap, const char*); }
+    va_end(ap);
+    return out;
+}
+
+// ============================================================
+//                     复合函数（手动扩展）
+// ============================================================
+
+/**
+ * 有序数组去重（要求已升序，相邻重复只保留一个），返回去重后长度
+ * @param arr 有序数组（会被改写）
+ * @param n 原长度
+ * @return 去重后长度
+ */
+int unique_sorted(int *arr, int n) {
+    if (!arr || n <= 0) return 0;
+    int w = 1;
+    for (int i = 1; i < n; i++)
+        if (arr[i] != arr[w - 1]) arr[w++] = arr[i];
+    return w;
+}
+
+/**
+ * 任意顺序数组去重：内部先排序再去重（复合调用 quick_sort + unique_sorted）
+ * @param arr 数组（会被改写）
+ * @param n 输入原长度，输出去重后长度
+ * @return 去重后长度
+ */
+int remove_duplicates_array(int *arr, int *n) {
+    if (!arr || !n || *n <= 0) return 0;
+    quick_sort(arr, *n);            /* 复合：先排序 */
+    int m = unique_sorted(arr, *n); /* 复合：再相邻去重 */
+    *n = m;
+    return m;
+}
+
+/**
+ * 求数组的中位数：内部复制数组并排序（复合调用 quick_sort）
+ * @param arr 数组
+ * @param n 长度
+ * @param out 输出中位数（偶数个取中间两数平均）
+ * @return 0 成功；-1 参数无效或内存不足
+ */
+int median_of_array(const int *arr, int n, double *out) {
+    if (!arr || !out || n <= 0) return -1;
+    int *tmp = (int*)malloc((size_t)n * sizeof(int));
+    if (!tmp) return -1;
+    memcpy(tmp, arr, (size_t)n * sizeof(int));
+    quick_sort(tmp, n);             /* 复合：复制后排序 */
+    if (n % 2 == 1) *out = tmp[n / 2];
+    else *out = (tmp[n / 2 - 1] + tmp[n / 2]) / 2.0;
+    free(tmp);
+    return 0;
+}
+
+/**
+ * 单趟扫描同时求数组的最小值和最大值
+ * @param arr 数组
+ * @param n 长度
+ * @param min 输出最小值
+ * @param max 输出最大值
+ */
+void array_minmax(const int *arr, int n, int *min, int *max) {
+    if (!arr || !min || !max || n <= 0) return;
+    *min = *max = arr[0];
+    for (int i = 1; i < n; i++) {
+        if (arr[i] < *min) *min = arr[i];
+        if (arr[i] > *max) *max = arr[i];
+    }
+}
+
+/**
+ * 统计数组每个值的出现次数（频次表）
+ * 内部先调用 array_minmax 确定取值区间，再逐项计数（复合）
+ * @param arr 数组
+ * @param n 长度
+ * @param freq 输出频次表（长度需 >= max-min+1，会被清零）
+ * @param lo 输出取值最小值
+ * @param hi 输出取值最大值
+ * @return 0 成功；-1 参数无效
+ */
+int histogram(const int *arr, int n, int *freq, int *lo, int *hi) {
+    if (!arr || !freq || !lo || !hi || n <= 0) return -1;
+    int mn, mx;
+    array_minmax(arr, n, &mn, &mx);   /* 复合：先求取值区间 */
+    int span = mx - mn + 1;
+    memset(freq, 0, (size_t)span * sizeof(int));
+    for (int i = 0; i < n; i++) freq[arr[i] - mn]++;
+    *lo = mn; *hi = mx;
+    return 0;
+}
+
+/**
+ * 求众数（出现次数最多的值，并列时返回较小的）
+ * 内部复合调用 array_minmax 与 histogram 完成统计
+ * @param arr 数组
+ * @param n 长度
+ * @param mode 输出众数
+ * @return 0 成功；-1 参数无效或内存不足
+ */
+int mode_of_array(const int *arr, int n, int *mode) {
+    if (!arr || !mode || n <= 0) return -1;
+    int mn, mx;
+    array_minmax(arr, n, &mn, &mx);   /* 复合：确定取值区间 */
+    int span = mx - mn + 1;
+    int *freq = (int*)calloc((size_t)span, sizeof(int));
+    if (!freq) return -1;
+    int lo, hi;
+    if (histogram(arr, n, freq, &lo, &hi) != 0) { free(freq); return -1; }
+    int best = lo, bestc = freq[0];
+    for (int i = 1; i <= hi - lo; i++)
+        if (freq[i] > bestc) { bestc = freq[i]; best = lo + i; }
+    free(freq);
+    *mode = best;
+    return 0;
+}
+
+/**
+ * 将两个升序数组合并到 out（稳定归并）
+ * @param out 输出缓冲区（长度 >= na+nb）
+ * @param a 第一个升序数组
+ * @param na 其长度
+ * @param b 第二个升序数组
+ * @param nb 其长度
+ * @return 合并后长度；-1 参数无效
+ */
+int merge_sorted_into(int *out, const int *a, int na, const int *b, int nb) {
+    if (!out || (na > 0 && !a) || (nb > 0 && !b) || na < 0 || nb < 0) return -1;
+    int i = 0, j = 0, k = 0;
+    while (i < na && j < nb)
+        out[k++] = (a[i] <= b[j]) ? a[i++] : b[j++];
+    while (i < na) out[k++] = a[i++];
+    while (j < nb) out[k++] = b[j++];
+    return k;
+}
+
+/**
+ * 求两个升序数组的交集写入 out（结果升序且无重复，归并式扫描）
+ * @param a 第一个升序数组
+ * @param na 其长度
+ * @param b 第二个升序数组
+ * @param nb 其长度
+ * @param out 输出缓冲区（长度 >= min(na,nb)）
+ * @return 交集长度；-1 参数无效
+ */
+int intersection_sorted(const int *a, int na, const int *b, int nb, int *out) {
+    if (!out || (na > 0 && !a) || (nb > 0 && !b) || na < 0 || nb < 0) return -1;
+    int i = 0, j = 0, k = 0;
+    while (i < na && j < nb) {
+        if (a[i] < b[j]) i++;
+        else if (a[i] > b[j]) j++;
+        else {
+            if (k == 0 || out[k - 1] != a[i]) out[k++] = a[i];
+            i++; j++;
+        }
+    }
+    return k;
+}
+
+

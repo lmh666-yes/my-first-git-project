@@ -43,7 +43,7 @@ def build_index(h_text):
             if re.match(r'//\s*=+\s*$', prev) and re.match(r'//\s*=+\s*$', nxt):
                 title = s.lstrip('/').strip()
                 if title:
-                    title = title.replace('（自动生成）', '').strip()
+                    title = title.replace('（自动生成）', '').replace('（手动扩展）', '').strip()
                     if title:
                         section = title
         if s.startswith('/**'):

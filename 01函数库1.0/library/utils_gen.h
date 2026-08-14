@@ -3320,4 +3320,82 @@ void clist_print(ListNode *head);
 /** 释放循环链表所有节点并置 head 为 NULL */
 void clist_free(ListNode **head);
 
+// ============================================================
+//                     回调函数（手动扩展）
+// ============================================================
+
+/** 把一元函数 f 依次应用到数组每个元素，结果写入 out（可与 arr 相同实现原地变换） */
+int array_map(const int *arr, int n, int (*f)(int), int *out);
+
+/** 原地过滤：保留满足谓词 pred 的元素（保持原顺序），返回新长度 */
+int array_filter(int *arr, int n, int (*pred)(int));
+
+/** 归约：acc = init，然后依次 acc = f(acc, arr[i])，返回最终 acc */
+int array_reduce(const int *arr, int n, int (*f)(int, int), int init);
+
+/** 统计数组中满足谓词 pred 的元素个数 */
+int count_if(const int *arr, int n, int (*pred)(int));
+
+/** 遍历链表，对每个节点的数据调用回调 fn */
+void list_foreach(ListNode *head, void (*fn)(int));
+
+/** 带比较器的冒泡排序：升序/降序由 cmp 决定 */
+void bubble_sort_cmp(int *arr, int n, int (*cmp)(int, int));
+
+/** 带比较器的二分查找（要求数组已按 cmp 有序），未找到返回 -1 */
+int binary_search_cmp(const int *arr, int n, int target, int (*cmp)(int, int));
+
+/** 对数组闭区间 [lo, hi] 的每个元素应用回调 f（原地变换） */
+void apply_to_range(int *arr, int lo, int hi, int (*f)(int));
+
+// ============================================================
+//                     变参函数（手动扩展）
+// ============================================================
+
+/** 变参求和：sum_variadic(3, 1, 2, 3) == 6 */
+long long sum_variadic(int count, ...);
+
+/** 变参求最大值：max_variadic(4, 3, 9, 2, 7) == 9 */
+int max_variadic(int count, ...);
+
+/** 变参求最小值 */
+int min_variadic(int count, ...);
+
+/** 变参求平均值（double），count<=0 返回 0 */
+double avg_variadic(int count, ...);
+
+/** 变参求乘积（long long） */
+long long mul_variadic(int count, ...);
+
+/** 拼接多个字符串到新分配的内存，最后一个参数传 NULL 结束（返回串需 free） */
+char* str_concat_va(const char *first, ...);
+
+// ============================================================
+//                     复合函数（手动扩展）
+// ============================================================
+
+/** 有序数组去重（要求已升序，相邻重复只保留一个），返回去重后长度 */
+int unique_sorted(int *arr, int n);
+
+/** 任意顺序数组去重：内部先排序再去重（复合 quick_sort + unique_sorted） */
+int remove_duplicates_array(int *arr, int *n);
+
+/** 求数组的中位数：内部复制数组并排序（复合 quick_sort） */
+int median_of_array(const int *arr, int n, double *out);
+
+/** 单趟扫描同时求数组的最小值和最大值 */
+void array_minmax(const int *arr, int n, int *min, int *max);
+
+/** 统计数组每个值的出现次数（内部先调 array_minmax 确定取值区间） */
+int histogram(const int *arr, int n, int *freq, int *lo, int *hi);
+
+/** 求众数（出现次数最多的值，并列返回较小；复合 array_minmax + histogram） */
+int mode_of_array(const int *arr, int n, int *mode);
+
+/** 将两个升序数组合并到 out（稳定归并），返回合并后长度 */
+int merge_sorted_into(int *out, const int *a, int na, const int *b, int nb);
+
+/** 求两个升序数组的交集写入 out（升序无重复，归并式扫描） */
+int intersection_sorted(const int *a, int na, const int *b, int nb, int *out);
+
 #endif /* UTILS_GEN_H */

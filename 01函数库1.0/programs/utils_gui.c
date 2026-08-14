@@ -3,7 +3,7 @@
  * ------------------------------------------------------------
  *  功能：
  *   1. 左侧列表展示全部函数：关键词搜索（支持子串 + 模糊匹配）、
- *      分类筛选（带数量）、排序（原序/名称/分类）
+ *      分类筛选、排序（原序/名称/分类），分类/搜索数量显示在计数栏
  *   2. 右侧详情窗格（RichEdit）：功能说明 + 调用示例 + 源码位置
  *      + 实现源码，源码按 VS Code Dark+ 风格语法高亮
  *   3. 双击函数 / 按钮跳转 VS Code（直接调用 Code.exe --goto）
@@ -834,6 +834,12 @@ static void refresh_list(void) {
         const char *cp = (const char*)SendMessageA(g_hCategory, CB_GETITEMDATA, (WPARAM)cat_sel, 0);
         if (cp) cat_name = cp;
     }
+    /* 选中分类的函数总数（显示在"显示 X / Y 个函数"旁边） */
+    int cat_total = 0;
+    if (cat_name[0]) {
+        for (i = 0; i < FUNC_COUNT; i++)
+            if (strcmp(g_funcs[i].section, cat_name) == 0) cat_total++;
+    }
 
     /* 筛选 + 收集匹配项（带分数） */
     int shown = 0;
@@ -898,8 +904,12 @@ static void refresh_list(void) {
     }
 
     char cnt[192];
-    snprintf(cnt, sizeof(cnt), "显示 %d / %d 个函数%s", shown, FUNC_COUNT,
-             nterm > 0 ? "（模糊匹配）" : "");
+    if (cat_name[0])
+        snprintf(cnt, sizeof(cnt), "显示 %d / %d 个函数%s ｜ %s分类: %d 个",
+                 shown, FUNC_COUNT, nterm > 0 ? "（模糊匹配）" : "", cat_name, cat_total);
+    else
+        snprintf(cnt, sizeof(cnt), "显示 %d / %d 个函数%s", shown, FUNC_COUNT,
+                 nterm > 0 ? "（模糊匹配）" : "");
     SetWindowTextA(g_hCountLbl, cnt);
     SetWindowTextA(g_hStatus, cnt);
 
@@ -964,7 +974,7 @@ static void show_detail(int func_index) {
     free(doc);
 }
 
-/* ---------- 分类下拉（带数量） ---------- */
+/* ---------- 分类下拉（仅分类名，数量显示在状态栏/计数处，避免下拉项被遮挡） ---------- */
 
 static void build_category_list(void) {
     const char *cats[256];
@@ -978,11 +988,7 @@ static void build_category_list(void) {
     SendMessageA(g_hCategory, CB_RESETCONTENT, 0, 0);
     SendMessageA(g_hCategory, CB_ADDSTRING, 0, (LPARAM)"全部");
     for (int j = 0; j < ncat; j++) {
-        int cnt = 0;
-        for (int i = 0; i < FUNC_COUNT; i++) if (strcmp(g_funcs[i].section, cats[j]) == 0) cnt++;
-        char label[220];
-        snprintf(label, sizeof(label), "%s  [%d]", cats[j], cnt);
-        int item = (int)SendMessageA(g_hCategory, CB_ADDSTRING, 0, (LPARAM)label);
+        int item = (int)SendMessageA(g_hCategory, CB_ADDSTRING, 0, (LPARAM)cats[j]);
         SendMessageA(g_hCategory, CB_SETITEMDATA, (WPARAM)item, (LPARAM)cats[j]);
     }
     SendMessageA(g_hCategory, CB_SETCURSEL, 0, 0);
