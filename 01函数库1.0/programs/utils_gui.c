@@ -36,6 +36,7 @@
 #define IDC_SORT_NAME     1010
 #define IDC_SORT_CAT      1011
 #define IDC_STATUS        1012
+#define IDC_COPY_SRC      1013
 
 /* ---------- 文档文件索引 ---------- */
 #define DOC_H     0   /* utils.h     */
@@ -57,7 +58,7 @@ static HFONT     g_hFont, g_hCodeFont;
 static HWND      g_hSearch, g_hCategory, g_hList, g_hDetail;
 static HWND      g_hBtnImpl, g_hBtnDecl, g_hCountLbl, g_hStatus;
 static HWND      g_hBtnSortName, g_hBtnSortCat;
-static HWND      g_hBtnCopyName, g_hBtnCopyEx;
+static HWND      g_hBtnCopyName, g_hBtnCopyEx, g_hBtnCopySrc;
 
 static FileDoc   g_docs[DOC_COUNT];
 static int       g_sortMode = 0;   /* 0 原始顺序, 1 按名称, 2 按分类 */
@@ -307,7 +308,39 @@ static void url_encode(const char *src, char *dst, int dst_size) {
     dst[j] = '\0';
 }
 
+/* 定位 VS Code 可执行文件（Code.exe） */
+static int find_code_exe(char *out, int out_size) {
+    char local[MAX_PATH];
+    if (GetEnvironmentVariableA("LOCALAPPDATA", local, MAX_PATH) > 0) {
+        snprintf(out, out_size, "%s\\Programs\\Microsoft VS Code\\Code.exe", local);
+        if (file_exist(out)) return 1;
+    }
+    static const char *cands[] = {
+        "C:\\Program Files\\Microsoft VS Code\\Code.exe",
+        "C:\\Program Files (x86)\\Microsoft VS Code\\Code.exe",
+        "C:\\Program Files\\Microsoft VS Code\\bin\\code.cmd",
+    };
+    for (int i = 0; i < 3; i++) {
+        if (file_exist(cands[i])) {
+            strncpy(out, cands[i], out_size - 1);
+            out[out_size - 1] = '\0';
+            return 1;
+        }
+    }
+    return 0;
+}
+
 static void open_in_vscode(const char *path, int line) {
+    char code[MAX_PATH];
+    if (find_code_exe(code, sizeof(code))) {
+        /* 直接调用 Code.exe --goto "文件路径:行号"，最可靠 */
+        char args[1100];
+        if (line > 0) snprintf(args, sizeof(args), "--goto \"%s:%d\"", path, line);
+        else          snprintf(args, sizeof(args), "\"%s\"", path);
+        ShellExecuteA(NULL, "open", code, args, NULL, SW_SHOWNORMAL);
+        return;
+    }
+    /* 回退：vscode:// 协议 */
     char fwd[MAX_PATH], enc[2048], uri[2200];
     int k = 0;
     for (int i = 0; path[i] && k < MAX_PATH - 1; i++) {
@@ -540,6 +573,8 @@ static void create_controls(HWND hwnd) {
         222, 34, 100, 26, hwnd, (HMENU)IDC_COPY_NAME, g_hInst, NULL);
     g_hBtnCopyEx = CreateWindowA("BUTTON", "复制示例", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
         328, 34, 100, 26, hwnd, (HMENU)IDC_COPY_EXAMPLE, g_hInst, NULL);
+    g_hBtnCopySrc = CreateWindowA("BUTTON", "复制实现源码", WS_CHILD | WS_VISIBLE | BS_PUSHBUTTON,
+        434, 34, 108, 26, hwnd, (HMENU)IDC_COPY_SRC, g_hInst, NULL);
 
     /* 列表 */
     g_hList = CreateWindowA(WC_LISTVIEWA, "",
@@ -574,6 +609,7 @@ static void create_controls(HWND hwnd) {
     SendMessage(g_hBtnSortCat,  WM_SETFONT, (WPARAM)g_hFont, TRUE);
     SendMessage(g_hBtnCopyName, WM_SETFONT, (WPARAM)g_hFont, TRUE);
     SendMessage(g_hBtnCopyEx,   WM_SETFONT, (WPARAM)g_hFont, TRUE);
+    SendMessage(g_hBtnCopySrc,  WM_SETFONT, (WPARAM)g_hFont, TRUE);
     SendMessage(g_hCountLbl, WM_SETFONT, (WPARAM)g_hFont, TRUE);
     SendMessage(g_hStatus,   WM_SETFONT, (WPARAM)g_hFont, TRUE);
     SendMessage(g_hList,     WM_SETFONT, (WPARAM)g_hFont, TRUE);
@@ -645,6 +681,15 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
         } else if (id == IDC_COPY_EXAMPLE && code == BN_CLICKED) {
             int idx = get_selected_func_index();
             if (idx >= 0) copy_to_clipboard(g_funcs[idx].example);
+        } else if (id == IDC_COPY_SRC && code == BN_CLICKED) {
+            int idx = get_selected_func_index();
+            if (idx >= 0) {
+                Loc impl = find_impl(g_funcs[idx].name);
+                if (impl.line > 0) {
+                    char *src = extract_function_source(&impl);
+                    if (src) { copy_to_clipboard(src); free(src); }
+                }
+            }
         } else if (id == IDC_SORT_NAME && code == BN_CLICKED) {
             g_sortMode = (g_sortMode == 1) ? 0 : 1;
             update_sort_buttons();
