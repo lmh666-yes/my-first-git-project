@@ -22,12 +22,17 @@ void print_int_array(int arr[], int size) {
     printf("\n");
 }
 
+/**************************** CodeGeeX Inline Diff ****************************/
+void print_double_array(double array[], int length) {
+    for (int index = 0; index < length; index++) {
+        printf("%.2f ", array[index]);
 void print_double_array(double arr[], int size) {
     for (int i = 0; i < size; i++) {
         printf("%.2f ", arr[i]);
     }
     printf("\n");
 }
+/******************** 4362b0a4-f076-4106-ab3e-5ea37b38aad1 ********************/
 
 void fill_int_array(int arr[], int size, int value) {
     for (int i = 0; i < size; i++) {

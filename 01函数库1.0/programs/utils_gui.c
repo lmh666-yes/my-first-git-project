@@ -17,6 +17,7 @@
 #include <windows.h>
 #include <shellapi.h>
 #include <commctrl.h>
+#include <richedit.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -394,6 +395,160 @@ static void update_sort_buttons(void) {
     SetWindowTextA(g_hBtnSortCat,  (g_sortMode == 2) ? "按分类排序 √" : "按分类排序");
 }
 
+/* ---------- 语法高亮（RichEdit） ---------- */
+
+static void apply_rich_color(int start, int end, COLORREF color, int bold) {
+    if (start >= end) return;
+    CHARFORMATA cf;
+    memset(&cf, 0, sizeof(cf));
+    cf.cbSize = sizeof(cf);
+    cf.dwMask = CFM_COLOR | (bold ? CFM_BOLD : 0);
+    cf.dwEffects = bold ? CFE_BOLD : 0;
+    cf.crTextColor = color;
+    SendMessage(g_hDetail, EM_SETSEL, start, end);
+    SendMessage(g_hDetail, EM_SETCHARFORMAT, SCF_SELECTION, (LPARAM)&cf);
+}
+
+static int is_ident_char(char c) {
+    return ((c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') ||
+            (c >= '0' && c <= '9') || c == '_');
+}
+
+static int is_c_keyword(const char *w) {
+    static const char *kw[] = {
+        "auto","break","case","char","const","continue","default","do","double",
+        "else","enum","extern","float","for","goto","if","inline","int","long",
+        "register","return","short","signed","sizeof","static","struct","switch",
+        "typedef","union","unsigned","void","volatile","while",
+        "uint8_t","uint16_t","uint32_t","uint64_t","int8_t","int16_t","int32_t",
+        "int64_t","size_t","bool","FILE","NULL"
+    };
+    for (size_t i = 0; i < sizeof(kw)/sizeof(kw[0]); i++)
+        if (strcmp(w, kw[i]) == 0) return 1;
+    return 0;
+}
+
+/* 对详情窗格文本做语法高亮；code_start 为“实现源码”正文起始位置 */
+static void highlight_code(const char *text, int code_start) {
+    int len = (int)strlen(text);
+    /* 元信息区：深灰 */
+    apply_rich_color(0, code_start, RGB(96, 96, 96), 0);
+    /* 代码区默认色 */
+    apply_rich_color(code_start, len, RGB(20, 20, 20), 0);
+
+    int first_func = 1;   /* 代码区第一个函数名为定义处，括号内标识符为形参 */
+    int i = code_start;
+    while (i < len) {
+        char c = text[i];
+
+        /* 行注释 */
+        if (c == '/' && i + 1 < len && text[i+1] == '/') {
+            int s = i;
+            while (i < len && text[i] != '\n') i++;
+            apply_rich_color(s, i, RGB(0, 128, 0), 0);
+            continue;
+        }
+        /* 块注释 */
+        if (c == '/' && i + 1 < len && text[i+1] == '*') {
+            int s = i; i += 2;
+            while (i + 1 < len && !(text[i] == '*' && text[i+1] == '/')) i++;
+            i += 2; if (i > len) i = len;
+            apply_rich_color(s, i, RGB(0, 128, 0), 0);
+            continue;
+        }
+        /* 字符串 */
+        if (c == '"') {
+            int s = i; i++;
+            while (i < len && text[i] != '"' && text[i] != '\n') i++;
+            if (i < len && text[i] == '"') i++;
+            apply_rich_color(s, i, RGB(178, 92, 0), 0);
+            continue;
+        }
+        /* 字符字面量 */
+        if (c == '\'') {
+            int s = i; i++;
+            while (i < len && text[i] != '\'' && text[i] != '\n') i++;
+            if (i < len && text[i] == '\'') i++;
+            apply_rich_color(s, i, RGB(178, 92, 0), 0);
+            continue;
+        }
+        /* 预处理 / 宏 */
+        if (c == '#') {
+            int s = i;
+            while (i < len && text[i] != '\n') i++;
+            int e = i;
+            apply_rich_color(s, e, RGB(150, 40, 120), 0);
+            /* #include <头文件> 的尖括号内容：青色加粗 */
+            for (int p = s; p < e; p++) {
+                if (text[p] == '<') {
+                    int q = p + 1;
+                    while (q < e && text[q] != '>') q++;
+                    if (q < e) { apply_rich_color(p, q + 1, RGB(0, 128, 128), 1); p = q; }
+                }
+            }
+            continue;
+        }
+        /* 数字 */
+        if (c >= '0' && c <= '9') {
+            int s = i;
+            while (i < len && (is_ident_char(text[i]) || text[i] == '.')) i++;
+            apply_rich_color(s, i, RGB(150, 0, 150), 0);
+            continue;
+        }
+        /* 标识符 */
+        if (is_ident_char(c)) {
+            int s = i;
+            while (i < len && is_ident_char(text[i])) i++;
+            int e = i;
+            /* 是否为函数名（后面紧跟 '('，允许空白） */
+            int j = e;
+            while (j < len && (text[j] == ' ' || text[j] == '\t')) j++;
+            if (j < len && text[j] == '(') {
+                apply_rich_color(s, e, RGB(0, 96, 200), 1);   /* 函数名：深蓝加粗 */
+                if (first_func) {
+                    /* 定义处的参数列表：类型=蓝，形参名=绿色加粗 */
+                    int depth = 1;
+                    int k = j + 1;
+                    while (k < len && depth > 0) {
+                        if (text[k] == '(') depth++;
+                        else if (text[k] == ')') { depth--; if (depth == 0) break; }
+                        else if (depth == 1 && is_ident_char(text[k])) {
+                            int ps = k;
+                            while (k < len && is_ident_char(text[k])) k++;
+                            int pe = k;
+                            char word[64];
+                            size_t wl = (size_t)(pe - ps);
+                            if (wl < sizeof(word)) {
+                                memcpy(word, text + ps, wl); word[wl] = '\0';
+                                if (is_c_keyword(word)) apply_rich_color(ps, pe, RGB(0, 0, 200), 0);
+                                else apply_rich_color(ps, pe, RGB(0, 128, 64), 1);
+                            }
+                            continue;
+                        }
+                        k++;
+                    }
+                    first_func = 0;
+                    i = k + 1;
+                    continue;
+                }
+                first_func = 0;
+                continue;
+            }
+            /* 关键字 */
+            char word[64];
+            size_t wl = (size_t)(e - s);
+            if (wl < sizeof(word)) {
+                memcpy(word, text + s, wl); word[wl] = '\0';
+                if (is_c_keyword(word)) apply_rich_color(s, e, RGB(0, 0, 200), 0);
+            }
+            continue;
+        }
+        i++;
+    }
+    /* 取消残留选区 */
+    SendMessage(g_hDetail, EM_SETSEL, (WPARAM)-1, 0);
+}
+
 static void show_detail(int func_index) {
     const FuncInfo *f = &g_funcs[func_index];
     Loc decl = find_decl(f->name);
@@ -421,6 +576,16 @@ static void show_detail(int func_index) {
         src ? src : "(未能提取源码：请确认 utils.c / utils_gen.c 与 utils_gui.exe 在同一目录)");
     (void)len;
     SetWindowTextA(g_hDetail, buf);
+    /* 语法高亮：仅对“实现源码”正文着色 */
+    {
+        const char *marker = "---------- 实现源码 ----------\r\n";
+        const char *m = strstr(buf, marker);
+        int code_start = m ? (int)(m - buf) + (int)strlen(marker) : 0;
+        SendMessage(g_hDetail, WM_SETREDRAW, FALSE, 0);
+        highlight_code(buf, code_start);
+        SendMessage(g_hDetail, WM_SETREDRAW, TRUE, 0);
+        InvalidateRect(g_hDetail, NULL, TRUE);
+    }
     free(buf);
     free(src);
 }
@@ -589,12 +754,13 @@ static void create_controls(HWND hwnd) {
     col.pszText = "分类";   col.cx = 150; ListView_InsertColumn(g_hList, 1, &col);
     col.pszText = "功能";   col.cx = 380; ListView_InsertColumn(g_hList, 2, &col);
 
-    /* 详情（代码字体） */
-    g_hDetail = CreateWindowA("EDIT", "",
+    /* 详情（RichEdit，支持语法高亮） */
+    g_hDetail = CreateWindowA("RichEdit20A", "",
         WS_CHILD | WS_VISIBLE | WS_BORDER | ES_MULTILINE | ES_READONLY |
         WS_VSCROLL | WS_HSCROLL | ES_AUTOVSCROLL,
         0, 0, 0, 0, hwnd, (HMENU)IDC_DETAIL, g_hInst, NULL);
     SendMessage(g_hDetail, EM_SETLIMITTEXT, 0x7FFFFFFF, 0);
+    SendMessage(g_hDetail, EM_SETBKGNDCOLOR, 0, (LPARAM)RGB(255, 255, 255));
 
     /* 状态栏 */
     g_hStatus = CreateWindowA("STATIC", "", WS_CHILD | WS_VISIBLE,
@@ -725,6 +891,16 @@ static LRESULT CALLBACK WndProc(HWND hwnd, UINT msg, WPARAM wParam, LPARAM lPara
                 else g_sortMode = 0;
                 update_sort_buttons();
                 refresh_list();
+            } else if (nm->code == NM_CUSTOMDRAW) {
+                /* 列表斑马纹：交替行底色，更易读 */
+                NMLVCUSTOMDRAW *lvd = (NMLVCUSTOMDRAW*)lParam;
+                if (lvd->nmcd.dwDrawStage == CDDS_PREPAINT) return CDRF_NOTIFYITEMDRAW;
+                if (lvd->nmcd.dwDrawStage == CDDS_ITEMPREPAINT) {
+                    int row = (int)lvd->nmcd.dwItemSpec;
+                    lvd->clrText = RGB(30, 30, 30);
+                    lvd->clrTextBk = (row % 2 == 0) ? RGB(255, 255, 255) : RGB(240, 245, 251);
+                    return CDRF_NEWFONT;
+                }
             }
         }
         return 0;
@@ -749,6 +925,7 @@ int WINAPI WinMain(HINSTANCE hInstance, HINSTANCE hPrev, LPSTR lpCmdLine, int nC
     icc.dwSize = sizeof(icc);
     icc.dwICC = ICC_LISTVIEW_CLASSES;
     InitCommonControlsEx(&icc);
+    LoadLibraryA("riched20.dll");   /* 语法高亮用 RichEdit */
 
     init_paths();
     for (int i = 0; i < DOC_COUNT; i++) {
