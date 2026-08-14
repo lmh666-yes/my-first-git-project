@@ -38,7 +38,7 @@ int led_blink(void *arg) {
 
 // ===== 错误回调 =====
 void on_step_error(int code) {
-    printf("\n⚠️ 出现错误，执行终止。错误码: %d\n", code);
+    printf("\n[警告] 出现错误，执行终止。错误码: %d\n", code);
 }
 
 int main() {

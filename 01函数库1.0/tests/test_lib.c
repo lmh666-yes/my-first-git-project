@@ -54,6 +54,6 @@ int main() {
         executor_free(exec);
     }
     
-    printf("\n✅ 所有测试通过！\n");
+    printf("\n[完成] 所有测试通过！\n");
     return 0;
 }

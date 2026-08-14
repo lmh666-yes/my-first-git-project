@@ -2453,10 +2453,14 @@ def build_index():
         if s.startswith('//') and not s.startswith('//='):
             prev = lines[i-1].strip() if i > 0 else ''
             nxt = lines[i+1].strip() if i+1 < len(lines) else ''
-            if prev.startswith('//=') and nxt.startswith('//='):
+            # 分隔线可能是 "// ====" 或 "//===="（// 后是否带空格都能识别）
+            if re.match(r'//\s*=+\s*$', prev) and re.match(r'//\s*=+\s*$', nxt):
                 title = s.lstrip('/').strip()
                 if title:
-                    section = title
+                    # 去掉生成器标注后缀，让下拉框分类名更简洁
+                    title = title.replace('（自动生成）', '').strip()
+                    if title:
+                        section = title
         # 文档注释
         if s.startswith('/**'):
             inner = s[3:].strip().rstrip('*/').strip()

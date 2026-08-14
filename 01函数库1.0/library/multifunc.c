@@ -42,7 +42,7 @@ int executor_run(MultiFuncExecutor *exec) {
         int ret = step->func(step->arg);
 
         if (ret != 0) {
-            printf("❌ 失败 (code=%d)\n", ret);
+            printf("[失败] (code=%d)\n", ret);
             if (step->mandatory) {
                 if (exec->on_error) exec->on_error(ret);
                 if (exec->stop_on_error) {
@@ -51,13 +51,13 @@ int executor_run(MultiFuncExecutor *exec) {
                 }
             }
         } else {
-            printf("✅ 成功\n");
+            printf("[成功]\n");
         }
     }
 
     printf("\n[执行完毕] 总步骤: %d, 最终状态: %s\n", 
            exec->step_count, 
-           err_code == EXEC_OK ? "✅ 全部成功" : "❌ 有步骤失败");
+           err_code == EXEC_OK ? "[全部成功]" : "[有步骤失败]");
 
     return err_code;
 }

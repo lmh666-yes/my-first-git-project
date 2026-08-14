@@ -74,19 +74,19 @@ echo.
 :: ============ 3. 复制头文件 ============
 echo [步骤 1/5] 复制头文件 ...
 set "ERR=0"
-if not exist "lib\utils.h"         set ERR=1
-if not exist "lib\utils_gen.h"     set ERR=1
-if not exist "lib\func_index.h"    set ERR=1
-if not exist "framework\multifunc.h" set ERR=1
+if not exist "library\utils.h"         set ERR=1
+if not exist "library\utils_gen.h"     set ERR=1
+if not exist "library\func_index.h"    set ERR=1
+if not exist "library\multifunc.h" set ERR=1
 if %ERR%==1 (
-    echo [错误] 缺少源文件，请检查 lib 和 framework 目录是否完整。
+    echo [错误] 缺少源文件，请检查 library 目录是否完整。
     pause
     exit /b 1
 )
-copy /Y "lib\utils.h"           "%INCLUDE_DIR%\" >nul
-copy /Y "lib\utils_gen.h"       "%INCLUDE_DIR%\" >nul
-copy /Y "lib\func_index.h"      "%INCLUDE_DIR%\" >nul
-copy /Y "framework\multifunc.h" "%INCLUDE_DIR%\" >nul
+copy /Y "library\utils.h"           "%INCLUDE_DIR%\" >nul
+copy /Y "library\utils_gen.h"       "%INCLUDE_DIR%\" >nul
+copy /Y "library\func_index.h"      "%INCLUDE_DIR%\" >nul
+copy /Y "library\multifunc.h" "%INCLUDE_DIR%\" >nul
 if errorlevel 1 (
     echo [错误] 头文件复制失败，请检查目录权限。
     pause
@@ -96,15 +96,15 @@ echo [完成] 已安装 4 个头文件。
 
 :: ============ 4. 编译源码（-O2 优化） ============
 echo [步骤 2/5] 编译源码 ...
-gcc -c -O2 "lib\utils.c" -o utils.o
+gcc -c -O2 "library\utils.c" -o utils.o
 if errorlevel 1 (
-    echo [错误] 编译 lib\utils.c 失败，请检查上方错误信息。
+    echo [错误] 编译 library\utils.c 失败，请检查上方错误信息。
     pause
     exit /b 1
 )
-gcc -c -O2 "framework\multifunc.c" -o multifunc.o
+gcc -c -O2 "library\multifunc.c" -o multifunc.o
 if errorlevel 1 (
-    echo [错误] 编译 framework\multifunc.c 失败，请检查上方错误信息。
+    echo [错误] 编译 library\multifunc.c 失败，请检查上方错误信息。
     pause
     exit /b 1
 )
@@ -162,7 +162,7 @@ set /p RUN_TEST="是否编译运行验证程序，确认任意目录可用？[Y/n] "
 if /i "!RUN_TEST!" neq "n" (
     echo [验证] 在临时目录编译并运行验证程序 ...
     if not exist "%TEMP%\mylib_test" mkdir "%TEMP%\mylib_test"
-    copy /Y "verify_install.c" "%TEMP%\mylib_test\" >nul
+    copy /Y "tests\verify_install.c" "%TEMP%\mylib_test\" >nul
     pushd "%TEMP%\mylib_test"
     gcc verify_install.c -lmylib -o verify_install.exe
     if errorlevel 1 (
