@@ -6300,3 +6300,296 @@ void log_to_file(const char *filename, const char *format, ...) {
     fprintf(fp, "\n");
     fclose(fp);
 }
+
+/* ============================================================
+ *  手动扩展区（与 utils_gen.h 手动扩展区对应，人工维护）
+ * ============================================================ */
+
+/* ---------- 并查集 ---------- */
+
+UnionFind* uf_create(int size) {
+    if (size <= 0) return NULL;
+    UnionFind *uf = (UnionFind*)malloc(sizeof(UnionFind));
+    if (!uf) return NULL;
+    uf->parent = (int*)malloc((size_t)size * sizeof(int));
+    uf->rank = (int*)malloc((size_t)size * sizeof(int));
+    if (!uf->parent || !uf->rank) {
+        free(uf->parent);
+        free(uf->rank);
+        free(uf);
+        return NULL;
+    }
+    /* 初始时每个元素自成集合，秩为 0 */
+    for (int i = 0; i < size; i++) {
+        uf->parent[i] = i;
+        uf->rank[i] = 0;
+    }
+    uf->size = size;
+    return uf;
+}
+
+int uf_find(UnionFind *uf, int x) {
+    if (!uf || x < 0 || x >= uf->size) return -1;
+    /* 路径压缩：把沿途节点直接指向根 */
+    if (uf->parent[x] != x) uf->parent[x] = uf_find(uf, uf->parent[x]);
+    return uf->parent[x];
+}
+
+int uf_union(UnionFind *uf, int a, int b) {
+    if (!uf) return -1;
+    int ra = uf_find(uf, a);
+    int rb = uf_find(uf, b);
+    if (ra < 0 || rb < 0) return -1;
+    if (ra == rb) return 1;   /* 已在同一集合 */
+    /* 按秩合并：秩小的根接到秩大的根上 */
+    if (uf->rank[ra] < uf->rank[rb]) {
+        uf->parent[ra] = rb;
+    } else if (uf->rank[ra] > uf->rank[rb]) {
+        uf->parent[rb] = ra;
+    } else {
+        uf->parent[rb] = ra;
+        uf->rank[ra]++;
+    }
+    return 0;
+}
+
+int uf_connected(UnionFind *uf, int a, int b) {
+    int ra = uf_find(uf, a);
+    int rb = uf_find(uf, b);
+    return (ra >= 0 && ra == rb) ? 1 : 0;
+}
+
+void uf_destroy(UnionFind *uf) {
+    if (!uf) return;
+    free(uf->parent);
+    free(uf->rank);
+    free(uf);
+}
+
+/* ---------- 图：有向加边 ---------- */
+
+void graph_add_edge_dir(Graph *g, int u, int v) {
+    if (!g || u < 0 || u >= g->n || v < 0 || v >= g->n) return;
+    g->adj[u][v] = 1;   /* 只设置 u -> v 方向 */
+}
+
+/* ---------- 图：拓扑排序（Kahn 算法） ---------- */
+
+int topological_sort(const Graph *g, int *out) {
+    if (!g || !out || g->n <= 0) return -1;
+    int n = g->n;
+    int *indeg = (int*)calloc((size_t)n, sizeof(int));
+    if (!indeg) return -1;
+    /* 计算每个节点的入度 */
+    for (int u = 0; u < n; u++)
+        for (int v = 0; v < n; v++)
+            if (g->adj[u][v]) indeg[v]++;
+    /* 用数组模拟队列，存放下标 */
+    int *queue = (int*)malloc((size_t)n * sizeof(int));
+    if (!queue) { free(indeg); return -1; }
+    int head = 0, tail = 0;
+    for (int v = 0; v < n; v++) if (indeg[v] == 0) queue[tail++] = v;
+    int cnt = 0;
+    while (head < tail) {
+        int u = queue[head++];
+        out[cnt++] = u;
+        for (int v = 0; v < n; v++) {
+            if (g->adj[u][v] && --indeg[v] == 0) queue[tail++] = v;
+        }
+    }
+    free(indeg);
+    free(queue);
+    /* 输出节点数不足说明存在环 */
+    return (cnt == n) ? cnt : -1;
+}
+
+/* ---------- 图：Prim 最小生成树权值和 ---------- */
+
+int prim_mst(const Graph *g) {
+    if (!g || g->n <= 0) return -1;
+    int n = g->n;
+    int *lowcost = (int*)malloc((size_t)n * sizeof(int));
+    int *inmst = (int*)calloc((size_t)n, sizeof(int));
+    if (!lowcost || !inmst) { free(lowcost); free(inmst); return -1; }
+    /* 从 0 号节点出发，记录到各节点当前最小边权 */
+    for (int i = 0; i < n; i++) lowcost[i] = g->adj[0][i] ? g->adj[0][i] : 0x7FFFFFFF;
+    inmst[0] = 1;
+    int total = 0;
+    for (int it = 1; it < n; it++) {
+        int minc = 0x7FFFFFFF, u = -1;
+        for (int v = 0; v < n; v++) {
+            if (!inmst[v] && lowcost[v] < minc) { minc = lowcost[v]; u = v; }
+        }
+        if (u < 0) { free(lowcost); free(inmst); return -1; }   /* 图不连通 */
+        inmst[u] = 1;
+        total += minc;
+        /* 用新加入的节点更新其他节点的最小边权 */
+        for (int v = 0; v < n; v++) {
+            if (!inmst[v] && g->adj[u][v] && g->adj[u][v] < lowcost[v])
+                lowcost[v] = g->adj[u][v];
+        }
+    }
+    free(lowcost);
+    free(inmst);
+    return total;
+}
+
+/* ---------- 二分边界（数组需升序） ---------- */
+
+int lower_bound(int arr[], int size, int target) {
+    int lo = 0, hi = size;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (arr[mid] < target) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
+int upper_bound(int arr[], int size, int target) {
+    int lo = 0, hi = size;
+    while (lo < hi) {
+        int mid = lo + (hi - lo) / 2;
+        if (arr[mid] <= target) lo = mid + 1;
+        else hi = mid;
+    }
+    return lo;
+}
+
+/* ---------- 逆序对（归并排序） ---------- */
+
+static long long inv_merge_count(int arr[], int tmp[], int lo, int hi) {
+    if (lo >= hi) return 0;
+    int mid = lo + (hi - lo) / 2;
+    long long cnt = inv_merge_count(arr, tmp, lo, mid) + inv_merge_count(arr, tmp, mid + 1, hi);
+    int i = lo, j = mid + 1, k = lo;
+    while (i <= mid && j <= hi) {
+        if (arr[i] <= arr[j]) tmp[k++] = arr[i++];
+        else { tmp[k++] = arr[j++]; cnt += (mid - i + 1); }   /* 左边剩余都大于 arr[j] */
+    }
+    while (i <= mid) tmp[k++] = arr[i++];
+    while (j <= hi) tmp[k++] = arr[j++];
+    for (i = lo; i <= hi; i++) arr[i] = tmp[i];
+    return cnt;
+}
+
+long long count_inversions(int arr[], int size) {
+    if (size <= 1) return 0;
+    int *tmp = (int*)malloc((size_t)size * sizeof(int));
+    if (!tmp) return 0;
+    long long cnt = inv_merge_count(arr, tmp, 0, size - 1);
+    free(tmp);
+    return cnt;
+}
+
+/* ---------- 滑动窗口最大值（单调双端队列） ---------- */
+
+int sliding_window_max(int arr[], int size, int k, int *out) {
+    if (!arr || !out || k <= 0 || k > size) return 0;
+    int *dq = (int*)malloc((size_t)size * sizeof(int));   /* 存下标 */
+    if (!dq) return 0;
+    int head = 0, tail = 0;   /* 队区间 [head, tail) */
+    int cnt = 0;
+    for (int i = 0; i < size; i++) {
+        /* 队首元素滑出窗口 */
+        if (head < tail && dq[head] <= i - k) head++;
+        /* 移除队尾所有 <= 当前元素的（它们不可能成为最大值） */
+        while (head < tail && arr[dq[tail - 1]] <= arr[i]) tail--;
+        dq[tail++] = i;
+        /* 窗口已满，队首即当前窗口最大值 */
+        if (i >= k - 1) out[cnt++] = arr[dq[head]];
+    }
+    free(dq);
+    return cnt;
+}
+
+/* ---------- 两数之和（朴素双重循环） ---------- */
+
+int two_sum(int arr[], int size, int target, int *idx1, int *idx2) {
+    if (!arr || !idx1 || !idx2 || size < 2) return 0;
+    for (int i = 0; i < size - 1; i++) {
+        for (int j = i + 1; j < size; j++) {
+            if (arr[i] + arr[j] == target) {
+                *idx1 = i;
+                *idx2 = j;
+                return 1;
+            }
+        }
+    }
+    return 0;
+}
+
+/* ---------- 字母异位词 ---------- */
+
+int is_anagram(const char *a, const char *b) {
+    if (!a || !b) return 0;
+    int cnt[256] = {0};
+    for (const char *p = a; *p; p++) cnt[(unsigned char)*p]++;
+    for (const char *p = b; *p; p++) cnt[(unsigned char)*p]--;
+    for (int i = 0; i < 256; i++) if (cnt[i] != 0) return 0;
+    return 1;
+}
+
+/* ---------- 最长公共子序列长度（动态规划） ---------- */
+
+int str_lcs(const char *a, const char *b) {
+    if (!a || !b) return 0;
+    int la = str_len(a), lb = str_len(b);
+    if (la == 0 || lb == 0) return 0;
+    int **dp = (int**)malloc((size_t)(la + 1) * sizeof(int*));
+    if (!dp) return 0;
+    int alloc_ok = 1;
+    for (int i = 0; i <= la; i++) {
+        dp[i] = (int*)calloc((size_t)(lb + 1), sizeof(int));
+        if (!dp[i]) { alloc_ok = 0; break; }
+    }
+    if (!alloc_ok) {
+        for (int i = 0; i <= la; i++) if (dp[i]) free(dp[i]);
+        free(dp);
+        return 0;
+    }
+    for (int i = 1; i <= la; i++) {
+        for (int j = 1; j <= lb; j++) {
+            if (a[i-1] == b[j-1]) dp[i][j] = dp[i-1][j-1] + 1;
+            else dp[i][j] = (dp[i-1][j] > dp[i][j-1]) ? dp[i-1][j] : dp[i][j-1];
+        }
+    }
+    int ans = dp[la][lb];
+    for (int i = 0; i <= la; i++) free(dp[i]);
+    free(dp);
+    return ans;
+}
+
+/* ---------- 数论补充 ---------- */
+
+int is_perfect_square(int n) {
+    if (n < 0) return 0;
+    int r = (int)(sqrt((double)n) + 0.5);   /* 四舍五入避免浮点误差 */
+    return r * r == n;
+}
+
+int is_ugly(int n) {
+    if (n <= 0) return 0;
+    while (n % 2 == 0) n /= 2;
+    while (n % 3 == 0) n /= 3;
+    while (n % 5 == 0) n /= 5;
+    return n == 1;
+}
+
+int count_primes(int n) {
+    if (n < 2) return 0;
+    char *iscomp = (char*)calloc((size_t)(n + 1), 1);
+    if (!iscomp) return 0;
+    int cnt = 0;
+    for (int i = 2; i <= n; i++) {
+        if (!iscomp[i]) {
+            cnt++;
+            if ((long long)i * i <= n)
+                for (long long j = (long long)i * i; j <= n; j += i)
+                    iscomp[(int)j] = 1;
+        }
+    }
+    free(iscomp);
+    return cnt;
+}
+

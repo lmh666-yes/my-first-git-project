@@ -8,6 +8,14 @@
          将 utils 函数库扩充到 1000+ 个函数。
       2. 自动把新函数声明写入 utils.h、实现写入 utils.c。
       3. 自动解析 utils.h 重建 func_index.h（查找工具使用的索引表）。
+
+    ⚠ 重要警告：
+      本脚本运行会重写 utils_gen.h / utils_gen.c 并清理 utils.h / utils.c
+      的自动生成区。utils_gen.h / utils_gen.c 末尾的
+      【手动扩展区】（C 常用宏、并查集、图算法、查找与算法、数论补充等，
+      约 30 个函数与 16 个宏）由人工维护，运行本脚本前请先备份这两个文件，
+      否则手动扩展区会被覆盖丢失。
+
     用法：在 lib 目录下执行  py gen_functions.py
     ============================================================ """
 import re, os
@@ -2449,6 +2457,22 @@ MACRO_DESC = {
     'UTILS_ABS': '求绝对值',
     'UTILS_ARRAY_SIZE': '求数组元素个数',
     'UTILS_BIT': '生成位掩码（第 n 位为 1）',
+    'UTILS_CLAMP': '把数值限制在 [lo, hi] 区间内',
+    'UTILS_SWAP': '交换两个变量的值（需指定类型）',
+    'UTILS_IS_EVEN': '判断整数是否为偶数',
+    'UTILS_IS_ODD': '判断整数是否为奇数',
+    'UTILS_IS_POW2': '判断正整数是否为 2 的幂',
+    'UTILS_SIGN': '返回符号（正 1 / 负 -1 / 零 0）',
+    'UTILS_MAX3': '取三个数中最大值',
+    'UTILS_MIN3': '取三个数中最小值',
+    'UTILS_DIV_CEIL': '整数除法向上取整',
+    'UTILS_ALIGN_UP': '向上对齐到 a 的整数倍',
+    'UTILS_ALIGN_DOWN': '向下对齐到 a 的整数倍',
+    'UTILS_SET_BIT': '将整数 x 的第 n 位置 1',
+    'UTILS_CLEAR_BIT': '将整数 x 的第 n 位清 0',
+    'UTILS_GET_BIT': '读取整数 x 的第 n 位',
+    'UTILS_TOGGLE_BIT': '翻转整数 x 的第 n 位',
+    'UTILS_SQUARE': '计算平方',
 }
 
 def build_index():

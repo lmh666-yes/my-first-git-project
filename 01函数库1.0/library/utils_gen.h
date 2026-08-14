@@ -3148,4 +3148,133 @@ long long get_timestamp_us(void);
 /** 带时间戳写入日志文件 */
 void log_to_file(const char *filename, const char *format, ...);
 
+/* ============================================================
+ *  手动扩展区（以下内容由人工维护；若运行 gen_functions.py 请
+ *  注意保留此区，或先备份 utils_gen.h / utils_gen.c）
+ *  新增：C 常用宏、并查集、图算法、查找与算法、数论补充
+ * ============================================================ */
+
+/* ---------- C 常用宏 ---------- */
+#ifndef UTILS_CLAMP
+#define UTILS_CLAMP(x, lo, hi) ((x) < (lo) ? (lo) : ((x) > (hi) ? (hi) : (x)))
+#endif
+#ifndef UTILS_SWAP
+#define UTILS_SWAP(a, b, type) do { type tmp = (a); (a) = (b); (b) = tmp; } while (0)
+#endif
+#ifndef UTILS_IS_EVEN
+#define UTILS_IS_EVEN(n) (((n) & 1) == 0)
+#endif
+#ifndef UTILS_IS_ODD
+#define UTILS_IS_ODD(n) (((n) & 1) != 0)
+#endif
+#ifndef UTILS_IS_POW2
+#define UTILS_IS_POW2(n) ((n) > 0 && (((n) & ((n) - 1)) == 0))
+#endif
+#ifndef UTILS_SIGN
+#define UTILS_SIGN(x) ((x) > 0 ? 1 : ((x) < 0 ? -1 : 0))
+#endif
+#ifndef UTILS_MAX3
+#define UTILS_MAX3(a, b, c) ((a) > (b) ? ((a) > (c) ? (a) : (c)) : ((b) > (c) ? (b) : (c)))
+#endif
+#ifndef UTILS_MIN3
+#define UTILS_MIN3(a, b, c) ((a) < (b) ? ((a) < (c) ? (a) : (c)) : ((b) < (c) ? (b) : (c)))
+#endif
+#ifndef UTILS_DIV_CEIL
+#define UTILS_DIV_CEIL(a, b) (((a) + (b) - 1) / (b))
+#endif
+#ifndef UTILS_ALIGN_UP
+#define UTILS_ALIGN_UP(x, a) (((x) + (a) - 1) / (a) * (a))
+#endif
+#ifndef UTILS_ALIGN_DOWN
+#define UTILS_ALIGN_DOWN(x, a) ((x) / (a) * (a))
+#endif
+#ifndef UTILS_SET_BIT
+#define UTILS_SET_BIT(x, n) ((x) |= (1u << (n)))
+#endif
+#ifndef UTILS_CLEAR_BIT
+#define UTILS_CLEAR_BIT(x, n) ((x) &= ~(1u << (n)))
+#endif
+#ifndef UTILS_GET_BIT
+#define UTILS_GET_BIT(x, n) (((x) >> (n)) & 1u)
+#endif
+#ifndef UTILS_TOGGLE_BIT
+#define UTILS_TOGGLE_BIT(x, n) ((x) ^= (1u << (n)))
+#endif
+#ifndef UTILS_SQUARE
+#define UTILS_SQUARE(x) ((x) * (x))
+#endif
+
+// ============================================================
+//                     并查集与图（手动扩展）
+// ============================================================
+
+/** 并查集结构体 */
+typedef struct {
+    int *parent;   /* 父节点数组 */
+    int *rank;     /* 秩（树高近似），用于按秩合并 */
+    int size;      /* 元素个数 */
+} UnionFind;
+
+/** 创建大小为 size 的并查集，初始每个元素自成集合 */
+UnionFind* uf_create(int size);
+
+/** 查找元素 x 所在集合的根（带路径压缩） */
+int uf_find(UnionFind *uf, int x);
+
+/** 合并 a、b 所在集合（按秩合并）；已同集合返回 1，成功返回 0 */
+int uf_union(UnionFind *uf, int a, int b);
+
+/** 判断 a、b 是否在同一集合（1 是 0 否） */
+int uf_connected(UnionFind *uf, int a, int b);
+
+/** 释放并查集内存 */
+void uf_destroy(UnionFind *uf);
+
+/** 添加有向边 u -> v（拓扑排序等有向算法使用） */
+void graph_add_edge_dir(Graph *g, int u, int v);
+
+/** 有向图拓扑排序（Kahn 算法），顺序写入 out；成功返回节点数，有环返回 -1 */
+int topological_sort(const Graph *g, int *out);
+
+/** 邻接矩阵最小生成树权值和（Prim 算法）；图不连通返回 -1 */
+int prim_mst(const Graph *g);
+
+// ============================================================
+//                     查找与算法（手动扩展）
+// ============================================================
+
+/** 二分查找第一个 >= target 的下标（数组需升序） */
+int lower_bound(int arr[], int size, int target);
+
+/** 二分查找第一个 > target 的下标（数组需升序） */
+int upper_bound(int arr[], int size, int target);
+
+/** 逆序对个数（归并排序，会改变数组顺序） */
+long long count_inversions(int arr[], int size);
+
+/** 滑动窗口最大值：对每个窗口 [i, i+k-1] 输出最大值到 out，返回窗口个数 */
+int sliding_window_max(int arr[], int size, int k, int *out);
+
+/** 两数之和：找到两下标使 arr[i]+arr[j]==target，写入 idx1/idx2，找到返回 1 */
+int two_sum(int arr[], int size, int target, int *idx1, int *idx2);
+
+/** 判断两字符串是否为字母异位词（字符组成相同） */
+int is_anagram(const char *a, const char *b);
+
+/** 最长公共子序列长度（动态规划） */
+int str_lcs(const char *a, const char *b);
+
+// ============================================================
+//                     数论补充（手动扩展）
+// ============================================================
+
+/** 判断是否为完全平方数 */
+int is_perfect_square(int n);
+
+/** 判断是否为丑数（质因子仅含 2、3、5 的正整数） */
+int is_ugly(int n);
+
+/** 统计 [2, n] 范围内素数个数（埃氏筛） */
+int count_primes(int n);
+
 #endif /* UTILS_GEN_H */
