@@ -212,8 +212,10 @@ class BreakStmt(Stmt):
 
 
 class PrintfStmt(Stmt):
-    def __init__(self, line):
+    def __init__(self, line, fmt=None, args=None):
         super().__init__(line, "printf")
+        self.fmt = fmt       # 格式串（无则 None）
+        self.args = args or []   # 参数表达式 AST 列表
 
 
 # 表达式：以元组 (kind, ...) 表示
@@ -802,16 +804,25 @@ class Parser:
         if self.at("printf"):
             self.next()
             self.expect("(")
-            # 跳过直到匹配的 )
-            depth = 1
-            while depth > 0:
-                tk = self.next()
-                if tk.text == "(":
-                    depth += 1
-                elif tk.text == ")":
-                    depth -= 1
+            fmt = None
+            args = []
+            if self.peek() is not None and self.peek().kind == "str":
+                fmt = self.next().text[1:-1]
+            # 解析逗号分隔的参数表达式
+            while not self.at(")") and self.peek() is not None:
+                if self.at(","):
+                    self.next()
+                    continue
+                try:
+                    args.append(self.parse_expr())
+                except Exception:
+                    while (not self.at(",") and not self.at(")")
+                           and self.peek() is not None):
+                        self.next()
+                    continue
+            self.expect(")")
             self.expect(";")
-            return PrintfStmt(t.line)
+            return PrintfStmt(t.line, fmt, args)
         # 声明 vs 表达式
         if self.looks_like_decl():
             first = self.parse_decl(semi=False)
@@ -2114,6 +2125,11 @@ class SimEngine:
                 val = self.inputs[self.input_pos]
                 self.input_pos += 1
             return Value("int", val)
+        if name == "puts":
+            # puts("text")：输出一行
+            if args:
+                self.outputs.append(str(self._printf_arg(args[0])))
+            return Value("int", 0)
         # 函数指针变量调用（如回调参数 op(x)）
         try:
             vi = self.lookup(name)
@@ -2346,8 +2362,84 @@ class SimEngine:
         if k == "break":
             return "break"
         if k == "printf":
+            self._exec_printf(st)
             return None
         return None
+
+    # ---- printf 输出（供日志窗口显示，终端样式） ----
+    def _exec_printf(self, st):
+        fmt = st.fmt
+        args = st.args
+        vals = [self._printf_arg(a) for a in args]
+        if not fmt:
+            self.outputs.append(" ".join(str(v) for v in vals))
+            return
+        out = ""
+        ai = 0
+        i = 0
+        n = len(fmt)
+        while i < n:
+            ch = fmt[i]
+            if ch == "%" and i + 1 < n:
+                nxt = fmt[i + 1]
+                if nxt == "%":
+                    out += "%"
+                    i += 2
+                    continue
+                j = i + 1
+                while j < n and fmt[j] in "-+0# 0123456789.lhL":
+                    j += 1
+                typ = fmt[j] if j < n else ""
+                if typ and typ in "diuoxXfFeEgGcsp":
+                    v = vals[ai] if ai < len(vals) else 0
+                    ai += 1
+                    out += self._fmt_val(typ, v)
+                    i = j + 1
+                    continue
+                out += "%"
+                i += 1
+            else:
+                out += ch
+                i += 1
+        self.outputs.append(out)
+
+    def _printf_arg(self, a):
+        """求值 printf 参数并转为可显示的字符串/值"""
+        try:
+            v = self.eval_expr(a)
+        except Exception:
+            return "?"
+        if not hasattr(v, "kind"):
+            return str(v)
+        if v.kind == "int":
+            return v.val
+        if v.kind == "addr":
+            if v.val in self.str_table:
+                return self.str_table[v.val]
+            return f"0x{v.val:x}"
+        return 0
+
+    def _fmt_val(self, typ, v):
+        try:
+            if typ in "di":
+                return str(int(v))
+            if typ == "u":
+                return str(int(v) & 0xFFFFFFFF)
+            if typ in "oxX":
+                n = int(v) & 0xFFFFFFFF
+                return (format(n, 'o') if typ == 'o'
+                        else format(n, 'x' if typ == 'x' else 'X'))
+            if typ in "fFeEgG":
+                return f"{float(v):.6f}"
+            if typ == "c":
+                return chr(int(v) & 0xFF)
+            if typ == "s":
+                return v if isinstance(v, str) else str(v)
+            if typ == "p":
+                return f"0x{int(v):x}"
+            return str(v)
+        except Exception:
+            return str(v)
 
     def exec_decl(self, st):
         frame = self.frames[-1]
