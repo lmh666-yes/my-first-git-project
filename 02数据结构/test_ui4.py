@@ -85,8 +85,8 @@ root.update()
 app.canvas.xview_moveto(0)
 app.canvas.yview_moveto(0)
 root.update()
-app.drawer.selected_addr = None
 d = app.drawer
+d.panels = []
 assert d.node_rects, "node_rects 为空"
 addr, (rx, ry, rw, rh) = list(d.node_rects.items())[0]
 ev = Ev()
@@ -94,10 +94,10 @@ ev.x = rx + 6
 ev.y = ry + 6
 app._cv_click(ev)
 root.update()
-hit_ok = d.selected_addr == addr and d.info_win_id is not None
+hit_ok = any(p["addr"] == addr and p.get("win_id") for p in d.panels)
 win_items = [it for it in app.canvas.find_all() if app.canvas.type(it) == "window"]
-print(f"点击块 0x{addr:x}: selected={d.selected_addr is not None} 面板窗口数={len(win_items)}")
-print("[%s] 点击内存块显示右上角信息面板" % ("PASS" if hit_ok and win_items else "FAIL"))
+print(f"点击块 0x{addr:x}: 面板数={len(d.panels)} 面板窗口数={len(win_items)}")
+print("[%s] 点击内存块显示信息面板" % ("PASS" if hit_ok and win_items else "FAIL"))
 
 # ---- 4. 缩放: zoom 变化后重绘且滚动区变化 ----
 d.zoom = 1.0
