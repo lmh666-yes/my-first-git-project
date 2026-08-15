@@ -31,14 +31,24 @@
 
 ## 快速开始
 
-1. **一键部署**：双击 `01函数库1.0\install_my_lib.bat`，自动定位 MinGW、安装头文件、编译打包静态库 `libmylib.a`
+1. **一键部署**：双击 `install_my_lib.bat`，自动定位 MinGW、安装头文件、编译打包静态库 `libmylib.a`
+   - **拆分编译**：`utils.c` / `utils_gen.c`（6000+ 行）/ `multifunc.c` 分别编译，
+     避免连带编译导致的“卡源码编译”问题；全程中文提示与进度显示
 2. **调用函数**：部署后任意目录写程序：
    ```c
    #include <utils.h>
    #include <multifunc.h>   // 可选
    ```
    编译链接：`gcc 你的程序.c -lmylib -o 程序`
-3. **图形化查找**：双击 `01函数库1.0\programs\utils_gui.exe`，支持搜索、74 个分类筛选（数量显示在计数栏）、排序、复制、跳转 VS Code
+3. **图形化查找**：双击根目录 `启动图形工具.bat`（或 `programs\utils_gui.exe`），
+   支持搜索、74 个分类筛选（数量显示在计数栏）、排序、复制、跳转 VS Code
+   - 若 exe 不存在会自动调用 `build_gui.bat` 编译（自动定位 MinGW）
+
+## 最近更新（2026-08-15）
+
+- **修复“卡源码编译”**：`utils_gen.c`（6000+ 行）由 `utils.c` 连带编译改为**独立编译单元**（顶部补 `#include "utils.h"`、`<ctype.h>`、`<windows.h>`），`install_my_lib.bat` 拆分编译三个源文件后打包，编译清晰不卡顿
+- **脚本封装升级**：`install_my_lib.bat`、`programs/build_gui.bat` 全部改为自动定位 MinGW gcc（不再依赖 PATH）、详细中文注释与进度显示；新增根目录 `启动图形工具.bat` 一键启动查询工具
+- **稳定性验证**：完整构建 + 编译运行全部 7 个测试程序，3 轮压力测试全部通过；`-Wall` 编译仅 1 条无害警告
 
 ## 最近更新（2026-08-14）
 

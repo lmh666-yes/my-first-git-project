@@ -1,7 +1,13 @@
 /* ============================================================
  *  utils_gen.c — 自动生成的函数实现（由 gen_functions.py 生成，请勿手改）
- *  通过 utils.c 末尾的 #include "utils_gen.c" 编译进库
+ *  独立编译单元：顶部包含 utils.h 获取宏 / 类型定义，
+ *  由 install_my_lib.bat 单独编译为 utils_gen.o 后打包进 libmylib.a
  * ============================================================ */
+#include "utils.h"
+#include <ctype.h>          /* isalnum 等字符判断函数 */
+#ifdef _WIN32
+#include <windows.h>        /* FILETIME / GetSystemTimeAsFileTime 等 */
+#endif
 
 
 // ============================================================
