@@ -2395,6 +2395,9 @@ class SimEngine:
                 fields[fn] = self.describe_value(v)
             hb.append({"addr": addr, "typename": blk.typename, "fields": fields,
                        "loc": "栈" if blk.is_stack else "堆",
+                       "scalar": self.describe_value(blk.scalar)
+                       if blk.scalar is not None else None,
+                       "freed": blk.freed,
                        "array": [self.describe_value(x) for x in blk.array_vals[:30]]
                        if blk.array_vals else None})
         return {"frames": fr, "heap": hb, "heap_total": len(all_addr)}

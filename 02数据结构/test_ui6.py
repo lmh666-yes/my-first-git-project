@@ -52,10 +52,10 @@ for path in targets:
         continue
 print(f"全量分类: 可绘制 {len(ok_all)} 个, 其中含堆块(链表/结构体) {len(ok_heap)} 个")
 
-n_heap = min(12, len(ok_heap))
+n_heap = min(30, len(ok_heap))
 heap_sample = random.sample(ok_heap, n_heap) if ok_heap else []
 rest = [p for p in ok_all if p not in heap_sample]
-others = random.sample(rest, min(8, len(rest))) if rest else []
+others = random.sample(rest, min(30, len(rest))) if rest else []
 sample = heap_sample + others
 
 root = tk.Tk()
@@ -70,22 +70,40 @@ def overlap(a, b):
 
 
 def rects_on(cv):
+    """真正内存块：圆角多边形(polygon) 的 bbox"""
     out = []
     for it in cv.find_all():
-        if cv.type(it) == "rectangle":
-            out.append(cv.coords(it))
+        if cv.type(it) == "polygon":
+            b = cv.bbox(it)
+            if b:
+                out.append(b)
     return out
 
 
+def var_box(cv):
+    """变量区大矩形 bbox（左上角、高度 > 50）"""
+    for it in cv.find_all():
+        if cv.type(it) == "rectangle":
+            b = cv.bbox(it)
+            if b and b[0] <= 20 and (b[3] - b[1]) > 50:
+                return b
+    return None
+
+
 def check_occlusion(cv):
-    """所有矩形两两不重叠(变量区与节点区、节点之间)"""
-    rects = rects_on(cv)
+    """节点(polygon)之间、节点与变量区矩形 均不重叠"""
+    boxes = rects_on(cv)
+    vb = var_box(cv)
     bad = []
-    for i in range(len(rects)):
-        for j in range(i + 1, len(rects)):
-            if overlap(rects[i], rects[j]):
-                bad.append((rects[i], rects[j]))
-    return rects, bad
+    for i in range(len(boxes)):
+        for j in range(i + 1, len(boxes)):
+            if overlap(boxes[i], boxes[j]):
+                bad.append((boxes[i], boxes[j]))
+    if vb:
+        for b in boxes:
+            if overlap(vb, b):
+                bad.append((vb, b))
+    return boxes, bad
 
 
 def check_title(cv):
@@ -95,11 +113,11 @@ def check_title(cv):
         if cv.type(it) == "text" and "内存 / 结构" in cv.itemcget(it, "text"):
             title_y = cv.coords(it)[1]
             break
-    rects = rects_on(cv)
-    if title_y is None or not rects:
-        return True, "无标题或矩形(跳过)"
-    # 堆区第一个节点顶部 = 大于标题 y 的最小矩形顶部
-    tops = [r[1] for r in rects if r[1] > title_y - 5]
+    boxes = rects_on(cv)
+    if title_y is None or not boxes:
+        return True, "无标题或节点(跳过)"
+    # 堆区第一个节点顶部 = 大于标题 y 的最小节点顶部
+    tops = [b[1] for b in boxes if b[1] > title_y - 5]
     if not tops:
         return True, "无堆区节点"
     first_top = min(tops)
@@ -165,7 +183,6 @@ for i, path in enumerate(sample, 1):
     occ_ok = len(bad) == 0
     if not occ_ok:
         stats["occ_fail"] += 1
-    # ② 标题
     title_ok, tinfo = check_title(canvas)
     if not title_ok:
         stats["title_fail"] += 1

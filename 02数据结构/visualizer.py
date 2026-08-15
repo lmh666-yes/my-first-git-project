@@ -199,8 +199,9 @@ class Drawer:
         self.c.delete("all")
         self.info_win_id = None
 
-    def draw(self, snap, msg="", diff_text=None):
-        """布局：上方「调用栈/变量」，下方「内存/链表结构」；支持缩放 zoom"""
+    def draw(self, snap, msg="", diff_text=None, changed_vars=None):
+        """布局：上方「调用栈/变量」，下方「内存/链表结构」；支持缩放 zoom。
+        changed_vars: 本步发生变化的变量名集合（高亮显示）"""
         self.clear()
         z = self.zoom
         W = int(self.c.cget("width"))
@@ -215,6 +216,7 @@ class Drawer:
         heap_by_addr = self.heap_by_addr
         self.last_audit = {"chains": 0, "nodes": 0, "arrows": 0,
                            "nulls": 0, "wilds": 0, "wraps": 0}
+        changed_vars = changed_vars or set()
         # 标题（含变更摘要）
         self.c.create_text(10 * z, 8 * z, anchor="nw", text=msg,
                            fill="#1a5276", font=self.FM(12, True))
@@ -240,20 +242,32 @@ class Drawer:
                            fill="#555555", font=self.FM(11, True))
         yy = vy + 24 * z
         for fr in frames:
-            self.c.create_text(vx + 8 * z, yy, anchor="nw",
+            # 帧标题底色条
+            self.c.create_rectangle(vx + 2 * z, yy, vx + vw - 2 * z, yy + 17 * z,
+                                    outline="", fill="#e8eaf6")
+            self.c.create_text(vx + 8 * z, yy + 1 * z, anchor="nw",
                                text="[ " + fr["func"] + " ]",
-                               fill="#1a5276", font=self.FM(11, True))
+                               fill="#283593", font=self.FM(11, True))
             yy += 19 * z
             for name, v in fr["vars"]:
                 line = self.fmt_var(name, v)
                 warn = self._dangling_warn(v, heap_by_addr)
+                if name in changed_vars:
+                    # 本步变化的变量：浅黄高亮
+                    self.c.create_rectangle(vx + 2 * z, yy - 1 * z,
+                                            vx + vw - 2 * z, yy + 18 * z,
+                                            outline="", fill="#fff9c4")
                 self.c.create_text(vx + 16 * z, yy, anchor="nw", text=line,
                                    fill="#c62828" if warn else "#333333",
                                    font=self.F(10))
                 if warn:
+                    _addr = v["value"][1] if v.get("value") and v["value"][0] == "ptr" else 0
+                    _blk = heap_by_addr.get(_addr)
+                    _tag = ("⚠指向已释放内存(悬垂指针)" if (_blk and _blk.get("freed"))
+                            else "⚠指向未分配内存(野指针)")
                     self.c.create_text(vx + 16 * z + self.mw(line, self.F(10)) + 14 * z,
                                        yy, anchor="nw",
-                                       text="⚠指向未分配内存(野指针/已释放)",
+                                       text=_tag,
                                        fill="#c62828", font=self.FM(9, True))
                 yy += 19 * z
             yy += 5 * z
@@ -322,7 +336,10 @@ class Drawer:
             for name, v in fr["vars"]:
                 val = v.get("value")
                 if val and val[0] == "ptr" and val[1] in heap_by_addr:
-                    heads.append((val[1], name))
+                    blk = heap_by_addr[val[1]]
+                    # 只有带字段的结构块才按“链”绘制；标量/数组块走普通网格
+                    if blk["fields"]:
+                        heads.append((val[1], name))
         # 按名称优先级排序，去重地址
         def rank(item):
             n = item[1].lower()
@@ -342,6 +359,15 @@ class Drawer:
     def field_rows(self, blk):
         """返回 [(fieldname, value_display, target_addr_or_None)]"""
         rows = []
+        # 标量堆块（malloc(sizeof(T)) 后 *p = x）：显示其值
+        if not blk["fields"] and blk.get("scalar") is not None:
+            sv = blk["scalar"]
+            if sv[0] == "int":
+                rows.append(("值", str(sv[1]), None))
+            elif sv[0] == "ptr":
+                rows.append(("值", f"0x{sv[1]:x}", sv[1]))
+            else:
+                rows.append(("值", "NULL", None))
         for fn, fv in blk["fields"].items():
             if fv[0] == "ptr":
                 rows.append((fn, f"0x{fv[1]:x}", fv[1]))
@@ -368,7 +394,7 @@ class Drawer:
         return rows
 
     def node_height(self, blk):
-        n = len(blk["fields"])
+        n = len(self.field_rows(blk))
         return (self.NODE_H0 + max(1, n) * self.FIELD_H + 8) * self.zoom
 
     def draw_node(self, x, y, addr, blk, heap_by_addr):
@@ -377,9 +403,13 @@ class Drawer:
         z = self.zoom
         h = self.node_height(blk)
         loc = blk.get("loc", "堆")
+        freed = blk.get("freed", False)
         if loc == "栈":
             outline, fill = "#2e7d32", "#e8f5e9"   # 绿 = 栈上结构体变量
             loc_txt = "栈"
+        elif freed:
+            outline, fill = "#c62828", "#fdecea"   # 红 = 已释放(free)
+            loc_txt = "堆·已释放"
         else:
             outline, fill = "#b8860b", "#fff8dc"   # 黄 = 堆(malloc)
             loc_txt = "堆"
@@ -396,37 +426,66 @@ class Drawer:
         while self.mw(title + "…", tf) > w - 8 * z and len(title) > 1:
             title = title[:-1]
         title += "…"
-        self.c.create_rectangle(x, y, x + w, y + h, outline=outline, fill=fill,
-                                width=2)
-        self.c.create_text(x + 6 * z, y + 5 * z, anchor="nw", text=title,
-                           fill="#5d4037" if loc == "栈" else "#8b4513",
-                           font=tf)
+        # 圆角矩形 + 标题底色条
+        r = 8 * z
+        self.round_rect(x, y, x + w, y + h, r, outline=outline, fill=fill, width=2)
+        if loc == "栈":
+            title_bg, title_fg = "#c8e6c9", "#1b5e20"
+        elif freed:
+            title_bg, title_fg = "#ffcdd2", "#b71c1c"
+        else:
+            title_bg, title_fg = "#ffe082", "#5d4037"
+        self.c.create_rectangle(x + 2 * z, y + 2 * z, x + w - 2 * z,
+                                y + self.NODE_H0 * z - 2 * z,
+                                outline="", fill=title_bg)
+        self.c.create_text(x + 6 * z, y + 4 * z, anchor="nw", text=title,
+                           fill=title_fg, font=tf)
         yy = y + self.NODE_H0 * z
         for txt in field_lines:
             # 字段超宽则截断
             while self.mw(txt + "…", ff) > w - 8 * z and len(txt) > 1:
                 txt = txt[:-1]
             txt += "…"
+            if "->" in txt:
+                fill_c = "#1565c0"
+            elif freed:
+                fill_c = "#9e9e9e"
+            elif txt.startswith("值 =") or " = " in txt:
+                fill_c = "#2e7d32"
+            else:
+                fill_c = "#333333"
             self.c.create_text(x + 6 * z, yy, anchor="nw", text=txt,
-                               fill="#1565c0" if "->" in txt else "#333333",
-                               font=ff)
+                               fill=fill_c, font=ff)
             yy += self.FIELD_H * z
+        if freed:
+            # 已释放：底部画删除线
+            self.c.create_line(x + 4 * z, y + h - 3 * z, x + w - 4 * z, y + h - 3 * z,
+                               fill="#c62828", width=2, dash=(4, 3))
         self.node_rects[addr] = (x, y, w, h)
         return x + w, y + h
 
+    def round_rect(self, x1, y1, x2, y2, r, **kw):
+        """圆角矩形（用平滑多边形近似），比直角更精致"""
+        pts = (x1 + r, y1, x2 - r, y1,
+               x2, y1, x2, y1 + r, x2, y2 - r, x2, y2,
+               x2 - r, y2, x1 + r, y2,
+               x1, y2, x1, y2 - r, x1, y1 + r, x1, y1)
+        return self.c.create_polygon(pts, smooth=True, **kw)
+
     def _dangling_warn(self, v, heap_by_addr):
-        """指针变量指向堆外且非 NULL → 野指针/已释放警告"""
+        """指针变量指向堆外或已释放块且非 NULL → 野指针/悬垂指针警告"""
         val = v.get("value")
         if not val or val[0] != "ptr":
             return False
         addr = val[1]
         if addr == 0:
             return False
-        if addr in heap_by_addr:
-            return False
-        if v.get("loc") == "栈" and val[0] == "ptr":
-            return False
-        return True
+        blk = heap_by_addr.get(addr)
+        if blk is None:
+            return True      # 指向堆外（野指针）
+        if blk.get("freed"):
+            return True      # 指向已释放块（悬垂指针）
+        return False
 
     def _next_target(self, blk):
         """返回该块第一个指针字段的目标地址(0=无/NULL, 非0=地址)"""
@@ -642,15 +701,20 @@ class App:
         # ---- 顶部工具栏 ----
         bar = tk.Frame(root, bg="#2c3e50")
         bar.pack(side=tk.TOP, fill=tk.X)
-        btn = lambda t, fn: tk.Button(bar, text=t, command=fn, bg="#34495e",
-                                      fg="white", relief=tk.FLAT, padx=10,
-                                      font=("Microsoft YaHei", 10))
-        btn("打开文件", self.open_file).pack(side=tk.LEFT, padx=4, pady=4)
-        btn("粘贴代码", self.paste_code).pack(side=tk.LEFT, padx=4, pady=4)
-        btn("上一步", self.step_prev).pack(side=tk.LEFT, padx=4, pady=4)
-        btn("下一步", self.step_next).pack(side=tk.LEFT, padx=4, pady=4)
-        btn("运行全部", self.run_all).pack(side=tk.LEFT, padx=4, pady=4)
-        btn("重置", self.reset).pack(side=tk.LEFT, padx=4, pady=4)
+        def btn(t, fn):
+            b = tk.Button(bar, text=t, command=fn, bg="#34495e", fg="white",
+                          relief=tk.FLAT, padx=10, cursor="hand2",
+                          activebackground="#5d6d7e", activeforeground="white",
+                          font=("Microsoft YaHei", 10))
+            b.bind("<Enter>", lambda e: b.config(bg="#3e5c76"))
+            b.bind("<Leave>", lambda e: b.config(bg="#34495e"))
+            return b
+        btn("📂 打开文件", self.open_file).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("📋 粘贴代码", self.paste_code).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("◀ 上一步", self.step_prev).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("下一步 ▶", self.step_next).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("▶ 运行全部", self.run_all).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("↺ 重置", self.reset).pack(side=tk.LEFT, padx=4, pady=4)
         tk.Label(bar, text="示例:", bg="#2c3e50", fg="white",
                  font=("Microsoft YaHei", 10)).pack(side=tk.LEFT, padx=(16, 2))
         self.example_var = tk.StringVar()
@@ -658,9 +722,12 @@ class App:
                           width=18, values=list(EXAMPLES.keys()))
         ex.pack(side=tk.LEFT, padx=2)
         ex.bind("<<ComboboxSelected>>", self.load_example)
-        tk.Label(bar, text="提示：点击左侧代码行 / 用“上一步、下一步”逐步运行 / “运行全部”看最终状态",
+        tk.Label(bar, text="提示：点击代码行查看该行状态 · ←/→ 上一步下一步 · 拖动平移 · Ctrl+滚轮缩放",
                  bg="#2c3e50", fg="#ecf0f1",
                  font=("Microsoft YaHei", 9)).pack(side=tk.RIGHT, padx=10)
+        # 键盘快捷键：←/→ 逐步回放
+        root.bind("<Left>", lambda e: self.step_prev())
+        root.bind("<Right>", lambda e: self.step_next())
 
         # ---- 主区域：左代码 | 右图 ----
         main = tk.PanedWindow(root, orient=tk.HORIZONTAL, sashwidth=6)
@@ -822,7 +889,8 @@ class App:
                 diff_text += f" 等{len(diff)}处"
         else:
             diff_text = "本行未修改内存（声明 / 判断 / 函数调用等）"
-        self.drawer.draw(snap, f"执行到第 {line} 行（该行执行后）", diff_text)
+        changed = self._changed_var_names(diff)
+        self.drawer.draw(snap, f"执行到第 {line} 行（该行执行后）", diff_text, changed)
         self.set_status(f"第 {line} 行：{diff_text}", False)
         self.lineinfo.config(text=f"第 {line} 行")
 
@@ -867,6 +935,12 @@ class App:
                 changes.append(f"释放 0x{addr:x}")
         for addr in b_h.keys() & a_h.keys():
             bb, ab = b_h[addr], a_h[addr]
+            # 标量堆块值变化（*p = x）
+            if bb.get("scalar") != ab.get("scalar") and ab.get("scalar") is not None:
+                changes.append(f"{ab['typename']}@0x{addr:x} 值={self.fmt_diff_val(ab['scalar'])}")
+            # 释放
+            if not bb.get("freed") and ab.get("freed"):
+                changes.append(f"free: {ab['typename']}@0x{addr:x} 已释放")
             for fn in set(bb["fields"].keys()) | set(ab["fields"].keys()):
                 bv = bb["fields"].get(fn)
                 av = ab["fields"].get(fn)
@@ -956,6 +1030,19 @@ class App:
         except SimError as ex:
             return {}, ex, []
 
+    def _changed_var_names(self, diff):
+        """从 diff 列表中提取本步发生变化的变量名（用于高亮）"""
+        changed = set()
+        for d in diff:
+            if d.startswith("声明变量 "):
+                changed.add(d[len("声明变量 "):].strip())
+            elif "=" in d and "->" not in d and "@" not in d \
+                    and "分配" not in d and "释放" not in d:
+                nm = d.split("=", 1)[0].strip()
+                if nm and all(c.isalnum() or c == "_" for c in nm):
+                    changed.add(nm)
+        return changed
+
     def _show_step(self, idx):
         line, snap = self.step_list[idx]
         self.current_line = line
@@ -967,13 +1054,15 @@ class App:
             diff = self.diff_snapshots(self.step_list[idx - 1][1], snap)
         else:
             diff = []
+        changed = self._changed_var_names(diff)
         if diff:
             diff_text = "本步修改内存：" + "；".join(diff[:8])
             if len(diff) > 8:
                 diff_text += f" 等{len(diff)}处"
         else:
             diff_text = "本步未修改内存（声明 / 判断 / 函数调用等）"
-        self.drawer.draw(snap, f"第 {idx + 1} / {len(self.step_list)} 步 · 第 {line} 行执行后", diff_text)
+        self.drawer.draw(snap, f"第 {idx + 1} / {len(self.step_list)} 步 · 第 {line} 行执行后",
+                         diff_text, changed)
         self.set_status(f"第 {idx + 1}/{len(self.step_list)} 步：{diff_text}", False)
         self.lineinfo.config(text=f"第 {line} 行")
 

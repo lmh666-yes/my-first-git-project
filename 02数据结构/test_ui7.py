@@ -33,22 +33,29 @@ def check(ln):
     cv = app.canvas
     d = app.drawer
     au = d.last_audit
-    # 矩形(排除变量区灰底大矩形)
-    rects = []
+    # 节点 = 圆角多边形(polygon) 的 bbox
+    nodes = []
+    for it in cv.find_all():
+        if cv.type(it) == "polygon":
+            b = cv.bbox(it)
+            if b:
+                nodes.append(b)
+    # 变量区大矩形
+    var_rect = None
     for it in cv.find_all():
         if cv.type(it) == "rectangle":
-            rects.append(cv.coords(it))
-    # 变量区矩形 = 最左(x1<=20)且最高的
-    var_rect = None
-    for r in rects:
-        if r[0] <= 20 and (r[3] - r[1]) > 50:
-            var_rect = r
-            break
-    node_rects = [r for r in rects if r is not var_rect]
+            b = cv.bbox(it)
+            if b and b[0] <= 20 and (b[3] - b[1]) > 50:
+                var_rect = b
+                break
     bad = 0
-    for i in range(len(node_rects)):
-        for j in range(i + 1, len(node_rects)):
-            if overlap(node_rects[i], node_rects[j]):
+    for i in range(len(nodes)):
+        for j in range(i + 1, len(nodes)):
+            if overlap(nodes[i], nodes[j]):
+                bad += 1
+    if var_rect:
+        for b in nodes:
+            if overlap(var_rect, b):
                 bad += 1
     # 标题遮挡
     title_y = None
@@ -58,13 +65,13 @@ def check(ln):
             break
     title_ok = True
     tinfo = "无标题"
-    if title_y is not None and node_rects:
-        first_top = min(r[1] for r in node_rects)
+    if title_y is not None and nodes:
+        first_top = min(b[1] for b in nodes)
         tinfo = f"标题底~{title_y + 15:.0f} 首节点顶={first_top:.0f}"
         title_ok = title_y + 15 <= first_top + 1
     ok = audit_ok(d) and bad == 0 and title_ok
     print(f"  第{ln}行: 节点{au['nodes']} 箭头{au['arrows']} NULL{au['nulls']} "
-          f"野{au['wilds']} 续排{au['wraps']} 矩形重叠={bad} {tinfo}")
+          f"野{au['wilds']} 续排{au['wraps']} 块数={len(nodes)} 重叠={bad} {tinfo}")
     return ok, au["wraps"] > 0
 
 
