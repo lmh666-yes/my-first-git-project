@@ -28,6 +28,14 @@ class StopExec(Exception):
     pass
 
 
+class NeedInput(Exception):
+    """自由测试模式：执行到需要输入处（scanf/getchar 等）输入耗尽时抛出，
+    携带需要输入的行号，供 GUI 弹窗收集输入后恢复执行"""
+    def __init__(self, line):
+        super().__init__(f"第 {line} 行需要输入")
+        self.line = line
+
+
 # ---------------------------------------------------------------
 # 词法：把一段代码切成 token（含行号）
 # ---------------------------------------------------------------
@@ -1307,6 +1315,7 @@ class SimEngine:
         # 模拟输入（scanf 用）
         self.inputs = []
         self.input_pos = 0
+        self.pause_at_input = False   # 自由测试：输入耗尽时抛 NeedInput 暂停
         # 字符串字面量表（只读字符数组）
         self._str_addr = {}
         self.str_table = {}     # addr -> 字符串
@@ -2047,6 +2056,9 @@ class SimEngine:
             for t in args[1:]:
                 if not isinstance(t, tuple) or not t:
                     continue
+                # 自由测试模式：输入耗尽 → 暂停，等待 GUI 弹窗收集输入
+                if self.pause_at_input and self.input_pos >= len(self.inputs):
+                    raise NeedInput(self.cur_line)
                 val = 0
                 if self.input_pos < len(self.inputs):
                     val = self.inputs[self.input_pos]
@@ -2084,6 +2096,24 @@ class SimEngine:
                     except Exception:
                         pass
             return Value("int", 0)
+        # 字符/字符串输入函数：从模拟输入队列取值（支持自由测试交互输入）
+        if name in ("getchar", "getc", "fgetc", "getch", "getche", "getchar()"):
+            if self.pause_at_input and self.input_pos >= len(self.inputs):
+                raise NeedInput(self.cur_line)
+            val = 0
+            if self.input_pos < len(self.inputs):
+                val = self.inputs[self.input_pos]
+                self.input_pos += 1
+            return Value("int", val)
+        if name in ("gets", "getline", "fgets", "scanf_s"):
+            # 简化：字符串输入取一个值（教学演示）
+            if self.pause_at_input and self.input_pos >= len(self.inputs):
+                raise NeedInput(self.cur_line)
+            val = 0
+            if self.input_pos < len(self.inputs):
+                val = self.inputs[self.input_pos]
+                self.input_pos += 1
+            return Value("int", val)
         # 函数指针变量调用（如回调参数 op(x)）
         try:
             vi = self.lookup(name)
@@ -2581,6 +2611,30 @@ class Simulator:
             self.engine.error = SimError(0, "递归深度超限（递归太深，可能导致栈溢出）；已显示执行到当前位置的内存状态")
         self.snapshots = self.engine.snapshots
         return self.snapshots
+
+    def run_pause_at_input(self):
+        """自由测试模式：从头执行，遇到需要输入处暂停。
+        返回 (snapshots, need_input_line, error)：
+          - need_input_line 非 None → 暂停在该行，等待 GUI 收集输入后恢复
+          - need_input_line 为 None → 执行结束（error 可能为 None=跑通）"""
+        fd = self._make_engine(None)
+        if fd is None:
+            self.snapshots = {}
+            return {}, None, None
+        self.engine.pause_at_input = True
+        try:
+            self.engine.exec_block(fd.body)
+        except NeedInput as ni:
+            self.snapshots = self.engine.snapshots
+            return self.snapshots, ni.line, None
+        except StopExec:
+            pass
+        except SimError as ex:
+            self.engine.error = self._friendly_error(ex)
+        except RecursionError:
+            self.engine.error = SimError(0, "递归深度超限（递归太深，可能导致栈溢出）；已显示执行到当前位置的内存状态")
+        self.snapshots = self.engine.snapshots
+        return self.snapshots, None, (self.engine.error if self.engine else None)
 
     def _has_input(self):
         """代码是否含输入语句（scanf/gets/getchar 等）"""

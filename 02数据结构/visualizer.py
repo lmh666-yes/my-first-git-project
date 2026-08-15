@@ -1176,6 +1176,7 @@ class App:
         self.step_idx = -1
         self._pending_inputs = []     # scanf 模拟输入
         self._input_requested = False
+        self._free_active = False     # 自由测试模式是否激活
 
         # ---- 顶部工具栏 ----
         bar = tk.Frame(root, bg="#2c3e50")
@@ -1192,7 +1193,23 @@ class App:
         btn("📋 粘贴代码", self.paste_code).pack(side=tk.LEFT, padx=4, pady=4)
         btn("◀ 上一步", self.step_prev).pack(side=tk.LEFT, padx=4, pady=4)
         btn("下一步 ▶", self.step_next).pack(side=tk.LEFT, padx=4, pady=4)
-        btn("▶ 运行全部", self.run_all).pack(side=tk.LEFT, padx=4, pady=4)
+        btn("↩ 返回调用处", self.step_back_to_caller).pack(side=tk.LEFT, padx=4, pady=4)
+        # ---- 运行模式：主按钮(当前模式) + ⋯ 下拉(展开其他模式) ----
+        self.run_mode = "常规运行"
+        self.mode_btn = btn(self.run_mode, self.run_current_mode)
+        self.mode_btn.pack(side=tk.LEFT, padx=(4, 2), pady=4)
+        self.mode_menu = tk.Menu(bar, tearoff=0)
+        self.mode_menu.add_command(label="常规运行", command=lambda: self.set_run_mode("常规运行"))
+        self.mode_menu.add_command(label="运行全部", command=lambda: self.set_run_mode("运行全部"))
+        self.mode_menu.add_command(label="自由测试", command=lambda: self.set_run_mode("自由测试"))
+        btn_dots = tk.Button(bar, text="⋯", command=self._popup_mode_menu,
+                             bg="#34495e", fg="white", relief=tk.FLAT,
+                             font=("Microsoft YaHei", 13, "bold"),
+                             padx=6, pady=1, cursor="hand2",
+                             activebackground="#5d6d7e", activeforeground="white")
+        btn_dots.bind("<Enter>", lambda e: btn_dots.config(bg="#3e5c76"))
+        btn_dots.bind("<Leave>", lambda e: btn_dots.config(bg="#34495e"))
+        btn_dots.pack(side=tk.LEFT, padx=(0, 4), pady=4)
         btn("↺ 重置", self.reset).pack(side=tk.LEFT, padx=4, pady=4)
         tk.Label(bar, text="示例:", bg="#2c3e50", fg="white",
                  font=("Microsoft YaHei", 10)).pack(side=tk.LEFT, padx=(16, 2))
@@ -1201,9 +1218,10 @@ class App:
                           width=18, values=list(EXAMPLES.keys()))
         ex.pack(side=tk.LEFT, padx=2)
         ex.bind("<<ComboboxSelected>>", self.load_example)
-        tk.Label(bar, text="提示：点击代码行查看该行状态 · ←/→ 上一步下一步 · 拖动平移 · Ctrl+滚轮缩放",
-                 bg="#2c3e50", fg="#ecf0f1",
-                 font=("Microsoft YaHei", 9)).pack(side=tk.RIGHT, padx=10)
+        # 右上角：运行状态栏（跑通=绿，未跑通=红+!!!；操作提示已移入 README）
+        self.run_status = tk.Label(bar, text="● 就绪", bg="#2c3e50", fg="#bdc3c7",
+                                   font=("Microsoft YaHei", 10, "bold"))
+        self.run_status.pack(side=tk.RIGHT, padx=12)
         # 键盘快捷键：←/→ 逐步回放
         root.bind("<Left>", lambda e: self.step_prev())
         root.bind("<Right>", lambda e: self.step_next())
@@ -1582,9 +1600,48 @@ class App:
         self.step_idx -= 1
         self._show_step(self.step_idx)
 
+    def step_back_to_caller(self):
+        """从函数内部一步返回到调用处（如回到 main）：
+        向前找第一个“调用栈变浅”的步（函数返回后的状态）并跳到那里"""
+        if not self.step_list:
+            self.set_status("请先点“下一步”或“运行全部”", False)
+            return
+        if self.step_idx < 0:
+            self.step_idx = 0
+        cur = self.step_list[self.step_idx][1]
+        cur_depth = len(cur.get("frames", []))
+        if cur_depth > 1:
+            # 函数内部步在调用行快照之前，先向后找最近的最外层(main)步
+            for i in range(self.step_idx + 1, len(self.step_list)):
+                if len(self.step_list[i][1].get("frames", [])) == 1:
+                    self.step_idx = i
+                    self._show_step(i)
+                    return
+            # 再向前找最外层
+            for i in range(self.step_idx - 1, -1, -1):
+                if len(self.step_list[i][1].get("frames", [])) == 1:
+                    self.step_idx = i
+                    self._show_step(i)
+                    return
+        # 找不到最外层 → 回退到最近一次调用栈变浅的位置
+        for i in range(self.step_idx - 1, -1, -1):
+            d = len(self.step_list[i][1].get("frames", []))
+            if d < cur_depth:
+                self.step_idx = i
+                self._show_step(i)
+                return
+        # 已在最外层（main 内）→ 普通回退一步
+        if self.step_idx > 0:
+            self.step_idx -= 1
+            self._show_step(self.step_idx)
+        else:
+            self.set_status("已在最外层调用处", False)
+
     def run_all(self):
+        """运行全部：一次性跑通 main 直到结束；状态栏显示跑通(绿)/未跑通(红!!!)"""
         snaps, err, steps = self._exec_code()
         if err:
+            self._set_run_status("❌ 程序未能正常跑通!!!", "red")
             self.set_status(f"运行错误：{err.msg}", True)
             self.highlight_error(err.line)
             self.draw_empty()
@@ -1592,6 +1649,7 @@ class App:
         self.snapshots = snaps
         self.step_list = steps
         if not snaps:
+            self._set_run_status("❌ 程序未能正常跑通!!!", "red")
             self.set_status("未发现可执行函数（需要 int main() 或函数定义）", True)
             return
         self.step_idx = len(steps) - 1 if steps else -1
@@ -1601,7 +1659,188 @@ class App:
         self.code.tag_remove("hl", "1.0", "end")
         self.code.tag_add("hl", f"{last}.0", f"{last}.end")
         self.code.see(f"{last}.0")
+        self._set_run_status("✅ 程序已跑通", "green")
         self.set_status(f"运行完成，共 {len(snaps)} 个状态；可用“上一步/下一步”逐步回放（共 {len(steps)} 步）", False)
+
+    # ---------- 运行模式：常规 / 全部 / 自由测试 ----------
+    def _set_run_status(self, text, color="gray"):
+        colors = {"green": "#2ecc71", "red": "#e74c3c",
+                  "gray": "#bdc3c7", "blue": "#5dade2"}
+        self.run_status.config(text=text, fg=colors.get(color, "#bdc3c7"))
+
+    def _popup_mode_menu(self):
+        try:
+            self.mode_menu.tk_popup(self.mode_btn.winfo_rootx(),
+                                    self.mode_btn.winfo_rooty() +
+                                    self.mode_btn.winfo_height())
+        finally:
+            self.mode_menu.grab_release()
+
+    def set_run_mode(self, mode):
+        self.run_mode = mode
+        self.mode_btn.config(text=mode)
+        self.run_current_mode()
+
+    def run_current_mode(self):
+        if self.run_mode == "常规运行":
+            self.normal_run()
+        elif self.run_mode == "运行全部":
+            self.run_all()
+        elif self.run_mode == "自由测试":
+            self.free_test_start()
+
+    def normal_run(self):
+        """常规运行：第一步自动定位到 main 函数位置（不自动跑完）"""
+        code = self.get_code()
+        if not code.strip():
+            return
+        try:
+            sim = Simulator(code)
+            m = sim.main_name()
+            if m is None:
+                self._set_run_status("❌ 未找到 main", "red")
+                self.set_status("未找到可执行函数", True)
+                return
+            fd = sim.funcs[m]
+            first = fd.body[0].line if fd.body else None
+        except Exception:
+            first = None
+        if first:
+            self.show_line(first)
+            self.code.tag_remove("hl", "1.0", "end")
+            self.code.tag_add("hl", f"{first}.0", f"{first}.end")
+            self.code.see(f"{first}.0")
+            self._set_run_status("● 常规运行", "gray")
+            self.set_status(f"常规运行：已定位到 {m}() 起始行（第 {first} 行），可点“下一步”逐步执行", False)
+        else:
+            self.run_all()
+
+    # ---------- 自由测试：交互式输入，到输入点暂停弹输入窗 ----------
+    def free_test_start(self):
+        """自由测试：从 main 开头开始，到需要输入处暂停并弹输入窗，可重复输入"""
+        self._free_active = True
+        self._pending_inputs = []
+        self._input_requested = True     # 自由测试自己处理输入，不再走旧弹窗
+        self._free_resume()
+
+    def _free_resume(self):
+        """恢复自由测试执行：重新从头执行，到下一个输入点暂停或执行结束"""
+        code = self.get_code()
+        if not code.strip():
+            return
+        try:
+            sim = Simulator(code)
+        except Exception:
+            self._set_run_status("❌ 程序未能正常跑通!!!", "red")
+            return
+        sim.pending_inputs = list(self._pending_inputs)
+        try:
+            snaps, need_line, err = sim.run_pause_at_input()
+        except Exception:
+            self._set_run_status("❌ 程序未能正常跑通!!!", "red")
+            return
+        self.sim = sim
+        self.snapshots = snaps
+        self.step_list = list(sim.engine.step_snapshots) if sim.engine else []
+        self.step_idx = len(self.step_list) - 1 if self.step_list else -1
+        if need_line is not None:
+            self._show_free_pause(need_line, snaps)
+            self._open_input_window(need_line)
+            return
+        # 执行结束
+        self._free_active = False
+        if err:
+            self._set_run_status("❌ 程序未能正常跑通!!!", "red")
+            self.set_status(f"自由测试结束（未跑通）：{err.msg}", True)
+            if err.line:
+                self.highlight_error(err.line)
+            if snaps:
+                last = max(snaps.keys())
+                self.current_line = last
+                self.drawer.draw(snaps[last], "自由测试（遇到问题）")
+        else:
+            self._set_run_status("✅ 程序已跑通", "green")
+            if snaps:
+                last = max(snaps.keys())
+                self.current_line = last
+                self.drawer.draw(snaps[last], "自由测试完成（最终状态）")
+                self.code.tag_remove("hl", "1.0", "end")
+                self.code.tag_add("hl", f"{last}.0", f"{last}.end")
+                self.code.see(f"{last}.0")
+            self.set_status("自由测试完成：程序已跑通", False)
+
+    def _show_free_pause(self, line, snaps):
+        """显示自由测试暂停在输入行时的状态（该行执行前/最近的快照）"""
+        snap = None
+        keys = sorted(snaps.keys())
+        for k in keys:
+            if k <= line:
+                snap = snaps[k]
+            else:
+                break
+        if snap is None and keys:
+            snap = snaps[keys[0]]
+        self.current_line = line
+        self.code.tag_remove("hl", "1.0", "end")
+        self.code.tag_remove("er", "1.0", "end")
+        self.code.tag_add("hl", f"{line}.0", f"{line}.end")
+        self.code.see(f"{line}.0")
+        if snap:
+            self.drawer.draw(snap, f"自由测试：第 {line} 行需要输入")
+        self._set_run_status("⏸ 等待输入…", "blue")
+        self.set_status(f"自由测试：第 {line} 行需要输入，请在输入窗中填写", False)
+
+    def _open_input_window(self, line):
+        """可拖动的模拟输入窗：上=输入框(可缩放)，下=载入输入结果/重新输入"""
+        win = tk.Toplevel(self.root)
+        win.title(f"模拟输入 - 第 {line} 行")
+        win.geometry("420x230")
+        win.transient(self.root)
+        tk.Label(win, text=f"第 {line} 行需要输入（scanf/getchar 等）。"
+                           "多个值用空格/逗号分隔，Ctrl+Enter 提交：",
+                 font=("Microsoft YaHei", 9), fg="#333333", anchor="w",
+                 padx=10).pack(fill=tk.X, pady=(10, 2))
+        txt = tk.Text(win, font=("Consolas", 12), height=4,
+                      bg="#1e1e1e", fg="#d4d4d4", insertbackground="#d4d4d4",
+                      padx=8, pady=6, relief=tk.SUNKEN, bd=1)
+        txt.pack(fill=tk.BOTH, expand=True, padx=10, pady=4)
+        txt.focus_set()
+        btns = tk.Frame(win)
+        btns.pack(fill=tk.X, padx=10, pady=(2, 10))
+
+        def parse():
+            vals = []
+            for x in txt.get("1.0", "end-1c").replace(",", " ").split():
+                try:
+                    vals.append(int(x, 0))
+                except Exception:
+                    try:
+                        vals.append(int(float(x)))
+                    except Exception:
+                        pass
+            return vals
+
+        def load_input():
+            self._pending_inputs.extend(parse())
+            win.destroy()
+            self._free_resume()          # 回到输入步骤并继续（可能开下一个输入窗）
+
+        def reinput():
+            txt.delete("1.0", "end")
+            txt.focus_set()
+
+        tk.Button(btns, text="载入输入结果", command=load_input,
+                  bg="#1a5276", fg="white", cursor="hand2",
+                  activebackground="#154360", activeforeground="white",
+                  font=("Microsoft YaHei", 11, "bold"),
+                  padx=20, pady=6, relief=tk.RAISED, bd=1).pack(side=tk.LEFT, expand=True)
+        tk.Button(btns, text="重新输入", command=reinput,
+                  bg="#8e44ad", fg="white", cursor="hand2",
+                  activebackground="#6c3483", activeforeground="white",
+                  font=("Microsoft YaHei", 11),
+                  padx=20, pady=6, relief=tk.RAISED, bd=1).pack(side=tk.RIGHT, expand=True, padx=(8, 0))
+        txt.bind("<Control-Return>", lambda e: load_input())
+        txt.bind("<Return>", lambda e: load_input())
 
     def reset(self):
         self.current_line = None
@@ -1612,6 +1851,15 @@ class App:
         self.step_idx = -1
         self._input_requested = False
         self._pending_inputs = []
+        self._free_active = False
+        self._set_run_status("● 就绪", "gray")
+        # 关闭自由测试遗留的输入窗
+        try:
+            for w in self.root.winfo_children():
+                if isinstance(w, tk.Toplevel) and w.title().startswith("模拟输入"):
+                    w.destroy()
+        except Exception:
+            pass
         self.draw_empty()
         self.set_status("已重置。点击代码行 / “下一步”逐步运行 / “运行全部”查看最终状态", False)
 
@@ -1887,7 +2135,8 @@ class App:
                 self.draw_empty()
                 msg = "没有找到 int main() 或任何函数定义，无法执行。\n请粘贴包含函数定义的完整代码片段。"
                 self.set_status("未找到可执行函数", True)
-                messagebox.showwarning("无法分析", msg)
+                if self._popup:
+                    messagebox.showwarning("无法分析", msg)
                 return
             snaps = sim.run()
             err = sim.engine.error if sim.engine else None
