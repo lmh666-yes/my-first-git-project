@@ -2,7 +2,7 @@
 """用户文件专项: 跨排长链(10节点→多排)的遮挡 + 标题 + 箭头审计 + NULL/野指针指向"""
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
 

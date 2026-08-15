@@ -3,7 +3,7 @@
 加载执行, 验证绘制准确性(节点/审计/无重叠) 与内容准确。"""
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
 from simcore import Simulator

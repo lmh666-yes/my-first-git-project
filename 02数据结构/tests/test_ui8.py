@@ -2,7 +2,7 @@
 """验证: ① NULL箭头与next字段行对齐 ② 堆内箭头高度=next字段行 ③ 仅Ctrl+滚轮缩放 ④ 双击复位"""
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
 

@@ -5,7 +5,7 @@
 抽样使用固定随机种子,结果可复现。"""
 import sys, io, os, random
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from simcore import Simulator, SimError
 from visualizer import Drawer

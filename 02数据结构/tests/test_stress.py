@@ -5,7 +5,7 @@ B. 崩溃测试: 各种非法/边界代码必须“安全失败”(捕获为 Sim
 C. 保护还原: 坏代码后加载好代码仍正常; reset 状态干净; 引擎状态隔离"""
 import sys, io, os, time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from simcore import Simulator, SimError
 from visualizer import App

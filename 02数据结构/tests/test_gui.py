@@ -2,7 +2,7 @@
 """GUI 无界面自检：创建窗口、载入每个示例、逐行点击、验证绘图不崩溃"""
 import sys, io, os, traceback
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App, EXAMPLES
 

@@ -3,7 +3,7 @@
 统计可视化器的解析/执行通过情况。排除 02C语言\\999复习巩固。"""
 import sys, io, os, time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simcore import Simulator, SimError
 
 BASE = r"D:\yq\01虚拟机"

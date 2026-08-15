@@ -2,7 +2,7 @@
 """test_sim.py — 验证 simcore 模拟引擎的准确性"""
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simcore import Simulator, SimError
 
 fails = 0

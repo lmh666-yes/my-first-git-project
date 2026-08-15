@@ -2,7 +2,7 @@
 """综合复查：examples 外部文件 + 全部内置示例逐行点击 + 运行全部"""
 import sys, io, os, traceback
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App, EXAMPLES
 
@@ -20,7 +20,7 @@ app = App(root)
 app._popup = False  # 测试时关闭错误弹窗
 
 # 1. 外部 examples 文件
-ex_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "examples")
+ex_dir = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "examples")
 for fn in sorted(os.listdir(ex_dir)):
     if fn.endswith(".c"):
         path = os.path.join(ex_dir, fn)

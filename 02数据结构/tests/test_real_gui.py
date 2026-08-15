@@ -3,7 +3,7 @@
 仅在 D:\yq\CQ2615 存在时运行，否则跳过。"""
 import sys, io, os, traceback
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
 

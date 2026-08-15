@@ -51,18 +51,27 @@
 02数据结构/
 ├── visualizer.py         主程序（GUI，tkinter）
 ├── simcore.py            迷你 C 模拟引擎（解析 + 执行 + 快照）
-├── test_sim.py           引擎正确性测试（8 组）
-├── test_gui.py           GUI 无界面自检（7 个示例逐行点击）
-├── 启动可视化器.bat        双击运行
+├── 启动可视化器.bat        一键启动封装（自动定位 Python、检查 tkinter）
 ├── README.md
-└── examples/             示例代码文件
+├── examples/             示例代码文件
+└── tests/                全部自动化测试（引擎/UI/压力/崩溃/抽样等 20+ 个）
+    ├── test_sim.py       引擎正确性测试（8 组）
+    ├── test_gui.py       GUI 无界面自检（7 个示例逐行点击）
+    ├── test_stress.py    压力/崩溃/保护还原综合测试
+    ├── test_ui6.py       随机抽样 60 个程序科学验证（遮挡/箭头）
+    ├── test_scan.py      全量 435 文件扫描
+    └── ...
 ```
 
 ## 测试
 
 ```bash
-python test_sim.py    # 引擎测试：链表/递归/数组/循环/报错，全部通过
-python test_gui.py    # GUI 自检：7 个示例逐行点击 + 运行全部 + 错误捕获
+cd tests
+python test_sim.py      # 引擎测试：链表/递归/数组/循环/报错，全部通过
+python test_gui.py      # GUI 自检：7 个示例逐行点击 + 运行全部 + 错误捕获
+python test_stress.py   # 压力/崩溃/保护还原综合测试
+python test_scan.py     # 全量 435 文件扫描（100% 可正常打开）
+python test_ui6.py      # 随机抽样 60 文件科学验证（UI 遮挡 + 箭头指向）
 ```
 
 ## 示例：链表头插

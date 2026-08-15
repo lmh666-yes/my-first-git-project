@@ -2,7 +2,7 @@
 """验证: 01单向带头不循环.c 链表构建与移动节点正确性"""
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 from simcore import Simulator
 
 p = r"d:\yq\01虚拟机\03数据结构\02单向链表\code\01单向带头不循环.c"

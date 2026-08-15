@@ -3,7 +3,7 @@
 ③再点已选中→关闭 ④移除后重新分配(红右上/蓝右下) ⑤面板可拖动且连线同步 ⑥关闭叉叉"""
 import sys, io, os
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
 

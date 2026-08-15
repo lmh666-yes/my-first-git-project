@@ -2,7 +2,7 @@
 """验证三项优化：上下布局 / 点击行内存变更摘要 / 堆栈准确标注"""
 import sys, io, os, traceback
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App, EXAMPLES
 from simcore import Simulator

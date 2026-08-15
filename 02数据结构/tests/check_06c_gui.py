@@ -2,7 +2,7 @@
 """GUI 验证 06.c: 逐步执行并截图, 检查 scalar 值与 freed 状态显示"""
 import sys, io, os, time
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
 from PIL import ImageGrab
