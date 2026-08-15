@@ -165,15 +165,21 @@ class Drawer:
         self.heap_by_addr = {}
         self._font_cache = {}
         self._fo_cache = {}
+        # 缩放布局尺寸（draw 时按 zoom 计算；带下限，保证缩小后文字不挤压、清晰）
+        self.lh = 20      # 变量区行高
+        self.fh = 22      # 字段行高
+        self.h0 = 30      # 节点标题高
+        self.gap = 36     # 节点间距
+        self.tlh = 19     # 帧标题行高
         self.last_audit = {"chains": 0, "nodes": 0, "arrows": 0,
                            "nulls": 0, "wilds": 0, "wraps": 0}
 
-    # ---------- 字体（随缩放缩放） ----------
+    # ---------- 字体（随缩放缩放；Tk 字号须为整数，下限 8 保证缩小后仍清晰） ----------
     def F(self, size, bold=False, fam="Consolas"):
-        key = (fam, max(7, round(size * self.zoom)), bold)
+        px = max(8, round(size * self.zoom))
+        key = (fam, px, bold)
         if key not in self._font_cache:
-            self._font_cache[key] = (fam, max(7, round(size * self.zoom)),
-                                     "bold" if bold else "normal")
+            self._font_cache[key] = (fam, px, "bold" if bold else "normal")
         return self._font_cache[key]
 
     def FM(self, size, bold=False):
@@ -217,6 +223,12 @@ class Drawer:
         self.last_audit = {"chains": 0, "nodes": 0, "arrows": 0,
                            "nulls": 0, "wilds": 0, "wraps": 0}
         changed_vars = changed_vars or set()
+        # 布局尺寸（带下限）：缩小后文字可读、不挤压；放大后等比放大
+        self.lh = max(18, round(20 * z))
+        self.fh = max(18, round(self.FIELD_H * z))
+        self.h0 = max(24, round(self.NODE_H0 * z))
+        self.gap = max(16, round(self.GAP * z))
+        self.tlh = max(18, round(19 * z))
         # 标题（含变更摘要）
         self.c.create_text(10 * z, 8 * z, anchor="nw", text=msg,
                            fill="#1a5276", font=self.FM(12, True))
@@ -231,31 +243,31 @@ class Drawer:
         vx = 10 * z
         vy = ty + 6 * z
         vw = W - 20 * z
-        need_h = 26 * z
+        need_h = max(20, round(26 * z))
         for fr in frames:
-            need_h += 22 * z + len(fr["vars"]) * 19 * z + 6 * z
-        ph = max(need_h + 10 * z, 44 * z)
+            need_h += self.tlh + len(fr["vars"]) * self.lh + max(4, round(6 * z))
+        ph = max(need_h + max(8, round(10 * z)), 44)
         self.c.create_rectangle(vx, vy, vx + vw, vy + ph, outline="#bbbbbb",
                                 fill="#f4f6f8", width=1)
         self.c.create_text(vx + 8 * z, vy + 4 * z, anchor="nw",
                            text="调用栈 / 变量（栈上）",
                            fill="#555555", font=self.FM(11, True))
-        yy = vy + 24 * z
+        yy = vy + max(18, round(24 * z))
         for fr in frames:
             # 帧标题底色条
-            self.c.create_rectangle(vx + 2 * z, yy, vx + vw - 2 * z, yy + 17 * z,
+            self.c.create_rectangle(vx + 2 * z, yy, vx + vw - 2 * z, yy + self.tlh,
                                     outline="", fill="#e8eaf6")
-            self.c.create_text(vx + 8 * z, yy + 1 * z, anchor="nw",
+            self.c.create_text(vx + 8 * z, yy + 1, anchor="nw",
                                text="[ " + fr["func"] + " ]",
                                fill="#283593", font=self.FM(11, True))
-            yy += 19 * z
+            yy += self.tlh
             for name, v in fr["vars"]:
                 line = self.fmt_var(name, v)
                 warn = self._dangling_warn(v, heap_by_addr)
                 if name in changed_vars:
                     # 本步变化的变量：浅黄高亮
-                    self.c.create_rectangle(vx + 2 * z, yy - 1 * z,
-                                            vx + vw - 2 * z, yy + 18 * z,
+                    self.c.create_rectangle(vx + 2 * z, yy - 1,
+                                            vx + vw - 2 * z, yy + self.lh - 1,
                                             outline="", fill="#fff9c4")
                 self.c.create_text(vx + 16 * z, yy, anchor="nw", text=line,
                                    fill="#c62828" if warn else "#333333",
@@ -269,8 +281,8 @@ class Drawer:
                                        yy, anchor="nw",
                                        text=_tag,
                                        fill="#c62828", font=self.FM(9, True))
-                yy += 19 * z
-            yy += 5 * z
+                yy += self.lh
+            yy += max(4, round(5 * z))
         # 提示
         self.c.create_text(vx + 8 * z, yy + 2 * z, anchor="nw",
                            text="▼ 下方为内存/结构图：拖动平移 · Ctrl+滚轮缩放 · 双击复位 · 点击内存块看详情",
@@ -278,8 +290,8 @@ class Drawer:
 
         # ---- 下方：堆 / 链表结构（起点在标题之下，标题不被第一排节点遮挡） ----
         hx0 = vx
-        htop = vy + ph + 34 * z
-        self.c.create_text(hx0, htop - 16 * z, anchor="nw",
+        htop = vy + ph + max(24, round(34 * z))
+        self.c.create_text(hx0, htop - max(14, round(16 * z)), anchor="nw",
                            text="内存 / 结构（■堆 ■栈）",
                            fill="#555555", font=self.FM(10, True))
         chain_heads = self.find_chains(frames, heap_by_addr)
@@ -395,7 +407,7 @@ class Drawer:
 
     def node_height(self, blk):
         n = len(self.field_rows(blk))
-        return (self.NODE_H0 + max(1, n) * self.FIELD_H + 8) * self.zoom
+        return self.h0 + max(1, n) * self.fh + 8
 
     def draw_node(self, x, y, addr, blk, heap_by_addr):
         """画一个内存块矩形（堆/栈分色，宽度按内容自适应，文字永不越界）
@@ -427,7 +439,7 @@ class Drawer:
             title = title[:-1]
         title += "…"
         # 圆角矩形 + 标题底色条
-        r = 8 * z
+        r = max(4, round(8 * z))
         self.round_rect(x, y, x + w, y + h, r, outline=outline, fill=fill, width=2)
         if loc == "栈":
             title_bg, title_fg = "#c8e6c9", "#1b5e20"
@@ -436,11 +448,11 @@ class Drawer:
         else:
             title_bg, title_fg = "#ffe082", "#5d4037"
         self.c.create_rectangle(x + 2 * z, y + 2 * z, x + w - 2 * z,
-                                y + self.NODE_H0 * z - 2 * z,
+                                y + self.h0 - 2 * z,
                                 outline="", fill=title_bg)
         self.c.create_text(x + 6 * z, y + 4 * z, anchor="nw", text=title,
                            fill=title_fg, font=tf)
-        yy = y + self.NODE_H0 * z
+        yy = y + self.h0
         for txt in field_lines:
             # 字段超宽则截断
             while self.mw(txt + "…", ff) > w - 8 * z and len(txt) > 1:
@@ -456,7 +468,7 @@ class Drawer:
                 fill_c = "#333333"
             self.c.create_text(x + 6 * z, yy, anchor="nw", text=txt,
                                fill=fill_c, font=ff)
-            yy += self.FIELD_H * z
+            yy += self.fh
         if freed:
             # 已释放：底部画删除线
             self.c.create_line(x + 4 * z, y + h - 3 * z, x + w - 4 * z, y + h - 3 * z,
@@ -536,10 +548,10 @@ class Drawer:
                     _paddr, prx, pby = prev
                     self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 20 * z,
                                        fill="#1565c0", width=2, arrow=tk.LAST)
-                    self.c.create_text(x0 + 2, pby + 22 * z, anchor="nw",
+                    self.c.create_text(x0 + 2, pby + max(20, round(22 * z)), anchor="nw",
                                        text="↘ 续接", fill="#1565c0",
                                        font=self.FM(9, True))
-                    y = pby + 40 * z
+                    y = pby + max(30, round(40 * z))
                     x = x0
                     self.last_audit["wraps"] += 1
                 rx, by = self.draw_node(x, y, cur, blk, heap_by_addr)
@@ -549,7 +561,7 @@ class Drawer:
                 # 引用标注：其他变量也指向该块（只标注一次，不重复画链）
                 if cur in refs:
                     tag = "← " + ", ".join(refs[cur])
-                    self.c.create_text(x - 6 * z, y + self.NODE_H0 * z,
+                    self.c.create_text(x - 6 * z, y + self.h0,
                                        anchor="se", text=tag, fill="#666666",
                                        font=self.FM(9, True))
                 # next 字段目标
@@ -557,7 +569,7 @@ class Drawer:
                 if tgt in heap_by_addr:
                     prev = (cur, rx, by)
                     cur = tgt
-                    x = rx + self.GAP * z
+                    x = rx + self.gap
                     steps += 1
                 else:
                     # next 为 NULL 或野指针 → 画带箭头的指向标记（与 next 字段行对齐）
@@ -578,7 +590,7 @@ class Drawer:
             self.c.create_text(x0, chain_bottom + 8 * z, anchor="nw",
                                text=f"← {head_label}",
                                fill="#666666", font=self.FM(10, True))
-            y0 = chain_bottom + 44 * z   # 下一条链从本链底部下方开始
+            y0 = chain_bottom + max(30, round(44 * z))   # 下一条链从本链底部下方开始
             global_visited.update(visited)
 
     def _next_field_idx(self, blk):
@@ -589,21 +601,22 @@ class Drawer:
         return 0
 
     def _field_line_y(self, y_top, idx, z):
-        """节点内第 idx 个字段行的中心 y（绝对坐标）"""
-        return y_top + self.NODE_H0 * z + idx * self.FIELD_H * z + self.FIELD_H * z / 2
+        """节点内第 idx 个字段行的中心 y（绝对坐标，用带下限行高）"""
+        return y_top + self.h0 + idx * self.fh + self.fh / 2
 
     def _draw_next_target(self, rx, y_top, idx, tgt, z):
         """画 next 指向 NULL 或野指针的标记：箭头从 next 字段行水平引出，与 NULL 对齐"""
         yline = self._field_line_y(y_top, idx, z)
         nx = rx + 8 * z
+        off = max(4, round(7 * z))
         if tgt == 0:
-            self.c.create_text(nx + 6, yline - 7 * z, anchor="nw",
+            self.c.create_text(nx + 6, yline - off, anchor="nw",
                                text="NULL", fill="#8a8a8a",
                                font=self.F(9, True))
             self.arrow(rx + 1, yline, nx + 4, yline, color="#8a8a8a")
             self.last_audit["nulls"] += 1
         else:
-            self.c.create_text(nx + 6, yline - 7 * z, anchor="nw",
+            self.c.create_text(nx + 6, yline - off, anchor="nw",
                                text=f"⚠野指针 0x{tgt:x}", fill="#c62828",
                                font=self.F(9, True))
             self.arrow(rx + 1, yline, nx + 4, yline, color="#c62828")
@@ -617,15 +630,19 @@ class Drawer:
         for addr in sorted(heap_by_addr.keys()):
             blk = heap_by_addr[addr]
             rx, by = self.draw_node(x, y, addr, blk, heap_by_addr)
-            x = rx + self.GAP * z
+            x = rx + self.gap
             if x > x0 + vis_w - 60:
                 x = x0
-                y = by + 40 * z
+                y = by + max(30, round(40 * z))
 
     def arrow(self, x1, y1, x2, y2, color="#1565c0"):
+        az = max(0.6, self.zoom)
         self.c.create_line(x1, y1, x2, y2, fill=color,
-                           width=max(2, round(2 * self.zoom)),
-                           arrow=tk.LAST, arrowshape=(12, 15, 7))
+                           width=max(1.5, 2 * self.zoom),
+                           arrow=tk.LAST,
+                           arrowshape=(max(6, round(12 * az)),
+                                       max(8, round(15 * az)),
+                                       max(3, round(7 * az))))
 
     # ---------- 右上角信息面板：点击内存块后显示“属于哪个变量 + 当前状态” ----------
     def _draw_info_panel(self):
@@ -1200,7 +1217,7 @@ class App:
         """以鼠标位置为中心缩放画布"""
         d = self.drawer
         old = d.zoom
-        new = min(4.0, max(0.3, old * factor))
+        new = min(4.0, max(0.45, old * factor))
         if abs(new - old) < 1e-6:
             return
         cx = self.canvas.canvasx(mx)
