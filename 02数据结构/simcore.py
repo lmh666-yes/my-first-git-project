@@ -2042,7 +2042,7 @@ class SimEngine:
             return self.eval_expr(args[0])
         if name in self.funcs:
             return self.call_user(name, args)
-        # scanf：从模拟输入队列取值赋给变量（scanf("%d", &a) / &a, &b）
+        # scanf：从模拟输入队列取值赋给变量（scanf("%d", &a) / &a, &b / &arr[i]）
         if name == "scanf" and len(args) >= 1:
             for t in args[1:]:
                 if not isinstance(t, tuple) or not t:
@@ -2051,13 +2051,21 @@ class SimEngine:
                 if self.input_pos < len(self.inputs):
                     val = self.inputs[self.input_pos]
                     self.input_pos += 1
-                tv = None
+                # 先去掉外层取址符 &（&a / &arr[i]）
                 if t[0] == "unary" and len(t) >= 3 and t[1] == "&":
-                    inner = t[2]
-                    if isinstance(inner, tuple) and inner and inner[0] == "var":
-                        tv = inner[1]
-                elif t[0] == "var":
-                    tv = t[1]
+                    t = t[2]
+                if not isinstance(t, tuple) or not t:
+                    continue
+                if t[0] == "var":
+                    # scanf("%d", &a) 或 scanf("%d", a)（教学写法）
+                    try:
+                        vi = self.lookup(t[1])
+                        if vi.is_array and isinstance(vi.value, list):
+                            pass   # 数组名作目标（如 scanf("%s", str)）保持数组
+                        else:
+                            vi.value = Value("int", val)
+                    except Exception:
+                        pass
                 elif t[0] == "index":
                     # scanf("%d", &arr[i]) / arr[i]
                     try:
@@ -2065,16 +2073,14 @@ class SimEngine:
                         idx = self.to_int(self.eval_expr(t[2]))
                         if isinstance(arr, list) and 0 <= idx < len(arr):
                             arr[idx] = Value("int", val)
-                        continue
-                    except Exception:
-                        pass
-                if tv is not None:
-                    try:
-                        vi = self.lookup(tv)
-                        if vi.is_array and isinstance(vi.value, list):
-                            pass   # 数组名作目标（如 scanf("%s", str)）保持数组
-                        else:
-                            vi.value = Value("int", val)
+                        elif isinstance(arr, Value) and arr.kind == "addr":
+                            # 数组名/&arr 返回基址(addr): 用 _arr_base 定位并写入元素
+                            m = self._arr_base(arr.val)
+                            if m is not None:
+                                vi, off = m
+                                i2 = idx + off
+                                if 0 <= i2 < len(vi.value):
+                                    vi.value[i2] = Value("int", val)
                     except Exception:
                         pass
             return Value("int", 0)

@@ -68,7 +68,12 @@ echo [信息] 正在启动可视化器，请稍候 ...
 echo [提示] 关闭窗口即退出程序。
 echo.
 %PY% "%~dp0visualizer.py"
-echo.
-echo [提示] 程序已退出。若上方有错误信息，请按提示解决后重试。
-echo.
-pause
+if errorlevel 1 (
+    echo.
+    echo [错误] 程序异常退出（错误码 %errorlevel%）。请按任意键查看详情后关闭。
+    echo.
+    pause
+    exit /b 1
+)
+:: 正常关闭窗口后直接退出，终端自动关闭
+exit /b 0

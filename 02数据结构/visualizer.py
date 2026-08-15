@@ -159,7 +159,12 @@ class Drawer:
         self.c = canvas
         self.zoom = 1.0
         self.node_rects = {}        # addr -> (x, y, w, h)（缩放后画布坐标）
-        self.panels = []            # 信息面板（最多2个：第1红·右上，第2蓝·右下）
+        self.panels = []            # 信息面板（块: 红/蓝 各1；指针: 绿1）
+        self.ptr_boxes = {}         # 独立指针变量名 -> (x, y, w, h) 绿框
+        self.ptr_vars = {}          # 指针变量名 -> 变量描述 v
+        self.wrap_marks = {}        # 续接标记 canvas id -> 信息dict
+        self.wrap_arrows = {}       # 续接标记 id -> 紫箭头 item id 列表
+        self.ptr_links = {}         # 指针变量名 -> 目标块addr(点击绿框的高亮绿线)
         self.frames = []
         self.heap_by_addr = {}
         self._font_cache = {}
@@ -205,6 +210,10 @@ class Drawer:
         for p in self.panels:
             p["win_id"] = None
             p["line_id"] = None
+        self.ptr_boxes = {}
+        self.ptr_vars = {}
+        self.wrap_marks = {}
+        self.wrap_arrows = {}
 
     def draw(self, snap, msg="", diff_text=None, changed_vars=None):
         """布局：上方「调用栈/变量」，下方「内存/链表结构」；支持缩放 zoom。
@@ -297,9 +306,11 @@ class Drawer:
                            fill="#555555", font=self.FM(10, True))
         chain_heads = self.find_chains(frames, heap_by_addr)
         if chain_heads:
-            self.draw_chains(chain_heads, heap_by_addr, hx0, htop, H)
+            bottom = self.draw_chains(chain_heads, heap_by_addr, hx0, htop, H)
         else:
-            self.draw_heap_blocks(heap_by_addr, hx0, htop, H)
+            bottom = self.draw_heap_blocks(heap_by_addr, hx0, htop, H)
+        self._draw_ptr_boxes(frames, heap_by_addr, hx0, bottom, H)
+        self._draw_ptr_links()
         self._draw_info_panels()
         self.fit()
 
@@ -544,19 +555,19 @@ class Drawer:
                                        font=self.FM(9, True))
                     break
                 blk = heap_by_addr[cur]
-                # 超出行宽 -> 换行，画向下续接标记（与下一行错开，不遮挡节点）
+                # 超出行宽 -> 换行：画大号可点击「续接」标记（不做误导性垂直短线+左侧转接）
                 if prev is not None and x > x0 + max_w:
                     _paddr, prx, pby = prev
-                    self.c.create_line(prx - 4, pby + 2, prx - 4, pby + 20 * z,
-                                       fill="#1565c0", width=2, arrow=tk.LAST)
-                    self.c.create_text(x0 + 2, pby + max(20, round(22 * z)), anchor="nw",
-                                       text="↘ 续接", fill="#1565c0",
-                                       font=self.FM(9, True))
-                    y = pby + max(30, round(40 * z))
+                    self._draw_wrap_mark(heap_by_addr, _paddr, prx, pby, cur, z)
+                    y = pby + max(44, round(58 * z))
                     x = x0
                     self.last_audit["wraps"] += 1
                 rx, by = self.draw_node(x, y, cur, blk, heap_by_addr)
                 pos[cur] = (x, y, rx, by)
+                # 续接标记的 to_rect 在此节点画完后回填（供紫箭头定位）
+                for m in self.wrap_marks.values():
+                    if m["to_addr"] == cur and m.get("to_rect") is None:
+                        m["to_rect"] = (x, y, rx, by)
                 chain_bottom = max(chain_bottom, by)
                 self.last_audit["nodes"] += 1
                 # 引用标注：其他变量也指向该块（只标注一次，不重复画链）
@@ -568,6 +579,11 @@ class Drawer:
                 # next 字段目标
                 tgt = self._next_target(blk)
                 if tgt in heap_by_addr:
+                    if tgt in visited:
+                        # 循环回边（尾节点→头 / head→head 自循环）：画清晰的循环箭头
+                        self._draw_cycle_arrow(cur, pos[cur], blk, tgt, pos, z)
+                        self.last_audit["arrows"] += 1
+                        break
                     prev = (cur, rx, by)
                     cur = tgt
                     x = rx + self.gap
@@ -593,6 +609,7 @@ class Drawer:
                                fill="#666666", font=self.FM(10, True))
             y0 = chain_bottom + max(30, round(44 * z))   # 下一条链从本链底部下方开始
             global_visited.update(visited)
+        return y0
 
     def _next_field_idx(self, blk):
         """返回第一个指针(next)字段的序号，用于箭头与该行对齐"""
@@ -623,6 +640,43 @@ class Drawer:
             self.arrow(rx + 1, yline, nx + 4, yline, color="#c62828")
             self.last_audit["wilds"] += 1
 
+    def _draw_cycle_arrow(self, cur_addr, from_rect, blk, to_addr, pos, z):
+        """画循环链表的回边箭头：尾节点→头节点 / 头节点自循环。
+        橙色折线从 next 字段行绕行到目标节点 next 字段行，标注 ↺，一眼看清谁指向谁。"""
+        bx, by, rx, _bh = from_rect
+        idx = self._next_field_idx(blk)
+        y1 = self._field_line_y(by, idx, z)
+        if to_addr == cur_addr:
+            # 自循环：节点右侧画小回环（head->next = head）
+            arc_x = rx + max(10, round(14 * z))
+            arc_y = y1 - max(10, round(14 * z))
+            self.c.create_oval(arc_x, arc_y, arc_x + max(18, round(22 * z)),
+                               arc_y + max(18, round(22 * z)),
+                               outline="#e65100", width=2)
+            self.c.create_line(rx + 1, y1, arc_x, y1, fill="#e65100", width=2)
+            self.c.create_line(arc_x + max(18, round(22 * z)), y1,
+                               arc_x + max(22, round(26 * z)), y1,
+                               fill="#e65100", width=2, arrow=tk.LAST,
+                               arrowshape=(7, 10, 4))
+            self.c.create_text(arc_x, y1 + max(16, round(20 * z)), anchor="nw",
+                               text="↺ 自循环", fill="#e65100",
+                               font=self.FM(8, True))
+            return
+        if to_addr not in pos:
+            return
+        tx, ty, trx, _ = pos[to_addr]
+        to_idx = self._next_field_idx(self.heap_by_addr.get(to_addr) or {})
+        y2 = self._field_line_y(ty, to_idx, z)
+        # 折线：从本节点 next 字段行 → 向下 → 水平到目标右侧 → 箭头向上指向目标 next 行
+        mid_y = max(y1, y2) + max(16, round(22 * z))
+        self.c.create_line(rx + 1, y1, rx + 1, mid_y, fill="#e65100", width=2)
+        self.c.create_line(rx + 1, mid_y, trx + 6, mid_y, fill="#e65100", width=2)
+        self.c.create_line(trx + 6, mid_y, trx + 6, y2, fill="#e65100", width=2,
+                           arrow=tk.LAST, arrowshape=(8, 11, 5))
+        self.c.create_text((rx + 1 + trx + 6) / 2, mid_y + max(4, round(6 * z)),
+                           anchor="n", text="↺ 循环返回", fill="#e65100",
+                           font=self.FM(8, True))
+
     def draw_heap_blocks(self, heap_by_addr, x0, y0, H):
         z = self.zoom
         x = x0
@@ -635,6 +689,162 @@ class Drawer:
             if x > x0 + vis_w - 60:
                 x = x0
                 y = by + max(30, round(40 * z))
+        return y + max(30, round(40 * z))
+
+    def _draw_ptr_boxes(self, frames, heap_by_addr, x0, top, H):
+        """为独立定义的指针变量（结构体/联合体字段指针除外）画淡绿色小框。
+        文字居中不溢出，每框独立；点击绿框→绿色面板 + 绿色高亮线连到内存框图。"""
+        z = self.zoom
+        ptrs = []
+        for fr in frames:
+            for name, v in fr["vars"]:
+                val = v.get("value")
+                if val and val[0] in ("ptr", "null"):
+                    ptrs.append((name, v))
+        if not ptrs:
+            return top
+        vis_w = int(self.c.cget("width")) / z
+        x = x0
+        y = top + max(14, round(20 * z))
+        self.c.create_text(x0, y - 8 * z, anchor="nw",
+                           text="■ 指针变量（点击绿框查看指向详情）",
+                           fill="#2e7d32", font=self.FM(9, True))
+        y += max(8, round(12 * z))
+        bh = max(24, round(28 * z))
+        nf = self.F(9, True)
+        for name, v in ptrs:
+            val = v["value"]
+            if val[0] == "ptr":
+                txt = f"{name} → 0x{val[1]:x}"
+            else:
+                txt = f"{name} → NULL"
+            # 文字过宽则截断（保证不溢出框）
+            bw = self.mw(txt, nf) + 20 * z
+            while self.mw(txt + "…", nf) > bw - 8 * z and len(txt) > 3:
+                txt = txt[:-1]
+            if self.mw(txt, nf) > bw - 8 * z:
+                txt = txt + "…"
+            if x > x0 and x + bw > x0 + vis_w - 40:
+                x = x0
+                y += bh + 8 * z
+            # 淡绿圆角框，文字居中（anchor=center 保证文本在框内）
+            self.round_rect(x, y, x + bw, y + bh, max(4, round(7 * z)),
+                            outline="#43a047", fill="#e8f5e9", width=1)
+            self.c.create_text(x + bw / 2, y + bh / 2, text=txt, fill="#1b5e20",
+                               font=nf)
+            self.ptr_boxes[name] = (x, y, bw, bh)
+            self.ptr_vars[name] = v
+            x += bw + 8 * z
+        return y + bh + max(10, round(16 * z))
+
+    def _toggle_ptr_link(self, name):
+        """点击指针绿框：切换绿色高亮线（连到该指针指向的内存框图）"""
+        v = self.ptr_vars.get(name)
+        val = v.get("value") if v else None
+        target = val[1] if val and val[0] == "ptr" else None
+        if name in self.ptr_links:
+            del self.ptr_links[name]
+        elif target is not None:
+            self.ptr_links[name] = target
+        else:
+            self.ptr_links[name] = None      # NULL 指针：画到绿框下方的 NULL 标记
+
+    def _draw_ptr_links(self):
+        """重画指针高亮绿线：从绿框中心连到指向的内存框图（粗亮绿线）"""
+        z = self.zoom
+        for name, target in list(self.ptr_links.items()):
+            box = self.ptr_boxes.get(name)
+            if not box:
+                continue
+            bx, by, bw, bh = box
+            sx, sy = bx + bw / 2, by + bh / 2
+            if target is None:
+                # NULL：向下画一小段带箭头的绿线 + NULL 标注
+                ex, ey = sx, sy + max(16, round(20 * z))
+                self.c.create_line(sx, sy, ex, ey, fill="#00c853", width=3,
+                                   arrow=tk.LAST, arrowshape=(8, 11, 5))
+                self.c.create_text(ex + 6, ey, anchor="nw", text="NULL",
+                                   fill="#2e7d32", font=self.F(9, True))
+                continue
+            rect = self.node_rects.get(target)
+            if not rect:
+                continue
+            tx, ty, tw, th = rect
+            ex, ey = tx + tw / 2, ty - 2            # 指向目标框图顶部中心
+            self.c.create_line(sx, sy, ex, ey, fill="#00c853", width=3,
+                               arrow=tk.LAST, arrowshape=(8, 11, 5))
+            # 起点小圆点强调
+            self.c.create_oval(sx - 4, sy - 4, sx + 4, sy + 4,
+                               fill="#00c853", outline="")
+
+    def _draw_wrap_mark(self, heap_by_addr, from_addr, prx, pby, to_addr, z):
+        """画大号可点击「续接」标记：位于上一节点右侧/下方，点击后从发出起点
+        显示高亮紫色垂直箭头指向下一排节点。返回标记 id。"""
+        mk_w = max(60, round(74 * z))
+        mk_h = max(24, round(30 * z))
+        mkx = prx - mk_w - 8 * z
+        mky = pby + max(8, round(12 * z))
+        mid = self.round_rect(mkx, mky, mkx + mk_w, mky + mk_h,
+                              max(5, round(9 * z)),
+                              outline="#1565c0", fill="#e3f2fd", width=2)
+        self.c.create_text(mkx + mk_w / 2, mky + mk_h / 2,
+                           text="↘ 续接", fill="#0d47a1", font=self.FM(9, True))
+        # 上一节点底部 → 续接标记 的短引线（表示从此处向下续接）
+        self.c.create_line(prx - mk_w / 2, pby + 2, prx - mk_w / 2, mky,
+                           fill="#1565c0", width=2, dash=(3, 2))
+        self.wrap_marks[mid] = {"rect": (mkx, mky, mkx + mk_w, mky + mk_h),
+                                "from_addr": from_addr,
+                                "from_idx": self._next_field_idx(
+                                    heap_by_addr.get(from_addr) or {}),
+                                "to_addr": to_addr, "to_rect": None}
+        return mid
+
+    def _toggle_wrap_arrow(self, mid):
+        """点击续接标记：从发出起点(上一节点 next 字段行)出现高亮紫色垂直箭头，
+        垂直向下指向下一排节点框图；再点一次隐藏。"""
+        info = self.wrap_marks.get(mid)
+        if not info:
+            return
+        if mid in self.wrap_arrows:
+            for it in self.wrap_arrows[mid]:
+                try:
+                    self.c.delete(it)
+                except Exception:
+                    pass
+            del self.wrap_arrows[mid]
+            return
+        frect = self.node_rects.get(info["from_addr"])
+        to_rect = info.get("to_rect")
+        if not frect or not to_rect:
+            return
+        z = self.zoom
+        fx, fy, fw, fh = frect
+        tx, ty, tw, th = to_rect
+        y1 = fy + self.h0 + info["from_idx"] * self.fh + self.fh / 2
+        x_start = fx + fw + 2          # 发出起点：节点右边缘 next 字段行
+        y_end = ty + 2                 # 指向下一排节点顶部
+        x_end = tx + tw / 2            # 下一排节点中心
+        items = []
+        if abs(x_end - x_start) > 4:
+            # 主体垂直向下，末尾水平对准目标节点中心
+            items.append(self.c.create_line(x_start, y1, x_start, y_end,
+                                            fill="#9c27b0", width=3))
+            items.append(self.c.create_line(x_start, y_end, x_end, y_end,
+                                            fill="#9c27b0", width=3,
+                                            arrow=tk.LAST,
+                                            arrowshape=(10, 14, 6)))
+        else:
+            items.append(self.c.create_line(x_start, y1, x_end, y_end,
+                                            fill="#9c27b0", width=3,
+                                            arrow=tk.LAST,
+                                            arrowshape=(10, 14, 6)))
+        # 起点高亮圆点 + 说明
+        items.append(self.c.create_oval(x_start - 4, y1 - 4, x_start + 4, y1 + 4,
+                                        fill="#9c27b0", outline=""))
+        items.append(self.c.create_text(x_start + 6, y1 - 12, anchor="nw",
+                                        text="↑ 指向起点", fill="#9c27b0",
+                                        font=self.FM(9, True)))
+        self.wrap_arrows[mid] = items
 
     def arrow(self, x1, y1, x2, y2, color="#1565c0"):
         az = max(0.6, self.zoom)
@@ -645,27 +855,28 @@ class Drawer:
                                        max(8, round(15 * az)),
                                        max(3, round(7 * az))))
 
-    # ---------- 信息面板（点击内存块显示详情）：最多 2 个，可拖动/关闭，节点描边+连线 ----------
-    # 第 1 个：右上角·红色连线；第 2 个：右下角·蓝色连线
+    # ---------- 信息面板（点击内存块/指针框显示详情）：块红/蓝各1 + 指针绿1，可拖动/关闭 ----------
+    # 第 1 个：右上角·红色连线；第 2 个：右下角·蓝色连线；指针：绿色·可拖动
     def _add_panel(self, addr):
-        if any(p["addr"] == addr for p in self.panels):
+        if any(p["kind"] == "blk" and p["addr"] == addr for p in self.panels):
             return
-        if len(self.panels) >= 2:                     # 超过 2 个：移除最旧的
-            old = self.panels.pop(0)
-            self._remove_panel(old["addr"])
-        is_first = len(self.panels) == 0
+        blks = [p for p in self.panels if p["kind"] == "blk"]
+        if len(blks) >= 2:                            # 块面板超过 2 个：移除最旧的
+            self._remove_panel(blks[0]["addr"])
+        is_first = len([p for p in self.panels if p["kind"] == "blk"]) == 0
         color = "#e53935" if is_first else "#1e88e5"
         cw = max(240, self.c.winfo_width())
         ch = max(240, self.c.winfo_height())
         dx = cw - 20
         dy = 20 if is_first else ch - 20
-        self.panels.append({"addr": addr, "color": color, "dx": dx, "dy": dy,
+        self.panels.append({"kind": "blk", "addr": addr, "color": color,
+                            "dx": dx, "dy": dy,
                             "anchor": "ne" if is_first else "se",
                             "win_id": None, "line_id": None, "frame": None})
 
     def _remove_panel(self, addr):
         for p in self.panels:
-            if p["addr"] == addr:
+            if p["kind"] == "blk" and p["addr"] == addr:
                 if p.get("win_id"):
                     try:
                         self.c.delete(p["win_id"])
@@ -679,20 +890,54 @@ class Drawer:
                 self.c.delete(f"hl_{addr}")
                 self.panels.remove(p)
                 break
-        # 移除后重新分配：始终第1个=红·右上，第2个=蓝·右下
+        # 移除后重新分配：始终第1个=红·右上，第2个=蓝·右下（只影响块面板）
         cw = max(240, self.c.winfo_width())
         ch = max(240, self.c.winfo_height())
-        for i, p in enumerate(self.panels):
+        blks = [p for p in self.panels if p["kind"] == "blk"]
+        for i, p in enumerate(blks):
             p["color"] = "#e53935" if i == 0 else "#1e88e5"
             p["dx"] = cw - 20
             p["dy"] = 20 if i == 0 else ch - 20
             p["anchor"] = "ne" if i == 0 else "se"
+
+    def _add_ptr_panel(self, name):
+        """指针绿框 → 绿色解释面板（最多 1 个）"""
+        if any(p["kind"] == "ptr" and p["name"] == name for p in self.panels):
+            return
+        for p in [p for p in self.panels if p["kind"] == "ptr"]:
+            self._remove_ptr_panel(p["name"])
+        cw = max(240, self.c.winfo_width())
+        ch = max(240, self.c.winfo_height())
+        self.panels.append({"kind": "ptr", "name": name, "addr": None,
+                            "color": "#43a047", "dx": cw - 340, "dy": 20,
+                            "anchor": "nw", "win_id": None, "line_id": None,
+                            "frame": None})
+
+    def _remove_ptr_panel(self, name):
+        for p in self.panels:
+            if p["kind"] == "ptr" and p["name"] == name:
+                if p.get("win_id"):
+                    try:
+                        self.c.delete(p["win_id"])
+                    except Exception:
+                        pass
+                if p.get("line_id"):
+                    try:
+                        self.c.delete(p["line_id"])
+                    except Exception:
+                        pass
+                self.c.delete(f"hp_{name}")
+                self.panels.remove(p)
+                break
 
     def _draw_info_panels(self):
         for p in list(self.panels):
             self._draw_panel(p)
 
     def _draw_panel(self, p):
+        if p["kind"] == "ptr":
+            self._draw_ptr_panel(p)
+            return
         addr = p["addr"]
         blk = self.heap_by_addr.get(addr)
         if blk is None:
@@ -774,15 +1019,108 @@ class Drawer:
                  padx=8, pady=2).pack(fill=tk.X)
         return frame
 
+    def _draw_ptr_panel(self, p):
+        """指针绿框 → 绿色解释面板"""
+        name = p["name"]
+        v = self.ptr_vars.get(name)
+        if v is None:
+            return
+        rect = self.ptr_boxes.get(name)
+        if rect:
+            x, y, w, h = rect
+            self.c.delete(f"hp_{name}")
+            self.round_rect(x - 3, y - 3, x + w + 3, y + h + 3,
+                            max(5, round(8 * self.zoom)),
+                            outline=p["color"], fill="", width=3,
+                            tags=(f"hp_{name}",))
+        frame = self._make_ptr_panel_frame(name, v, p["color"])
+        p["frame"] = frame
+        x0 = self.c.canvasx(0) + p["dx"]
+        y0 = self.c.canvasy(0) + p["dy"]
+        p["win_id"] = self.c.create_window(x0, y0, anchor=p["anchor"], window=frame)
+        self._bind_panel_drag(frame, p)
+        self._draw_panel_link(p)
+
+    def _make_ptr_panel_frame(self, name, v, color):
+        """绿色解释面板：说明指针指向的目标、地址是什么"""
+        frame = tk.Frame(self.c, bg="#ffffff", highlightbackground=color,
+                         highlightthickness=2)
+        bar = tk.Frame(frame, bg=color)
+        bar.pack(fill=tk.X)
+        tk.Label(bar, text=f"◆ 指针变量 {name}", bg=color, fg="white",
+                 font=("Microsoft YaHei", 11, "bold"), anchor="w",
+                 padx=8, pady=3).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        close = tk.Label(bar, text="✕", bg=color, fg="white", cursor="hand2",
+                         font=("Microsoft YaHei", 13, "bold"), padx=7, pady=3)
+        close.pack(side=tk.RIGHT)
+        close.bind("<Button-1>",
+                   lambda e: (self._remove_ptr_panel(name), "break")[1])
+        t = v.get("type", "指针")
+        val = v.get("value")
+        tk.Label(frame, text=f"  类型: {t}", bg="#ffffff", fg="#333333",
+                 font=("Consolas", 10), anchor="w", padx=8).pack(fill=tk.X)
+        if val and val[0] == "ptr":
+            addr = val[1]
+            tk.Label(frame, text=f"  指向地址: 0x{addr:x}", bg="#ffffff", fg=color,
+                     font=("Consolas", 10, "bold"), anchor="w", padx=8).pack(fill=tk.X)
+            blk = self.heap_by_addr.get(addr)
+            if blk is None:
+                tk.Label(frame, text="  目标: ⚠ 指向未分配内存（野指针）",
+                         bg="#ffffff", fg="#c62828",
+                         font=("Microsoft YaHei", 10), anchor="w",
+                         padx=8).pack(fill=tk.X)
+            elif blk.get("freed"):
+                tk.Label(frame, text=f"  目标: ⚠ 指向已释放内存 @0x{addr:x}",
+                         bg="#ffffff", fg="#c62828",
+                         font=("Microsoft YaHei", 10), anchor="w",
+                         padx=8).pack(fill=tk.X)
+            else:
+                loc_cn = "栈(结构体变量)" if blk.get("loc") == "栈" else "堆(malloc)"
+                tk.Label(frame,
+                         text=f"  目标: {blk['typename']} @0x{addr:x} [{loc_cn}]",
+                         bg="#ffffff", fg="#2e7d32",
+                         font=("Microsoft YaHei", 10, "bold"), anchor="w",
+                         padx=8).pack(fill=tk.X)
+                if not blk.get("fields") and blk.get("scalar") is not None:
+                    sv = blk["scalar"]
+                    vs = (str(sv[1]) if sv[0] == "int"
+                          else (f"0x{sv[1]:x}" if sv[0] == "ptr" else "NULL"))
+                    tk.Label(frame, text=f"  内容: 值 = {vs}", bg="#ffffff",
+                             fg="#333333", font=("Consolas", 10), anchor="w",
+                             padx=8).pack(fill=tk.X)
+                else:
+                    for fn, fv in list(blk.get("fields", {}).items())[:3]:
+                        if fv[0] == "ptr":
+                            disp = f"0x{fv[1]:x}"
+                        elif fv[0] == "null":
+                            disp = "NULL"
+                        else:
+                            disp = str(fv[1])
+                        tk.Label(frame, text=f"  内容: {fn} = {disp}",
+                                 bg="#ffffff", fg="#333333",
+                                 font=("Consolas", 10), anchor="w",
+                                 padx=8).pack(fill=tk.X)
+        elif val and val[0] == "null":
+            tk.Label(frame, text="  指向: NULL（未指向任何内存）", bg="#ffffff",
+                     fg="#8a8a8a", font=("Microsoft YaHei", 10), anchor="w",
+                     padx=8).pack(fill=tk.X)
+        tk.Label(frame, text="  状态: 独立指针变量（不含结构体/联合体内部指针）",
+                 bg="#f5f5f5", fg="#666666", font=("Microsoft YaHei", 9),
+                 anchor="w", padx=8, pady=2).pack(fill=tk.X)
+        return frame
+
     def _draw_panel_link(self, p):
-        """节点中心 → 面板 的细虚线连接线（不显眼）"""
+        """节点中心/指针框中心 → 面板 的细虚线连接线（不显眼）"""
         if p.get("line_id"):
             try:
                 self.c.delete(p["line_id"])
             except Exception:
                 pass
             p["line_id"] = None
-        rect = self.node_rects.get(p["addr"])
+        if p["kind"] == "ptr":
+            rect = self.ptr_boxes.get(p["name"])
+        else:
+            rect = self.node_rects.get(p["addr"])
         if not rect or not p.get("win_id"):
             return
         x, y, w, h = rect
@@ -1258,6 +1596,7 @@ class App:
             return
         self.step_idx = len(steps) - 1 if steps else -1
         last = max(snaps.keys())
+        self.current_line = last      # 记住最终状态行，重绘/点击面板时保持正确状态
         self.drawer.draw(snaps[last], "运行结束（最终状态）")
         self.code.tag_remove("hl", "1.0", "end")
         self.code.tag_add("hl", f"{last}.0", f"{last}.end")
@@ -1404,9 +1743,29 @@ class App:
         self._dragging = False
 
     def _cv_click(self, ev):
-        """单击内存块：已选中→关闭；未选中→添加面板（第1红右上/第2蓝右下）"""
+        """单击：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板"""
         cx = self.canvas.canvasx(ev.x)
         cy = self.canvas.canvasy(ev.y)
+        d = self.drawer
+        # 1. 续接标记 → 显示/隐藏紫色垂直箭头
+        for mid, info in list(d.wrap_marks.items()):
+            x1, y1, x2, y2 = info["rect"]
+            if x1 <= cx <= x2 and y1 <= cy <= y2:
+                d._toggle_wrap_arrow(mid)
+                return "break"
+        # 2. 指针绿框 → 绿色解释面板 + 绿色高亮线连到内存框图（再点一次关闭）
+        for name, (x, y, w, h) in d.ptr_boxes.items():
+            if x <= cx <= x + w and y <= cy <= y + h:
+                if any(p["kind"] == "ptr" and p["name"] == name
+                       for p in d.panels):
+                    d._remove_ptr_panel(name)
+                    d._toggle_ptr_link(name)
+                else:
+                    d._add_ptr_panel(name)
+                    d._toggle_ptr_link(name)
+                self.redraw()
+                return "break"
+        # 3. 内存块 → 红/蓝面板
         hit = None
         for addr, (x, y, w, h) in self.drawer.node_rects.items():
             if x <= cx <= x + w and y <= cy <= y + h:
@@ -1415,7 +1774,7 @@ class App:
         if hit is None:
             return
         d = self.drawer
-        if any(p["addr"] == hit for p in d.panels):
+        if any(p["addr"] == hit and p["kind"] == "blk" for p in d.panels):
             d._remove_panel(hit)      # 再点一次 → 关闭该介绍框
         else:
             d._add_panel(hit)         # 新增介绍框（最多 2 个）
@@ -1440,21 +1799,38 @@ class App:
     def paste_code(self):
         win = tk.Toplevel(self.root)
         win.title("粘贴代码")
-        win.geometry("700x460")
-        txt = tk.Text(win, font=("Consolas", 11), wrap="none")
-        txt.pack(fill=tk.BOTH, expand=True, padx=6, pady=6)
-        btns = tk.Frame(win)
-        btns.pack(fill=tk.X, padx=6, pady=4)
+        win.geometry("760x520")
+        win.transient(self.root)
+        txt = tk.Text(win, font=("Consolas", 11), wrap="none",
+                      bg="#fbfbfb", padx=8, pady=8)
+        txt.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
+        btns = tk.Frame(win, bg="#f0f0f0", highlightbackground="#dddddd",
+                        highlightthickness=1)
+        btns.pack(fill=tk.X, side=tk.BOTTOM)
+        hint = tk.Label(btns, text="支持 .c / .cpp 片段 · 粘贴后点「载入并分析」",
+                        bg="#f0f0f0", fg="#777777",
+                        font=("Microsoft YaHei", 9))
+        hint.pack(side=tk.LEFT, padx=12, pady=10)
 
         def ok():
             self.load_example_text(txt.get("1.0", "end-1c"))
             win.destroy()
             self.set_status("已粘贴代码", False)
 
-        tk.Button(btns, text="载入并分析", command=ok,
-                  bg="#1a5276", fg="white", padx=12).pack(side=tk.RIGHT)
-        tk.Button(btns, text="取消", command=win.destroy,
-                  bg="#888888", fg="white", padx=12).pack(side=tk.RIGHT, padx=8)
+        btn_ok = tk.Button(btns, text="✔ 载入并分析", command=ok,
+                           bg="#1a5276", fg="white", activebackground="#154360",
+                           activeforeground="white", cursor="hand2",
+                           font=("Microsoft YaHei", 12, "bold"),
+                           padx=28, pady=10, relief=tk.RAISED, bd=1)
+        btn_ok.pack(side=tk.RIGHT, padx=(0, 12), pady=10)
+        btn_cancel = tk.Button(btns, text="取消", command=win.destroy,
+                               bg="#9e9e9e", fg="white", cursor="hand2",
+                               activebackground="#757575",
+                               activeforeground="white",
+                               font=("Microsoft YaHei", 11),
+                               padx=20, pady=10, relief=tk.RAISED, bd=1)
+        btn_cancel.pack(side=tk.RIGHT, padx=8, pady=10)
+        txt.focus_set()
 
     def load_example(self, event=None):
         name = self.example_var.get()

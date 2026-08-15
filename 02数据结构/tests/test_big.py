@@ -13,7 +13,8 @@ app = App(root)
 app._popup = False
 root.update()
 
-BIG = r"D:\github\01函数库\library\utils_gen.c"
+_ROOT = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+BIG = os.path.join(_ROOT, "01函数库", "library", "utils_gen.c")
 code_big = open(BIG, encoding="utf-8", errors="replace").read()
 total_lines = len(code_big.splitlines())
 print(f"大文件行数: {total_lines}")
@@ -48,7 +49,7 @@ print(f"语法高亮: 关键字={bool(app.code.tag_ranges('kw'))} 注释={bool(a
 print("[%s] 大文件(6105行)加载/行号/滚动/高亮均正常" % ("PASS" if ok_load and ok_ln and ok_scroll and hl_ok else "FAIL"))
 
 # ---- 2. test_lib.c 内容准确性 ----
-LIB = r"D:\github\01函数库\tests\test_lib.c"
+LIB = os.path.join(_ROOT, "01函数库", "tests", "test_lib.c")
 code_lib = open(LIB, encoding="utf-8", errors="replace").read()
 app.load_example_text(code_lib)
 root.update()

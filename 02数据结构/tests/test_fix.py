@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """针对性验证：无main片段 / C++提示 / 多节点超出界面时的滚动区域"""
 import sys, io, os, traceback
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8')
+sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding='utf-8', line_buffering=True)
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import tkinter as tk
 from visualizer import App
