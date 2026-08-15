@@ -2553,6 +2553,8 @@ class Simulator:
             self.engine.exec_block(fd.body)
         except SimError as ex:
             self.engine.error = self._friendly_error(ex)
+        except RecursionError:
+            self.engine.error = SimError(0, "递归深度超限（递归太深，可能导致栈溢出）；已显示执行到当前位置的内存状态")
         self.snapshots = self.engine.snapshots
         return self.snapshots
 
@@ -2569,6 +2571,8 @@ class Simulator:
             pass  # 已到达目标行，快照已记录
         except SimError as ex:
             self.engine.error = self._friendly_error(ex)
+        except RecursionError:
+            self.engine.error = SimError(0, "递归深度超限（递归太深，可能导致栈溢出）；已显示执行到当前位置的内存状态")
         self.snapshots = self.engine.snapshots
         return self.snapshots
 
