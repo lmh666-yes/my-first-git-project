@@ -2372,8 +2372,14 @@ class SimEngine:
         args = st.args
         vals = [self._printf_arg(a) for a in args]
         if not fmt:
-            self.outputs.append(" ".join(str(v) for v in vals))
-            return
+            # 格式串可能是表达式（如 printf(cond ? "%d" : "%d->", x)）：
+            # 求值后第一个参数若为字符串则作为格式串
+            if vals and isinstance(vals[0], str):
+                fmt = vals[0]
+                vals = vals[1:]
+            else:
+                self.outputs.append(" ".join(str(v) for v in vals))
+                return
         out = ""
         ai = 0
         i = 0

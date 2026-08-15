@@ -1881,10 +1881,13 @@ class App:
                                       "fgetc", "getline", "fgets"))
 
     def normal_run(self):
-        """常规运行：第一步自动定位到 main 函数位置（不自动跑完）"""
+        """常规运行：重新构建逐步序列并从头开始（一步一行），
+        第一步定位到 main 函数起始行，不会跳到结尾。"""
         code = self.get_code()
         if not code.strip():
             return
+        m = None
+        first = None
         try:
             sim = Simulator(code)
             m = sim.main_name()
@@ -1892,19 +1895,25 @@ class App:
                 self._set_run_status("❌ 未找到 main", "red")
                 self.set_status("未找到可执行函数", True)
                 return
+            self.sim = sim
             fd = sim.funcs[m]
             first = fd.body[0].line if fd.body else None
         except Exception:
-            first = None
-        if first:
-            self.show_line(first)
-            self.code.tag_remove("hl", "1.0", "end")
-            self.code.tag_add("hl", f"{first}.0", f"{first}.end")
-            self.code.see(f"{first}.0")
-            self._set_run_status("● 常规运行", "gray")
-            self.set_status(f"常规运行：已定位到 {m}() 起始行（第 {first} 行），可点“下一步”逐步执行", False)
-        else:
+            pass
+        # 重新构建逐步序列，从第一步开始（关键：不能被载入时的快速运行状态污染）
+        self.step_list = []
+        self.step_idx = -1
+        self._input_requested = True
+        if not self.build_step_list():
+            return
+        if not self.step_list:
             self.run_all()
+            return
+        # 定位到 main 起始行（显示起点状态，但不跳到结尾）
+        if first is not None:
+            self.show_line(first)
+        self._set_run_status("● 常规运行", "gray")
+        self.set_status(f"常规运行：已定位到 {m}() 起始行，可点“下一步”逐步执行", False)
 
     # ---------- 自由测试：交互式输入，到输入点暂停弹输入窗 ----------
     def free_test_start(self):
