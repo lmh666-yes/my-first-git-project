@@ -366,9 +366,14 @@ class Parser:
         arr_size = None
         if self.at("["):
             self.next()
-            sz = self.next()
-            arr_size = 100 if sz.kind != "num" else int(sz.text)
-            self.expect("]")
+            if self.at("]"):
+                # 无大小全局数组 int g[] = {...}; 由初始化推断
+                self.next()
+                arr_size = 0
+            else:
+                sz = self.next()
+                arr_size = 100 if sz.kind != "num" else int(sz.text)
+                self.expect("]")
             is_array = True
         init = None
         if self.at("="):
@@ -377,6 +382,11 @@ class Parser:
                 init = ("arrinit", self.parse_array_init())
             else:
                 init = self.parse_expr()
+        # 无大小数组：由初始化长度推断
+        if is_array and arr_size == 0 and init and init[0] == "arrinit":
+            arr_size = len(init[1])
+        if is_array and arr_size == 0:
+            arr_size = 100
         self.globals.append((line, vtype, name, init, ptr, is_array, arr_size))
         # 同一行的其它变量 int a, b;
         while self.at(","):
@@ -934,6 +944,12 @@ class Parser:
                 dims = []
                 while self.at("["):
                     self.next()
+                    if self.at("]"):
+                        # 无大小数组 int a[]; / int a[] = {...}; 大小由初始化推断
+                        self.next()
+                        dims.append(0)
+                        total = 0        # 标记待推断（初始 total=1 会误判）
+                        break
                     sz = self.next()
                     d = (int(sz.text) if sz.kind == "num" else 10)
                     total *= d
@@ -952,6 +968,15 @@ class Parser:
                 init = ("arrinit", self.parse_array_init())
             else:
                 init = self.parse_expr()
+        # 无大小数组 int a[] = {1,2,3}: 用初始化长度推断
+        if is_array and arr_size == 0 and init and init[0] == "arrinit":
+            arr_size = len(init[1])
+            if dims:
+                dims[0] = arr_size
+        if is_array and arr_size == 0:
+            arr_size = 10
+            if dims:
+                dims[0] = 10
         if semi:
             self.expect(";")
         return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims)
