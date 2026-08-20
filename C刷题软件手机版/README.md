@@ -63,6 +63,7 @@
 
 | 现象 | 原因与解决 |
 |---|---|
+| 报错 `Unable to find Gradle tasks to build` | **打开错了文件夹**——要打开的是 **`android`** 子文件夹（含 `settings.gradle`/`build.gradle`/`app`），不是整个手机版文件夹，也不是 `www`；先 `File → Close Project` 再重新 `Open` 正确文件夹 |
 | 打开项目提示缺 SDK / `local.properties` | 正常，Android Studio 会自动生成并提示下载 SDK，点下载即可 |
 | Sync 报错 `Could not find com.android.application:8.2.2` 等 | 网络问题或未完成依赖下载 → 检查网络后点菜单 `File → Sync Project with Gradle Files` 重试 |
 | Sync 很慢 / 下载失败（国内网络） | 可给 `android/build.gradle` 与 `settings.gradle` 配置国内镜像仓库（如阿里云 `maven.aliyun.com`），或用网络代理后重试 |
