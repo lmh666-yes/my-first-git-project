@@ -8,7 +8,8 @@ android {
 
     defaultConfig {
         applicationId "com.cquiz.app"
-        minSdk 21
+        // minSdk 24 = Android 7.0: WebView fully supports the modern JS syntax used by the app
+        minSdk 24
         targetSdk 34
         versionCode 1
         versionName "1.0"

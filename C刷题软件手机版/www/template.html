@@ -34,7 +34,10 @@ main{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:
 .opt.wrong{background:#fdecea;color:#c62828;border-color:#c62828}
 /* 判断按钮 */
 .judgeBtns{display:flex;gap:10px}
-.judgeBtns button{flex:1;border:none;border-radius:10px;padding:14px;font-size:15px;color:#fff;cursor:pointer}
+.judgeBtns button{flex:1;border:none;border-radius:10px;padding:14px;font-size:15px;color:#fff;cursor:pointer;opacity:.85}
+.judgeBtns button.sel{opacity:1;outline:3px solid #1a5276;font-weight:bold}
+.judgeBtns button.t{background:#1a7f37}
+.judgeBtns button.f{background:#c62828}
 /* 反馈 */
 #fb{background:#fff;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;display:none}
 #fb .tag-ok{color:#1a7f37;font-weight:bold}
@@ -224,29 +227,41 @@ function renderOpts(it,examSel){
       const d2=document.createElement("div"); d2.className="opt"; d2.textContent=`你的答案：${examSel}`; d2.classList.add(examSel===ans?"right":"wrong"); o.appendChild(d2);
       return;
     }
+    // 判断题：先点选（高亮），再点「确认答案」才判分
     const w=document.createElement("div"); w.className="judgeBtns";
-    const b1=document.createElement("button"); b1.style.background="#1a7f37"; b1.textContent="✔ 正确";
-    b1.onclick=()=>answerJudge("√");
-    const b2=document.createElement("button"); b2.style.background="#c62828"; b2.textContent="✘ 错误";
-    b2.onclick=()=>answerJudge("×");
-    w.append(b1,b2); o.appendChild(w);
+    const mk=function(k,txt,cls){
+      const b=document.createElement("button"); b.className=cls; b.textContent=txt;
+      b.onclick=function(){
+        document.querySelectorAll("#opts .judgeBtns button").forEach(x=>x.classList.remove("sel"));
+        b.classList.add("sel"); sel=k;
+      };
+      return b;
+    };
+    w.append(mk("√","✔ 正确","t"), mk("×","✘ 错误","f"));
+    o.appendChild(w);
   }
 }
 function checkAnswer(){
   const it=queue[idx];
   if(!it)return;
-  if(mode==="考试"){ if(exam&&exam.active&&!exam.finished) examAnswer(it,sel); return; }
-  if(it.kind==="choice"){
-    if(!sel){ msg("提示","请先选择一个答案"); return; }
-    record(it,sel,isOk(it,sel)); showResult(it,sel,isOk(it,sel)); showNote(it.id);
-  }else if(it.kind==="judge"){ /* judge 通过按钮直接判分 */ }
+  if(mode==="考试"){
+    if(exam&&exam.active&&!exam.finished){
+      if(!sel){ msg("提示","请先选择答案，再点确认"); return; }
+      examAnswer(it,sel);
+    }
+    return;
+  }
+  if(!sel){ msg("提示", it.kind==="choice"?"请先选择一个答案":"请先选择答案（正确/错误）"); return; }
+  const ok=isOk(it,sel);
+  record(it,sel,ok); showResult(it,sel,ok); showNote(it.id);
   stat();
 }
 function answerJudge(key){
-  const it=queue[idx];
-  if(mode==="考试"){ examAnswer(it,key); return; }
-  const ok=isOk(it,key);
-  record(it,key,ok); showResult(it,key,ok); showNote(it.id); stat();
+  // 判断题选择：只高亮不判分，点「确认答案」后才生效
+  document.querySelectorAll("#opts .judgeBtns button").forEach(x=>x.classList.remove("sel"));
+  const target=Array.from(document.querySelectorAll("#opts .judgeBtns button")).find(b=>b.dataset.k===key);
+  if(target)target.classList.add("sel");
+  sel=key;
 }
 function examAnswer(it,k){
   if(exam.answers[it.id]){ msg("提示","本题已作答，不能更改"); return; }
