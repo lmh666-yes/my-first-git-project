@@ -1,5 +1,8 @@
-*.o
+﻿*.o
 *.exe
 
 __pycache__/
 *.pyc
+
+# 刷题软件本机进度（自动生成）
+C刷题软件/progress.json
