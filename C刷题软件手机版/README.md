@@ -12,17 +12,63 @@
 
 ### 方式二：打包成 APK 安装（推荐）
 
-用 **Android Studio** 打开 `android` 文件夹，一键构建 APK：
+把本文件夹打包转移到另一台电脑（装有 Android Studio）上构建 APK。下面按 **5 步** 完整说明。
 
-1. 电脑安装 [Android Studio](https://developer.android.com/studio)（免费）
-2. Android Studio 打开项目：`File → Open` → 选择 **`android`** 文件夹
-3. 首次打开等待 **Gradle Sync** 完成（自动下载依赖，需联网，约几分钟）
-4. 菜单 `Build → Build Bundle(s) / APK(s) → Build APK(s)`
-5. 构建完成在 `android/app/build/outputs/apk/debug/`（或 release/）得到 **`app-debug.apk`**
-6. 把 APK 发到手机安装即可（安装时允许“未知来源”）
+#### 第 1 步：打包并转移到目标电脑
 
-> 提示：如果 Gradle Sync 报错，先确认电脑已安装 Android Studio 且已下载 SDK；
-> 若提示缺 `local.properties`（SDK 路径），Android Studio 会自动生成。
+1. 右键整个 **`C刷题软件手机版`** 文件夹 →「压缩为 zip」（或 7z/rar）
+2. 把压缩包发到目标电脑（U 盘 / 微信 / 网盘均可），解压到任意位置
+
+> 已确认：文件夹内**不含任何本机残留配置**（`local.properties`、`.gradle`、`build/`、`.idea` 均不存在，
+> 且已被 `.gitignore` 排除），可直接打包移植；全部路径均为相对路径，换电脑无需改任何文件。
+> 建议解压到**英文路径**（如 `D:\cquiz`），可避免个别电脑中文路径的兼容问题（非必须）。
+
+#### 第 2 步：目标电脑环境要求（仅首次需要准备）
+
+| 项目 | 要求 | 说明 |
+|---|---|---|
+| Android Studio | 需安装（免费） | 自带 **JDK 17**（本工程 AGP 8.2.2 要求），无需单独装 Java |
+| 网络 | 首次构建需联网 | 自动下载 **Gradle 8.2 + AGP 8.2.2 + appcompat 1.6.1**，约 5–15 分钟 |
+| Android SDK | 需 **API 34** 平台 | 首次 Sync 会提示，点「下载」自动安装 |
+
+下载地址：https://developer.android.com/studio
+
+#### 第 3 步：用 Android Studio 打开项目
+
+1. 打开 Android Studio → 启动界面点 **`Open`**（或菜单 `File → Open`）
+2. 选择解压出来的 **`android`** 文件夹（注意：是 `android` 子文件夹，不是整个手机版文件夹，也不是 `www`）
+3. 点 OK，Android Studio 开始 **Gradle Sync**（右下角进度条，首次会下载依赖，耐心等待完成，界面会提示 `Sync finished`）
+
+> 提示：项目未内置 Gradle Wrapper，Android Studio 会**自动使用内置 Gradle** 完成同步与构建，无需额外配置。
+> 若提示缺 `local.properties`（SDK 路径）——正常现象，Android Studio 会自动生成，无需手动创建。
+
+#### 第 4 步：构建 APK
+
+1. 顶部菜单：**`Build → Build Bundle(s) / APK(s) → Build APK(s)`**
+2. 左下角 Build 面板出现 `BUILD SUCCESSFUL` 即构建成功
+3. 生成的 APK 在：
+   - 调试版：`android\app\build\outputs\apk\debug\app-debug.apk`（默认构建这个）
+   - 发布版：`android\app\build\outputs\apk\release\app-release.apk`（需配置签名后才建议使用）
+
+> 更省事的方法：构建成功后 Android Studio 右下角会弹出通知「APK(s) generated successfully」，
+> 点 **`locate`**（或 **`Show in Explorer`**）可直接打开 APK 所在文件夹。
+
+#### 第 5 步：安装到手机
+
+1. 把 **`app-debug.apk`** 发到手机（微信文件 / 网盘 / 数据线拷贝均可）
+2. 手机上点击该文件 → 按提示**允许“安装未知来源应用”**（不同手机设置入口不同，一般为安装时的弹窗开关，或「设置 → 安全 → 未知来源」）
+3. 安装完成，桌面出现「刷题软件」图标，点击即可离线刷题
+
+#### 常见问题排查
+
+| 现象 | 原因与解决 |
+|---|---|
+| 打开项目提示缺 SDK / `local.properties` | 正常，Android Studio 会自动生成并提示下载 SDK，点下载即可 |
+| Sync 报错 `Could not find com.android.application:8.2.2` 等 | 网络问题或未完成依赖下载 → 检查网络后点菜单 `File → Sync Project with Gradle Files` 重试 |
+| Sync 很慢 / 下载失败（国内网络） | 可给 `android/build.gradle` 与 `settings.gradle` 配置国内镜像仓库（如阿里云 `maven.aliyun.com`），或用网络代理后重试 |
+| 构建报错 `requires JDK 17` | 说明 Android Studio 版本过旧 → 升级 Android Studio（新版内置 JDK 17） |
+| 构建报错 `Android SDK 34 not found` | 打开 SDK Manager（`Tools → SDK Manager`）勾选安装 **Android 14 (API 34)** |
+| 构建后手机上打不开 / 白屏 | 确认安装的是**刚构建的 APK**；本应用需 Android 7.0（API 24）及以上系统 |
 
 ## 功能
 
