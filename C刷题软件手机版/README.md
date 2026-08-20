@@ -44,14 +44,18 @@
 
 #### 第 4 步：构建 APK
 
-1. 顶部菜单：**`Build → Build Bundle(s) / APK(s) → Build APK(s)`**
-2. 左下角 Build 面板出现 `BUILD SUCCESSFUL` 即构建成功
-3. 生成的 APK 在：
-   - 调试版：`android\app\build\outputs\apk\debug\app-debug.apk`（默认构建这个）
-   - 发布版：`android\app\build\outputs\apk\release\app-release.apk`（需配置签名后才建议使用）
+构建入口有**两种写法**（不同 Android Studio 版本菜单名不同，看到哪个用哪个）：
 
-> 更省事的方法：构建成功后 Android Studio 右下角会弹出通知「APK(s) generated successfully」，
-> 点 **`locate`**（或 **`Show in Explorer`**）可直接打开 APK 所在文件夹。
+- **方式 A（推荐，最省事）**：菜单 **`Build → Assemble Project`**（或 `Assemble Module 'android'`）—— 直接构建 **debug 版 APK，无需签名**
+- **方式 B**：菜单 **`Build → Build Bundle(s) / APK(s) → Build APK(s)`**（新版 AS 显示为 **`Build → Generate App Bundles or APKs`**，弹出窗口选 **APK** 后 Next/Finish）
+
+> 若弹出「Generate Signed App Bundle or APK」签名向导，debug 构建**不需要真实签名**，选 APK 后直接 Finish 即可。
+
+构建成功的标志：左下角 Build 面板出现 **`BUILD SUCCESSFUL`**，右下角弹出「APK(s) generated successfully」通知，点 **`locate`**（或 `Show in Explorer`）直接打开 APK 所在文件夹。
+
+生成的 APK 位置：
+- 调试版：`android\app\build\outputs\apk\debug\app-debug.apk`（默认构建这个，**发这个给手机装即可**）
+- 发布版：`android\app\build\outputs\apk\release\app-release.apk`（需配置签名后才建议使用）
 
 #### 第 5 步：安装到手机
 
