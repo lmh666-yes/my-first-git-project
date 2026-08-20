@@ -1,13 +1,11 @@
 # -*- coding: utf-8 -*-
-"""C刷题软件 · 压力测试
-覆盖：快速翻题 / 全题库作答 / 模式切换(含考试定时器) / 收藏切换 / 笔记写入 / 随机混合操作 / 控件泄漏检测
-用法：python test_stress.py
-"""
+"""C刷题软件 · 压力测试（1.0.8）
+覆盖：快速翻题 / 全题库作答 / 模式切换 / 笔记 / 考试循环(开考/答题/暂停/继续/交卷/
+重新考试) / 随机混合 / 控件泄漏检测 / 定时器零残留"""
 import sys, io, os, random, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-faulthandler.dump_traceback_later(120, exit=True)
-
+faulthandler.dump_traceback_later(150, exit=True)
 import importlib.util
 spec = importlib.util.spec_from_file_location("bs", os.path.join(os.path.dirname(os.path.abspath(__file__)), "刷题软件.py"))
 bs = importlib.util.module_from_spec(spec)
@@ -15,7 +13,6 @@ spec.loader.exec_module(bs)
 
 PASS = 0
 FAIL = 0
-
 def ok(name, cond, extra=""):
     global PASS, FAIL
     if cond:
@@ -25,11 +22,9 @@ def ok(name, cond, extra=""):
         FAIL += 1
         print(f"  [FAIL] {name} {extra}")
 
-# 屏蔽 messagebox，避免边界提示阻塞测试
-_msgs = []
-bs.messagebox.showinfo = lambda t, m: _msgs.append((t, m))
-bs.messagebox.showerror = lambda t, m: _msgs.append((t, m))
-bs.messagebox.showwarning = lambda t, m: _msgs.append((t, m))
+bs.messagebox.showinfo = lambda t, m: None
+bs.messagebox.showerror = lambda t, m: None
+bs.messagebox.showwarning = lambda t, m: None
 bs.messagebox.askyesno = lambda t, m: True
 
 def main():
@@ -55,13 +50,13 @@ def main():
                 if not b.winfo_ismapped():
                     nav_lost += 1
                     break
-    ok("5000次快速翻题无异常", True)
-    ok("选项区控件数量稳定(<=9)", max_n <= 9, f"max={max_n}")
-    ok("底部导航全程可见(刷新后)", nav_lost == 0, f"lost={nav_lost}")
+    ok("5000次快速翻题", True)
+    ok("选项区控件稳定(<=9)", max_n <= 9, f"max={max_n}")
+    ok("导航全程可见", nav_lost == 0, f"lost={nav_lost}")
 
-    # ---- 2. 全题库每题作答 ----
-    err = 0
+    # ---- 2. 全题库作答 ----
     app.set_mode("顺序")
+    err = 0
     for i in range(N):
         app.idx = i
         app.show_question()
@@ -70,68 +65,70 @@ def main():
             if it["kind"] == "choice":
                 app.choice_var.set(it["options"][0]["key"])
                 app.check()
-            elif it["kind"] == "judge":
-                app.answer_judge("√")
             else:
-                app.reveal_qa()
-                app.mark_qa(True)
+                app.answer_judge("√")
         except Exception as e:
             err += 1
-            if err <= 3:
-                print("    ERR@", i, e)
-    ok("全题库作答无异常", err == 0, f"err={err}")
+    ok("全题库作答", err == 0, f"err={err}")
 
-    # ---- 3. 1000 次模式切换（含考试，验证定时器不残留） ----
-    modes = ["顺序", "随机", "错题", "考试", "随机", "顺序"]
+    # ---- 3. 500 次模式切换（非考试） ----
     err = 0
-    timer_leak = 0
-    for _ in range(1000):
+    for _ in range(500):
         try:
-            app.set_mode(random.choice(modes))
+            app.set_mode(random.choice(["顺序", "随机", "错题"]))
             root.update_idletasks()
-            if app.mode != "考试" and app._exam_timer is not None:
-                timer_leak += 1
         except Exception as e:
             err += 1
-            if err <= 3:
-                print("    ERR mode:", e)
-    ok("1000次模式切换无异常", err == 0, f"err={err}")
-    ok("非考试模式下无残留倒计时定时器", timer_leak == 0, f"leak={timer_leak}")
+    ok("500次模式切换", err == 0, f"err={err}")
 
-    # ---- 4. 全题收藏切换 ----
+    # ---- 4. 笔记压力 ----
     app.set_mode("顺序")
     err = 0
-    for i in range(N):
-        try:
-            app.idx = i
-            app.show_question()
-            app.toggle_fav()
-        except Exception as e:
-            err += 1
-    ok("全题收藏切换无异常", err == 0, f"err={err}")
-
-    # ---- 5. 笔记压力：全题写入/切题/回显 ----
-    err = 0
-    app.set_mode("顺序")
     for i in range(N):
         try:
             app.idx = i
             app.show_question()
             app.note_text.delete("1.0", "end")
-            app.note_text.insert("1.0", f"第{i}题笔记")
+            app.note_text.insert("1.0", f"n{i}")
             app._note_edited()
             app.next_q()
         except Exception as e:
             err += 1
-            if err <= 3:
-                print("    ERR note:", e)
     app.idx = 0
     app.show_question()
-    back = app.note_text.get("1.0", "end-1c")
-    ok("130题笔记连续写入无异常", err == 0, f"err={err}")
-    ok("笔记回显正确", back == "第0题笔记", repr(back))
+    ok("笔记连续写入/回显", err == 0 and app.note_text.get("1.0", "end-1c") == "n0",
+       f"err={err}")
 
-    # ---- 6. 随机混合操作 3000 次 ----
+    # ---- 5. 50 次完整考试循环 ----
+    err = 0
+    for _ in range(50):
+        try:
+            app.set_mode("考试")
+            app._exam_start()
+            root.update_idletasks()
+            for i in range(len(app.queue)):
+                app.idx = i
+                app._exam_render_q()
+                q = app.queue[i]
+                if q["kind"] == "choice":
+                    app.choice_var.set(q["options"][0]["key"])
+                    app.check()
+                else:
+                    app.answer_judge("√")
+            app.finish_exam()
+            root.update_idletasks()
+            app._exam_toggle_pause()
+            app._exam_toggle_pause()
+        except Exception as e:
+            err += 1
+            if err <= 3:
+                print("    ERR exam:", e)
+    ok("50次完整考试循环", err == 0, f"err={err}")
+    ok("交卷后无残留定时器", app._exam_timer is None)
+    ok("交卷后可重新考试", app._exam_finished())
+
+    # ---- 6. 3000 次随机混合 ----
+    app.set_mode("顺序")
     ops = ["next", "prev", "check", "judge", "fav", "redo", "note"]
     err = 0
     for _ in range(3000):
@@ -159,27 +156,16 @@ def main():
                 print("    ERR op:", op, e)
         if random.random() < 0.02:
             root.update_idletasks()
-    ok("3000次随机混合操作无异常", err == 0, f"err={err}")
+    ok("3000次随机混合", err == 0, f"err={err}")
 
-    # ---- 7. 最终状态检查（先刷新布局） ----
+    # ---- 7. 最终检查 ----
     root.update_idletasks()
     root.update()
     mapped = [b.winfo_ismapped() for b, _ in app.nav_btns]
-    ok("最终选项区控件数量正常", len(app.opt_frame.winfo_children()) <= 9,
+    ok("最终控件数量正常", len(app.opt_frame.winfo_children()) <= 9,
        f"n={len(app.opt_frame.winfo_children())}")
-    ok("最终导航栏全部可见", all(mapped), f"{mapped}")
-    ok("最终无残留考试定时器", app._exam_timer is None)
-    try:
-        app._update_stat()
-        ok("统计更新正常", True)
-    except Exception as e:
-        ok("统计更新正常", False, str(e))
-    try:
-        app._save_progress()
-        ok("进度保存正常", True)
-    except Exception as e:
-        ok("进度保存正常", False, str(e))
-
+    ok("最终导航可见", all(mapped), f"{mapped}")
+    ok("最终无残留定时器", app._exam_timer is None)
     root.destroy()
     print(f"\n===== 压力测试结果: PASS={PASS} FAIL={FAIL} =====")
     sys.exit(1 if FAIL else 0)

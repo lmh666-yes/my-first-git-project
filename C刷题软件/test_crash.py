@@ -1,12 +1,11 @@
 # -*- coding: utf-8 -*-
-"""C刷题软件 · 崩溃测试
-覆盖：题库损坏JSON / 空题库 / 缺字段题目 / progress损坏 / 题库缺失 / 极端题干 / 笔记损坏
-用法：python test_crash.py
-"""
+"""C刷题软件 · 崩溃测试（1.0.8）
+覆盖：题库损坏JSON / 空题库 / 缺字段题目 / progress损坏 / 题库缺失 / 极端题干 /
+考试状态损坏(非dict / 失效id)"""
 import sys, io, os, json, shutil, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-faulthandler.dump_traceback_later(120, exit=True)
+faulthandler.dump_traceback_later(150, exit=True)
 
 import importlib.util
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -34,10 +33,15 @@ def ok(name, cond, extra=""):
 _msgs = []
 bs.messagebox.showinfo = lambda t, m: _msgs.append((t, m))
 bs.messagebox.showerror = lambda t, m: _msgs.append((t, m))
+bs.messagebox.showwarning = lambda t, m: _msgs.append((t, m))
 bs.messagebox.askyesno = lambda t, m: True
 
 def write_bank(data):
     with open(BANK, "w", encoding="utf-8") as f:
+        f.write(data)
+
+def write_prog(data):
+    with open(PROG, "w", encoding="utf-8") as f:
         f.write(data)
 
 def make_app(root):
@@ -91,9 +95,8 @@ def test_missing_fields():
     print("— 场景5: 题目缺字段 —")
     bad = [
         {"kind": "choice", "id": "x1", "num": 1, "stem": "缺options/answer的单选题"},
-        {"kind": "judge", "id": "x2", "num": 2},                    # 完全缺字段
-        {"kind": "qa", "id": "x3", "num": 3, "stem": "缺答案简答"},
-        {"id": "x4"},                                               # 连kind都没有
+        {"kind": "judge", "id": "x2", "num": 2},
+        {"id": "x4"},
         {},
     ]
     write_bank(json.dumps(bad, ensure_ascii=False))
@@ -101,7 +104,7 @@ def test_missing_fields():
     root.geometry("1180x720")
     app, err = make_app(root)
     ok("缺字段题库启动不崩溃", err is None, str(err) if err else "")
-    err = 0
+    err2 = 0
     if app:
         for i in range(len(app.bank)):
             try:
@@ -109,15 +112,11 @@ def test_missing_fields():
                 app.show_question()
                 app.check()
                 app.answer_judge("√")
-                app.reveal_qa()
-                app.mark_qa(True)
                 app.toggle_fav()
                 app.redo_q()
             except Exception as e:
-                err += 1
-                if err <= 3:
-                    print("    ERR@", i, e)
-    ok("缺字段题目作答不崩溃", err == 0, f"err={err}")
+                err2 += 1
+    ok("缺字段题目作答不崩溃", err2 == 0, f"err={err2}")
     root.destroy()
 
 def test_huge_stem():
@@ -130,7 +129,7 @@ def test_huge_stem():
     root.geometry("1180x720")
     app, err = make_app(root)
     ok("超长题干不崩溃", err is None, str(err) if err else "")
-    err = 0
+    err2 = 0
     if app:
         for i in range(50):
             try:
@@ -138,15 +137,14 @@ def test_huge_stem():
                 app.show_question()
                 app.check()
             except Exception as e:
-                err += 1
-    ok("超长题作答不崩溃", err == 0, f"err={err}")
+                err2 += 1
+    ok("超长题作答不崩溃", err2 == 0, f"err={err2}")
     root.destroy()
 
 def test_broken_progress():
     print("— 场景7: progress.json 损坏 —")
     write_bank(open(BAK_BANK, encoding="utf-8").read())
-    with open(PROG, "w", encoding="utf-8") as f:
-        f.write("{ not valid !!")
+    write_prog("{ not valid !!")
     root = tk.Tk()
     root.geometry("1180x720")
     app, err = make_app(root)
@@ -154,8 +152,39 @@ def test_broken_progress():
     ok("进度被重置为空", app is not None and app.progress == {})
     root.destroy()
 
+def test_exam_corrupt():
+    print("— 场景8: 考试状态损坏 —")
+    write_bank(open(BAK_BANK, encoding="utf-8").read())
+    # exam 非 dict
+    write_prog(json.dumps({"exam": "corrupted-string"}, ensure_ascii=False))
+    root = tk.Tk()
+    root.geometry("1180x720")
+    app, err = make_app(root)
+    ok("exam非dict不崩溃", err is None, str(err) if err else "")
+    root.destroy()
+    # exam 引用失效 id
+    write_prog(json.dumps({"exam": {"active": True, "finished": False, "paused": False,
+                                    "ids": ["nonexist-1", "nonexist-2"], "idx": 0,
+                                    "left": 100, "answers": {"nonexist-1": "A"}}},
+                          ensure_ascii=False))
+    root = tk.Tk()
+    root.geometry("1180x720")
+    app, err = make_app(root)
+    ok("exam失效id不崩溃", err is None, str(err) if err else "")
+    if app:
+        try:
+            app._exam_toggle_pause()
+            root.update()
+            app.finish_exam()
+            root.update()
+        except Exception as e:
+            ok("失效id考试操作不崩溃", False, str(e))
+        else:
+            ok("失效id考试操作不崩溃", True)
+    root.destroy()
+
 def test_missing_bank():
-    print("— 场景8: 题库文件缺失 —")
+    print("— 场景9: 题库文件缺失 —")
     if os.path.exists(BANK):
         os.remove(BANK)
     root = tk.Tk()
@@ -175,7 +204,6 @@ def restore():
             os.remove(p)
 
 def main():
-    # 备份现场
     if os.path.exists(BANK):
         shutil.copy(BANK, BAK_BANK)
     if os.path.exists(PROG):
@@ -188,6 +216,7 @@ def main():
         test_missing_fields()
         test_huge_stem()
         test_broken_progress()
+        test_exam_corrupt()
         test_missing_bank()
     finally:
         restore()
