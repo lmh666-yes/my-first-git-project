@@ -6,3 +6,6 @@ __pycache__/
 
 # 刷题软件本机进度（自动生成）
 C刷题软件/progress.json
+
+# 本地打包产物
+*.rar

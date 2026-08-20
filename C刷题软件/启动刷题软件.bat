@@ -36,7 +36,7 @@ if not exist "%~dp0题库.json" (
     if not exist "%~dp0题库.json" (
         echo.
         echo [错误] 题库生成失败。
-        echo        请确认存在 嵌入式软件开发（中级）题库（含答案）.docx
+        echo        请确认 题库 文件夹中存在 Word 题库文档（*.docx）
         echo        且已安装 python-docx（命令行执行：pip install python-docx）。
         echo.
         pause
