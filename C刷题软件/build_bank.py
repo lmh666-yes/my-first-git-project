@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """题库构建器：读取「原题目.docx」+「原题目答案.docx」，解析为 题库.json。
-题型：一、单选题(80) 二、判断题(50) 三、简答与编程题(11)。"""
+题型：一、单选题(80) 二、判断题(50)。【简答/编程题不再纳入题库】"""
 import sys, io, os, re, json
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 import docx
@@ -111,6 +111,8 @@ def build():
             kind = "qa"
         if kind is None:
             continue
+        if kind == "qa":
+            continue   # 1.0.7：只保留选择+判断，简答/编程题不再纳入题库
         # 找对应答案 section（按标题关键字匹配）
         akw = "单选" if kind == "choice" else ("判断" if kind == "judge" else "简答")
         asec = next((s for s in asections if akw in s["title"]), None)

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """C刷题软件 · 压力测试
-覆盖：快速翻题 / 全题库作答 / 模式切换 / 收藏切换 / 随机混合操作 / 控件泄漏检测
+覆盖：快速翻题 / 全题库作答 / 模式切换(含考试定时器) / 收藏切换 / 笔记写入 / 随机混合操作 / 控件泄漏检测
 用法：python test_stress.py
 """
 import sys, io, os, random, faulthandler, tkinter as tk
@@ -30,14 +30,15 @@ _msgs = []
 bs.messagebox.showinfo = lambda t, m: _msgs.append((t, m))
 bs.messagebox.showerror = lambda t, m: _msgs.append((t, m))
 bs.messagebox.showwarning = lambda t, m: _msgs.append((t, m))
+bs.messagebox.askyesno = lambda t, m: True
 
 def main():
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app = bs.App(root)
     root.update()
     N = len(app.bank)
-    ok("题库加载", N == 141, f"({N})")
+    ok("题库加载", N == 130, f"({N})")
 
     # ---- 1. 快速翻题 5000 次 ----
     max_n, nav_lost = 0, 0
@@ -80,18 +81,22 @@ def main():
                 print("    ERR@", i, e)
     ok("全题库作答无异常", err == 0, f"err={err}")
 
-    # ---- 3. 500 次模式切换 ----
+    # ---- 3. 1000 次模式切换（含考试，验证定时器不残留） ----
     modes = ["顺序", "随机", "错题", "考试", "随机", "顺序"]
     err = 0
-    for _ in range(500):
+    timer_leak = 0
+    for _ in range(1000):
         try:
             app.set_mode(random.choice(modes))
             root.update_idletasks()
+            if app.mode != "考试" and app._exam_timer is not None:
+                timer_leak += 1
         except Exception as e:
             err += 1
             if err <= 3:
                 print("    ERR mode:", e)
-    ok("500次模式切换无异常", err == 0, f"err={err}")
+    ok("1000次模式切换无异常", err == 0, f"err={err}")
+    ok("非考试模式下无残留倒计时定时器", timer_leak == 0, f"leak={timer_leak}")
 
     # ---- 4. 全题收藏切换 ----
     app.set_mode("顺序")
@@ -105,8 +110,29 @@ def main():
             err += 1
     ok("全题收藏切换无异常", err == 0, f"err={err}")
 
-    # ---- 5. 随机混合操作 3000 次 ----
-    ops = ["next", "prev", "check", "judge", "reveal", "mark", "fav", "redo"]
+    # ---- 5. 笔记压力：全题写入/切题/回显 ----
+    err = 0
+    app.set_mode("顺序")
+    for i in range(N):
+        try:
+            app.idx = i
+            app.show_question()
+            app.note_text.delete("1.0", "end")
+            app.note_text.insert("1.0", f"第{i}题笔记")
+            app._note_edited()
+            app.next_q()
+        except Exception as e:
+            err += 1
+            if err <= 3:
+                print("    ERR note:", e)
+    app.idx = 0
+    app.show_question()
+    back = app.note_text.get("1.0", "end-1c")
+    ok("130题笔记连续写入无异常", err == 0, f"err={err}")
+    ok("笔记回显正确", back == "第0题笔记", repr(back))
+
+    # ---- 6. 随机混合操作 3000 次 ----
+    ops = ["next", "prev", "check", "judge", "fav", "redo", "note"]
     err = 0
     for _ in range(3000):
         op = random.choice(ops)
@@ -120,14 +146,13 @@ def main():
                 app.check()
             elif op == "judge":
                 app.answer_judge(random.choice(["√", "×"]))
-            elif op == "reveal":
-                app.reveal_qa()
-            elif op == "mark":
-                app.mark_qa(random.choice([True, False]))
             elif op == "fav":
                 app.toggle_fav()
-            else:
+            elif op == "redo":
                 app.redo_q()
+            else:
+                app.note_text.insert("end", "x")
+                app._note_edited()
         except Exception as e:
             err += 1
             if err <= 5:
@@ -136,13 +161,14 @@ def main():
             root.update_idletasks()
     ok("3000次随机混合操作无异常", err == 0, f"err={err}")
 
-    # ---- 6. 最终状态检查（先刷新布局） ----
+    # ---- 7. 最终状态检查（先刷新布局） ----
     root.update_idletasks()
     root.update()
     mapped = [b.winfo_ismapped() for b, _ in app.nav_btns]
     ok("最终选项区控件数量正常", len(app.opt_frame.winfo_children()) <= 9,
        f"n={len(app.opt_frame.winfo_children())}")
     ok("最终导航栏全部可见", all(mapped), f"{mapped}")
+    ok("最终无残留考试定时器", app._exam_timer is None)
     try:
         app._update_stat()
         ok("统计更新正常", True)

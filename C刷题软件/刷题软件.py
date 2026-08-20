@@ -1,7 +1,8 @@
 # -*- coding: utf-8 -*-
 """C 语言刷题软件 · 类似软考通
 题库来源：题库.json（由 build_bank.py 从 docx 生成）
-功能：顺序练习 / 随机练习 / 错题重做 / 模拟考试；判分 + 解析 + 进度统计 + 收藏 + 错题本。"""
+功能：顺序练习 / 随机练习 / 错题重做 / 模拟考试；判分 + 解析 + 进度统计 + 收藏 + 错题本 + 笔记 + 重置进度。
+版本：1.0.7"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -41,25 +42,33 @@ class App:
     def __init__(self, root):
         self.root = root
         self.root.title("C 语言刷题软件")
-        self.root.geometry("980x700")
+        self.root.geometry("1180x720")
         self.bank = load_bank()
         if not self.bank:
             messagebox.showerror("题库错误",
                                  "题库为空或损坏，请重新运行 build_bank.py 生成题库。")
-        self.progress = load_progress()   # {id: {"ok": bool, "fav": bool}}
+        self.progress = load_progress()   # {id: {"ok","fav","wrong_count","notes"}}
         self.mode = "顺序"                 # 顺序/随机/错题/考试
         self.queue = []                    # 当前模式下的题目序列
         self.idx = 0
         self.choice_var = tk.StringVar()
         self.exam_left = 0                 # 考试剩余秒数
-        self._exam_timer = None
+        self._exam_timer = None            # 考试倒计时定时器
+        self._note_save_job = None         # 笔记防抖写盘定时器
         self._build_ui()
         self.set_mode("顺序")
         self.show_question()
+        self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+
+    def _on_close(self):
+        """关窗：先保存当前笔记与进度"""
+        self._save_note()
+        self._save_progress()
+        self.root.destroy()
 
     # ---------- UI ----------
     def _build_ui(self):
-        # 用 grid 布局：bar(0) pbar(1) body(2,权重1) nav(3)，底部导航始终可见
+        # grid 布局：bar(0) pbar(1) body(2,权重1) nav(3)，底部导航始终可见
         self.root.grid_rowconfigure(2, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
         # 顶部栏
@@ -82,43 +91,71 @@ class App:
         self.pbar = ttk.Progressbar(self.root, maximum=100, value=0)
         self.pbar.grid(row=1, column=0, sticky="ew")
 
-        # 题目区
+        # 主体：左=题目区，右=笔记区
         body = tk.Frame(self.root, bg="#ffffff")
         body.grid(row=2, column=0, sticky="nsew")
-        self.head_label = tk.Label(body, text="", bg="#eaf2f8", fg=COLOR_BLUE,
+        body.grid_rowconfigure(0, weight=1)
+        body.grid_columnconfigure(0, weight=3)   # 左：题目
+        body.grid_columnconfigure(1, weight=1)   # 右：笔记
+
+        left = tk.Frame(body, bg="#ffffff")
+        left.grid(row=0, column=0, sticky="nsew")
+        right = tk.Frame(body, bg="#fdf6e3", bd=1, relief=tk.GROOVE)
+        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+
+        # ---- 左：题干 / 选项 / 反馈 ----
+        self.head_label = tk.Label(left, text="", bg="#eaf2f8", fg=COLOR_BLUE,
                                    font=("Microsoft YaHei", 12, "bold"),
                                    anchor="w", padx=12, pady=6)
         self.head_label.pack(fill=tk.X)
-        self.stem = tk.Text(body, font=("Consolas", 12), wrap="word",
+        self.stem = tk.Text(left, font=("Consolas", 12), wrap="word",
                             bg="#ffffff", relief=tk.FLAT, padx=14, pady=8,
                             height=7, state=tk.DISABLED)
         self.stem.pack(fill=tk.X, pady=(4, 0))
 
-        # 选项区（单选 / 判断 / 简答 动态填充）
-        self.opt_frame = tk.Frame(body, bg="#ffffff")
+        # 选项区（单选 / 判断 动态填充）
+        self.opt_frame = tk.Frame(left, bg="#ffffff")
         self.opt_frame.pack(fill=tk.BOTH, expand=True, padx=10)
         self.opt_widgets = []
 
-        # 反馈区（答案 / 解析）
-        self.fb = tk.Text(body, font=("Microsoft YaHei", 11), wrap="word",
+        # 反馈区（答案 / 解析 / 错题次数）
+        self.fb = tk.Text(left, font=("Microsoft YaHei", 11), wrap="word",
                           height=7, relief=tk.GROOVE, bd=1, padx=10, pady=6)
         self.fb.pack(fill=tk.X, padx=10, pady=(2, 6))
+
+        # ---- 右：笔记区（可写可改，自动保存） ----
+        tk.Label(right, text="📝 我的笔记", bg="#fdf6e3", fg="#7b5804",
+                 font=("Microsoft YaHei", 11, "bold"), anchor="w",
+                 padx=8, pady=6).pack(fill=tk.X)
+        self.note_text = tk.Text(right, font=("Microsoft YaHei", 10), wrap="word",
+                                 bg="#fffdf5", relief=tk.FLAT, padx=8, pady=6)
+        self.note_text.pack(fill=tk.BOTH, expand=True)
+        self.note_text.bind("<KeyRelease>", lambda e: self._note_edited())
+        tk.Label(right, text="笔记自动保存，下次做到这题自动显示",
+                 bg="#fdf6e3", fg="#a08030", font=("Microsoft YaHei", 8),
+                 anchor="w", padx=8, pady=4).pack(fill=tk.X)
 
         # 底部导航（grid row3，固定可见）
         nav = tk.Frame(self.root, bg="#f0f0f0")
         nav.grid(row=3, column=0, sticky="ew")
         self.nav_btns = []
-        for txt, fn in (("◀ 上一题", self.prev_q), ("确认答案", self.check),
-                        ("下一题 ▶", self.next_q), ("⭐ 收藏", self.toggle_fav),
-                        ("重新做题", self.redo_q)):
-            b = tk.Button(nav, text=txt, command=fn, bg=COLOR_BLUE, fg="white",
-                          cursor="hand2", padx=14, pady=5,
+        for txt, fn, color in (("◀ 上一题", self.prev_q, COLOR_BLUE),
+                               ("确认答案", self.check, COLOR_BLUE),
+                               ("下一题 ▶", self.next_q, COLOR_BLUE),
+                               ("⭐ 收藏", self.toggle_fav, "#8e44ad"),
+                               ("重新做题", self.redo_q, "#b9770e"),
+                               ("🗑 重置进度", self.reset_progress, COLOR_NO)):
+            b = tk.Button(nav, text=txt, command=fn, bg=color, fg="white",
+                          cursor="hand2", padx=12, pady=5,
                           font=("Microsoft YaHei", 10))
             b.pack(side=tk.LEFT, padx=4, pady=6)
             self.nav_btns.append((b, txt))
 
     # ---------- 模式 ----------
     def set_mode(self, mode):
+        # 切换模式先保存当前题笔记 + 停考试倒计时（避免后台残留定时器覆盖标题/突然弹交卷）
+        self._save_note()
+        self._stop_exam_timer()
         self.mode = mode
         for m, b in self.mode_btns.items():
             b.config(bg="#34495e", fg="white")
@@ -142,6 +179,7 @@ class App:
         self.show_question()
 
     def start_exam(self):
+        self._stop_exam_timer()
         q = [it for it in self.bank if it.get("kind") in ("choice", "judge")]
         n = min(20, len(q))
         random.shuffle(q)
@@ -151,7 +189,19 @@ class App:
         self._exam_tick()
         self.show_question()
 
+    def _stop_exam_timer(self):
+        """取消考试倒计时定时器（切换模式 / 交卷 / 重新开考时调用）"""
+        if self._exam_timer:
+            try:
+                self.root.after_cancel(self._exam_timer)
+            except Exception:
+                pass
+            self._exam_timer = None
+
     def _exam_tick(self):
+        if self.mode != "考试":            # 已切走：残留定时器直接退出
+            self._exam_timer = None
+            return
         if self.exam_left <= 0:
             self.finish_exam()
             return
@@ -159,19 +209,10 @@ class App:
         mm, ss = divmod(self.exam_left, 60)
         self.head_label.config(
             text=f"⏱ 模拟考试 · 剩余 {mm:02d}:{ss:02d} · 共 {len(self.queue)} 题")
-        if self._exam_timer:
-            try:
-                self.root.after_cancel(self._exam_timer)
-            except Exception:
-                pass
         self._exam_timer = self.root.after(1000, self._exam_tick)
 
     def finish_exam(self):
-        if self._exam_timer:
-            try:
-                self.root.after_cancel(self._exam_timer)
-            except Exception:
-                pass
+        self._stop_exam_timer()
         done = [it for it in self.queue
                 if self.progress.get(it.get("id", ""), {}).get("ok") is not None]
         ok = [it for it in done
@@ -206,10 +247,14 @@ class App:
             self.fb.insert(tk.END, "❌ 上次作答：错误\n")
         else:
             self.fb.insert(tk.END, "未作答\n")
+        wc = rec.get("wrong_count", 0)
+        if wc:
+            self.fb.insert(tk.END, f"🔁 本题累计错误：{wc} 次\n")
         if rec.get("fav"):
             self.fb.insert(tk.END, "⭐ 已收藏\n")
         self.fb.config(state=tk.DISABLED)
         self._render_options(it)
+        self._load_note(it.get("id", ""))
         self._update_stat()
 
     def _set_stem(self, text):
@@ -242,7 +287,7 @@ class App:
                               bg="#34495e", fg="white")
                 b.pack(side=tk.LEFT, padx=10, pady=8)
                 self.opt_widgets.append(b)
-        else:  # 简答
+        else:  # 兼容旧题库：简答（新题库不再包含）
             self._add_btn("简答/编程题：先自行作答，再点「查看答案」对照。",
                           "#8e44ad", disabled=False)
             b = tk.Button(self.opt_frame, text="查看答案", command=self.reveal_qa,
@@ -286,10 +331,14 @@ class App:
         ok = (key == ans) or (key == "√" and ans in ("对", "T", "true", "√")) \
              or (key == "×" and ans in ("错", "F", "false", "×"))
         self.record(it.get("id", ""), ok)
+        rec = self.progress.get(it.get("id", ""), {})
+        wc = rec.get("wrong_count", 0)
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
         tag = "✅ 回答正确" if ok else "❌ 回答错误"
         self.fb.insert(tk.END, tag + f"（你的答案：{key}，正确答案：{ans}）\n")
+        if wc:
+            self.fb.insert(tk.END, f"🔁 本题累计错误：{wc} 次\n")
         if it.get("explain"):
             self.fb.insert(tk.END, "\n解析：\n" + it.get("explain", ""))
         self.fb.config(state=tk.DISABLED)
@@ -315,28 +364,81 @@ class App:
         self._update_stat()
 
     def record(self, qid, ok):
-        rec = self.progress.setdefault(qid, {"ok": None, "fav": False})
+        """记录作答；答错累计错误次数，自动进入错题库（错题模式按 ok=False 收集）"""
+        rec = self.progress.setdefault(qid, {"ok": None, "fav": False,
+                                             "wrong_count": 0, "notes": ""})
         rec["ok"] = ok
+        if not ok:
+            rec["wrong_count"] = rec.get("wrong_count", 0) + 1
         self._save_progress()
 
     def _show_result(self, it, sel):
         ans = str(it.get("answer", "")).upper()
+        rec = self.progress.get(it.get("id", ""), {})
+        wc = rec.get("wrong_count", 0)
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
         if sel == ans:
             self.fb.insert(tk.END, "✅ 回答正确！\n", ("ok",))
         else:
             self.fb.insert(tk.END, f"❌ 回答错误。正确答案：{ans}（你选了 {sel}）\n", ("no",))
+        if wc:
+            self.fb.insert(tk.END, f"🔁 本题累计错误：{wc} 次\n")
         self.fb.tag_configure("ok", foreground=COLOR_OK)
         self.fb.tag_configure("no", foreground=COLOR_NO)
         if it.get("explain"):
             self.fb.insert(tk.END, "\n解析：\n" + it.get("explain", ""))
         self.fb.config(state=tk.DISABLED)
 
-    # ---------- 收藏 / 重做 ----------
+    # ---------- 笔记 ----------
+    def _note_edited(self):
+        """笔记编辑：实时更新内存 + 防抖 0.8s 写盘"""
+        it = self._cur_item()
+        if it is None:
+            return
+        qid = it.get("id", "")
+        rec = self.progress.setdefault(qid, {"ok": None, "fav": False,
+                                             "wrong_count": 0, "notes": ""})
+        rec["notes"] = self.note_text.get("1.0", "end-1c")
+        if self._note_save_job:
+            try:
+                self.root.after_cancel(self._note_save_job)
+            except Exception:
+                pass
+        self._note_save_job = self.root.after(800, self._save_progress)
+
+    def _cur_item(self):
+        if self.queue and 0 <= self.idx < len(self.queue):
+            return self.queue[self.idx]
+        return None
+
+    def _load_note(self, qid):
+        if self._note_save_job:
+            try:
+                self.root.after_cancel(self._note_save_job)
+            except Exception:
+                pass
+            self._note_save_job = None
+        self.note_text.delete("1.0", "end")
+        rec = self.progress.get(qid, {})
+        self.note_text.insert("1.0", rec.get("notes", ""))
+
+    def _save_note(self):
+        """把当前笔记写入内存与磁盘（切换题目 / 关窗前调用）"""
+        it = self._cur_item()
+        if it is None:
+            return
+        qid = it.get("id", "")
+        rec = self.progress.setdefault(qid, {"ok": None, "fav": False,
+                                             "wrong_count": 0, "notes": ""})
+        rec["notes"] = self.note_text.get("1.0", "end-1c")
+        self._save_progress()
+
+    # ---------- 收藏 / 重做 / 重置 ----------
     def toggle_fav(self):
         it = self.queue[self.idx]
-        rec = self.progress.setdefault(it.get("id", ""), {"ok": None, "fav": False})
+        rec = self.progress.setdefault(it.get("id", ""), {"ok": None, "fav": False,
+                                                          "wrong_count": 0, "notes": ""})
         rec["fav"] = not rec.get("fav", False)
         self._save_progress()
         self.fb.config(state=tk.NORMAL)
@@ -352,8 +454,27 @@ class App:
             self._save_progress()
         self.show_question()
 
+    def reset_progress(self):
+        """清除记忆：全部做题记录 / 错题次数 / 笔记 重置"""
+        if not messagebox.askyesno(
+                "重置进度",
+                "确定要清除全部做题记录、错题次数和笔记吗？\n题库不会删除，进度将归零。"):
+            return
+        if self.mode == "错题":
+            self.set_mode("顺序")          # 错题队列已失效，先脱离再清空
+        self.progress = {}
+        self._save_progress()
+        self.note_text.delete("1.0", "end")
+        self.fb.config(state=tk.NORMAL)
+        self.fb.delete("1.0", "end")
+        self.fb.insert(tk.END, "🗑 已清除全部做题记录，重新开始！\n")
+        self.fb.config(state=tk.DISABLED)
+        self._update_stat()
+        self.show_question()
+
     # ---------- 导航 ----------
     def prev_q(self):
+        self._save_note()                  # 先保存当前题笔记
         if self.idx > 0:
             self.idx -= 1
             self.show_question()
@@ -361,6 +482,7 @@ class App:
             messagebox.showinfo("提示", "已经是第一题")
 
     def next_q(self):
+        self._save_note()                  # 先保存当前题笔记
         if self.idx < len(self.queue) - 1:
             self.idx += 1
             self.show_question()
@@ -376,8 +498,11 @@ class App:
                 if self.progress.get(it.get("id", ""), {}).get("ok") is not None]
         ok = [it for it in done
               if self.progress.get(it.get("id", ""), {}).get("ok") is True]
+        wrong = sum(1 for it in self.bank
+                    if self.progress.get(it.get("id", ""), {}).get("ok") is False)
         rate = round(len(ok) / len(done) * 100) if done else 0
-        self.stat_label.config(text=f"已做 {len(done)}/{len(self.bank)} · 正确率 {rate}%")
+        self.stat_label.config(
+            text=f"已做 {len(done)}/{len(self.bank)} · 正确率 {rate}% · 错题 {wrong}")
         self.pbar["value"] = rate
 
     def _save_progress(self):

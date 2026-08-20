@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """C刷题软件 · 崩溃测试
-覆盖：题库损坏JSON / 空题库 / 缺字段题目 / progress损坏 / 题库缺失 / 极端题干
+覆盖：题库损坏JSON / 空题库 / 缺字段题目 / progress损坏 / 题库缺失 / 极端题干 / 笔记损坏
 用法：python test_crash.py
 """
 import sys, io, os, json, shutil, faulthandler, tkinter as tk
@@ -34,6 +34,7 @@ def ok(name, cond, extra=""):
 _msgs = []
 bs.messagebox.showinfo = lambda t, m: _msgs.append((t, m))
 bs.messagebox.showerror = lambda t, m: _msgs.append((t, m))
+bs.messagebox.askyesno = lambda t, m: True
 
 def write_bank(data):
     with open(BANK, "w", encoding="utf-8") as f:
@@ -51,10 +52,10 @@ def test_normal():
     print("— 场景1: 正常题库 —")
     write_bank(open(BAK_BANK, encoding="utf-8").read())
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("正常题库启动不崩溃", err is None, str(err) if err else "")
-    ok("题库141题", app is not None and len(app.bank) == 141,
+    ok("题库130题", app is not None and len(app.bank) == 130,
        str(len(app.bank)) if app else "N/A")
     root.destroy()
 
@@ -62,7 +63,7 @@ def test_broken_json():
     print("— 场景2: 题库为损坏JSON —")
     write_bank('{"bad": json 截断!!!')
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("损坏JSON不崩溃(降级为空)", err is None, str(err) if err else "")
     ok("给出错误提示", any("题库" in t for t, _ in _msgs))
@@ -72,7 +73,7 @@ def test_empty_list():
     print("— 场景3: 空题库 [] —")
     write_bank("[]")
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("空题库不崩溃", err is None, str(err) if err else "")
     root.destroy()
@@ -81,7 +82,7 @@ def test_not_list():
     print("— 场景4: 题库为对象/字符串 —")
     write_bank('{"a": 1}')
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("非列表题库不崩溃", err is None, str(err) if err else "")
     root.destroy()
@@ -97,7 +98,7 @@ def test_missing_fields():
     ]
     write_bank(json.dumps(bad, ensure_ascii=False))
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("缺字段题库启动不崩溃", err is None, str(err) if err else "")
     err = 0
@@ -126,7 +127,7 @@ def test_huge_stem():
          "options": [{"key": "A", "text": "选项" * 1000}], "answer": "A"}
     write_bank(json.dumps([q] * 50, ensure_ascii=False))
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("超长题干不崩溃", err is None, str(err) if err else "")
     err = 0
@@ -147,7 +148,7 @@ def test_broken_progress():
     with open(PROG, "w", encoding="utf-8") as f:
         f.write("{ not valid !!")
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("损坏progress不崩溃(降级空)", err is None, str(err) if err else "")
     ok("进度被重置为空", app is not None and app.progress == {})
@@ -158,7 +159,7 @@ def test_missing_bank():
     if os.path.exists(BANK):
         os.remove(BANK)
     root = tk.Tk()
-    root.geometry("980x700")
+    root.geometry("1180x720")
     app, err = make_app(root)
     ok("题库缺失不崩溃", err is None, str(err) if err else "")
     ok("给出错误提示", any("题库" in t for t, _ in _msgs))
