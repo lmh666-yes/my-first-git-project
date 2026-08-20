@@ -27,9 +27,9 @@
 
 | 项目 | 要求 | 说明 |
 |---|---|---|
-| Android Studio | 需安装（免费） | 自带 **JDK 17**（本工程 AGP 8.2.2 要求），无需单独装 Java |
-| 网络 | 首次构建需联网 | 自动下载 **Gradle 8.2 + AGP 8.2.2 + appcompat 1.6.1**，约 5–15 分钟 |
-| Android SDK | 需 **API 34** 平台 | 首次 Sync 会提示，点「下载」自动安装 |
+| Android Studio | 需安装（免费） | 新版自带 JDK（本工程 Gradle 9.1.0 兼容 Java 17–25，新版 AS 直接可用，无需另装 JDK） |
+| 网络 | 首次构建需联网 | 自动下载 **Gradle 9.1.0 + AGP 9.0.0 + appcompat 1.6.1**，约 5–15 分钟 |
+| Android SDK | 需 **API 35** 平台 | 首次 Sync 会提示，点「下载」自动安装 |
 
 下载地址：https://developer.android.com/studio
 
@@ -69,10 +69,10 @@
 |---|---|
 | 报错 `Unable to find Gradle tasks to build` | **打开错了文件夹**——要打开的是 **`android`** 子文件夹（含 `settings.gradle`/`build.gradle`/`app`），不是整个手机版文件夹，也不是 `www`；先 `File → Close Project` 再重新 `Open` 正确文件夹 |
 | 打开项目提示缺 SDK / `local.properties` | 正常，Android Studio 会自动生成并提示下载 SDK，点下载即可 |
-| Sync 报错 `Could not find com.android.application:8.2.2` 等 | 网络问题或未完成依赖下载 → 检查网络后点菜单 `File → Sync Project with Gradle Files` 重试 |
+| Sync 报错 `Could not find com.android.application:9.0.0` 等 | 网络问题或未完成依赖下载 → 检查网络后点菜单 `File → Sync Project with Gradle Files` 重试 |
 | Sync 很慢 / 下载失败（国内网络） | 可给 `android/build.gradle` 与 `settings.gradle` 配置国内镜像仓库（如阿里云 `maven.aliyun.com`），或用网络代理后重试 |
-| 构建报错 `requires JDK 17` | 说明 Android Studio 版本过旧 → 升级 Android Studio（新版内置 JDK 17） |
-| 构建报错 `Android SDK 34 not found` | 打开 SDK Manager（`Tools → SDK Manager`）勾选安装 **Android 14 (API 34)** |
+| 构建报错 `Incompatible Gradle JVM version` | Gradle 与所选 JDK 版本不匹配——本项目已升级 **Gradle 9.1.0**（支持 Java 17–25），直接用新版 AS 的默认 JDK 即可，**不要**再手动选低版本 JDK |
+| 构建报错 `Android SDK 35 not found` | 打开 SDK Manager（`Tools → SDK Manager`）勾选安装 **Android 15 (API 35)** |
 | 构建后手机上打不开 / 白屏 | 确认安装的是**刚构建的 APK**；本应用需 Android 7.0（API 24）及以上系统 |
 
 ## 功能
