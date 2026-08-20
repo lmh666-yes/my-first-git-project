@@ -28,7 +28,7 @@ if not exist "%~dp0题库.json" (
         %PY% "%~dp0build_bank.py"
     )
     if not exist "%~dp0题库.json" (
-        echo [错误] 题库生成失败，请确认存在 原题目.docx 和 原题目答案.docx。
+        echo [错误] 题库生成失败，请确认存在 嵌入式软件开发（中级）题库（含答案）.docx。
         echo.
         pause
         exit /b 1

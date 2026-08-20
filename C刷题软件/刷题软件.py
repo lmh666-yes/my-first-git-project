@@ -478,15 +478,18 @@ class App:
                       COLOR_OK if score >= total * EXAM_SCORE * 0.6 else COLOR_NO, False)
         if wrong:
             self._add_btn("📌 点击错题号回顾题目与答案：", COLOR_NO, False)
-            row = tk.Frame(self.opt_frame, bg="#ffffff")
-            row.pack(fill=tk.X, pady=4)
-            self.opt_widgets.append(row)
-            for it in wrong:
-                b = tk.Button(row, text=f"错题 {it.get('num', '?')}", width=10,
+            # 用 grid 每行 6 个按钮自动换行，避免错题多时挤在一起
+            cols = 6
+            for k, it in enumerate(wrong):
+                if k % cols == 0:
+                    row = tk.Frame(self.opt_frame, bg="#ffffff")
+                    row.pack(fill=tk.X, pady=2)
+                    self.opt_widgets.append(row)
+                b = tk.Button(row, text=f"错题 {it.get('num', '?')}", width=9,
                               command=lambda q=it.get("id"): self._exam_review(q),
                               bg=COLOR_NO, fg="white", cursor="hand2",
                               font=("Microsoft YaHei", 10))
-                b.pack(side=tk.LEFT, padx=4, pady=3)
+                b.grid(row=0, column=k % cols, padx=4, pady=3)
                 self.opt_widgets.append(b)
         else:
             self._add_btn("🎉 全部答对，太棒了！", COLOR_OK, False)

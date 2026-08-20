@@ -24,7 +24,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-2",
@@ -51,7 +51,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-3",
@@ -78,7 +78,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-4",
@@ -105,7 +105,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-5",
@@ -132,7 +132,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-6",
@@ -159,7 +159,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-7",
@@ -186,7 +186,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-8",
@@ -213,7 +213,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-9",
@@ -240,7 +240,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-10",
@@ -267,7 +267,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-11",
@@ -294,7 +294,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-12",
@@ -321,7 +321,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-13",
@@ -348,7 +348,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-14",
@@ -375,7 +375,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-15",
@@ -402,7 +402,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-16",
@@ -429,7 +429,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-17",
@@ -456,7 +456,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-18",
@@ -483,7 +483,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-19",
@@ -510,7 +510,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-20",
@@ -537,7 +537,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-21",
@@ -564,7 +564,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-22",
@@ -591,7 +591,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-23",
@@ -618,7 +618,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-24",
@@ -641,15 +641,11 @@
    },
    {
     "key": "D",
-    "text": "interface"
-   },
-   {
-    "key": "E",
     "text": "ifconfig"
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-25",
@@ -676,7 +672,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-26",
@@ -703,7 +699,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-27",
@@ -730,7 +726,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-28",
@@ -757,7 +753,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-29",
@@ -784,7 +780,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-30",
@@ -811,7 +807,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-31",
@@ -838,7 +834,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-32",
@@ -865,7 +861,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-33",
@@ -892,7 +888,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-34",
@@ -919,7 +915,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-35",
@@ -946,7 +942,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-36",
@@ -973,7 +969,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-37",
@@ -1000,7 +996,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-38",
@@ -1027,7 +1023,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-39",
@@ -1054,7 +1050,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-40",
@@ -1081,7 +1077,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-41",
@@ -1108,7 +1104,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-42",
@@ -1135,7 +1131,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-43",
@@ -1162,7 +1158,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-44",
@@ -1189,7 +1185,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-45",
@@ -1216,7 +1212,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-46",
@@ -1243,7 +1239,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-47",
@@ -1270,7 +1266,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-48",
@@ -1297,7 +1293,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-49",
@@ -1324,7 +1320,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-50",
@@ -1351,7 +1347,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-51",
@@ -1378,7 +1374,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-52",
@@ -1405,7 +1401,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-53",
@@ -1432,7 +1428,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-54",
@@ -1459,7 +1455,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-55",
@@ -1486,7 +1482,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-56",
@@ -1513,7 +1509,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-57",
@@ -1540,7 +1536,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-58",
@@ -1567,7 +1563,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-59",
@@ -1594,7 +1590,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-60",
@@ -1621,7 +1617,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-61",
@@ -1648,7 +1644,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-62",
@@ -1675,7 +1671,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-63",
@@ -1702,7 +1698,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-64",
@@ -1729,7 +1725,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-65",
@@ -1740,11 +1736,23 @@
   "options": [
    {
     "key": "A",
-    "text": "-3\t9\t-12\t6"
+    "text": "-3"
+   },
+   {
+    "key": "B",
+    "text": "9"
+   },
+   {
+    "key": "C",
+    "text": "-12"
+   },
+   {
+    "key": "D",
+    "text": "6"
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-66",
@@ -1771,42 +1779,34 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-67",
   "kind": "choice",
   "kind_name": "单选题",
   "num": 67,
-  "stem": "若已定义:",
+  "stem": "若已定义:\nint a[ ]={0,1,2,3,4,5,6,7,8,9}, *p=a,i;\n其中 0≤i≤9, 则对a数组元素不正确的引用上（　　）。",
   "options": [
    {
     "key": "A",
-    "text": "int a[ ]={0,1,2,3,4,5,6,7,8,9}, *p=a,i;"
-   },
-   {
-    "key": "B",
-    "text": "其中 0≤i≤9, 则对a数组元素不正确的引用上（　　）。"
-   },
-   {
-    "key": "C",
     "text": "a[p-a]"
    },
    {
-    "key": "D",
+    "key": "B",
     "text": "*(&a[i])"
    },
    {
-    "key": "E",
+    "key": "C",
     "text": "p[i]"
    },
    {
-    "key": "F",
+    "key": "D",
     "text": "a[10]"
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-68",
@@ -1833,7 +1833,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-69",
@@ -1860,7 +1860,7 @@
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-70",
@@ -1887,7 +1887,7 @@
    }
   ],
   "answer": "D",
-  "explain": "D"
+  "explain": ""
  },
  {
   "id": "choice-71",
@@ -1914,7 +1914,7 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-72",
@@ -1941,7 +1941,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-73",
@@ -1968,7 +1968,7 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-74",
@@ -1995,50 +1995,34 @@
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-75",
   "kind": "choice",
   "kind_name": "单选题",
   "num": 75,
-  "stem": "若定义了以下函数：",
+  "stem": "若定义了以下函数：\nvoid f(……)\n{……\n*p=(double *)malloc( 10*sizeof( double));\n……\n}\np是该函数的形参，要求通过p把动态分配存储单元的地址传回主调函数，则形参p的正确定义应当是（　　）。",
   "options": [
    {
     "key": "A",
-    "text": "void f(……)"
-   },
-   {
-    "key": "B",
-    "text": "{……"
-   },
-   {
-    "key": "C",
-    "text": "*p=(double *)malloc( 10*sizeof( double));"
-   },
-   {
-    "key": "D",
-    "text": "……"
-   },
-   {
-    "key": "E",
-    "text": "}"
-   },
-   {
-    "key": "F",
-    "text": "p是该函数的形参，要求通过p把动态分配存储单元的地址传回主调函数，则形参p的正确定义应当是（　　）。"
-   },
-   {
-    "key": "G",
     "text": "double *p"
    },
    {
-    "key": "H",
+    "key": "B",
     "text": "float **p"
+   },
+   {
+    "key": "C",
+    "text": "double **p"
+   },
+   {
+    "key": "D",
+    "text": "float *p"
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "choice-76",
@@ -2065,175 +2049,115 @@
    }
   ],
   "answer": "A",
-  "explain": "A"
+  "explain": ""
  },
  {
   "id": "choice-77",
   "kind": "choice",
   "kind_name": "单选题",
   "num": 77,
-  "stem": "下列程序的输出结果是（  ）。",
+  "stem": "下列程序的输出结果是（  ）。\nstruct abc\n{ int a, b, c; };\nint main()\n{ struct abc s[2]={{1,2,3},{4,5,6}}; int t;\nt=s[0].a+s[1].b;\nprintf(\"\"%d \\n\"\",t);\n}",
   "options": [
    {
     "key": "A",
-    "text": "struct abc"
+    "text": "5"
    },
    {
     "key": "B",
-    "text": "{ int a, b, c; };"
+    "text": "6"
    },
    {
     "key": "C",
-    "text": "int main()"
+    "text": "7"
    },
    {
     "key": "D",
-    "text": "{ struct abc s[2]={{1,2,3},{4,5,6}}; int t;"
-   },
-   {
-    "key": "E",
-    "text": "t=s[0].a+s[1].b;"
-   },
-   {
-    "key": "F",
-    "text": "printf(\"\"%d \\n\"\",t);"
-   },
-   {
-    "key": "G",
-    "text": "}"
-   },
-   {
-    "key": "H",
-    "text": "5"
+    "text": "8"
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-78",
   "kind": "choice",
   "kind_name": "单选题",
   "num": 78,
-  "stem": "下列程序的输出结果是（  ）。",
+  "stem": "下列程序的输出结果是（  ）。\nint b=2;\nint func(int *a)\n{ b += *a; return(b);}\nint main()\n{ int a=2, res=2;\nres += func(&a);\nprintf(\"\"%d \\n\"\",res);\n}\"",
   "options": [
    {
     "key": "A",
-    "text": "int b=2;"
+    "text": "4"
    },
    {
     "key": "B",
-    "text": "int func(int *a)"
+    "text": "6"
    },
    {
     "key": "C",
-    "text": "{ b += *a; return(b);}"
+    "text": "8"
    },
    {
     "key": "D",
-    "text": "int main()"
-   },
-   {
-    "key": "E",
-    "text": "{ int a=2, res=2;"
-   },
-   {
-    "key": "F",
-    "text": "res += func(&a);"
-   },
-   {
-    "key": "G",
-    "text": "printf(\"\"%d \\n\"\",res);"
-   },
-   {
-    "key": "H",
-    "text": "}\""
+    "text": "10"
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-79",
   "kind": "choice",
   "kind_name": "单选题",
   "num": 79,
-  "stem": "设有以下说明语句",
+  "stem": "设有以下说明语句\nstruct ex\n{ int x ; float y; char z ;} example;\n则下面的叙述中不正确的是（  ）。\"",
   "options": [
    {
     "key": "A",
-    "text": "struct ex"
-   },
-   {
-    "key": "B",
-    "text": "{ int x ; float y; char z ;} example;"
-   },
-   {
-    "key": "C",
-    "text": "则下面的叙述中不正确的是（  ）。\""
-   },
-   {
-    "key": "D",
     "text": "struct结构体类型的关键字 。"
    },
    {
-    "key": "E",
+    "key": "B",
     "text": "example是结构体类型名。"
    },
    {
-    "key": "F",
+    "key": "C",
     "text": "x,y,z都是结构体成员名。"
    },
    {
-    "key": "G",
+    "key": "D",
     "text": "struct ex是结构体类型。"
    }
   ],
   "answer": "B",
-  "explain": "B"
+  "explain": ""
  },
  {
   "id": "choice-80",
   "kind": "choice",
   "kind_name": "单选题",
   "num": 80,
-  "stem": "以下程序的输出是（  ）。",
+  "stem": "以下程序的输出是（  ）。\nstruct st\n{ int x; int *y;} *p;\nint dt[4]={ 10,20,30,40 };\nstruct st aa[4]={ 50,&dt[0],60,&dt[0],60,&dt[0],60,&dt[0],};\nint main()\n{ p=aa;\nprintf(\"\"%d\\n\"\",++(p->x));\n}",
   "options": [
    {
     "key": "A",
-    "text": "struct st"
+    "text": "10"
    },
    {
     "key": "B",
-    "text": "{ int x; int *y;} *p;"
+    "text": "11"
    },
    {
     "key": "C",
-    "text": "int dt[4]={ 10,20,30,40 };"
+    "text": "51"
    },
    {
     "key": "D",
-    "text": "struct st aa[4]={ 50,&dt[0],60,&dt[0],60,&dt[0],60,&dt[0],};"
-   },
-   {
-    "key": "E",
-    "text": "int main()"
-   },
-   {
-    "key": "F",
-    "text": "{ p=aa;"
-   },
-   {
-    "key": "G",
-    "text": "printf(\"\"%d\\n\"\",++(p->x));"
-   },
-   {
-    "key": "H",
-    "text": "}"
+    "text": "60"
    }
   ],
   "answer": "C",
-  "explain": "C"
+  "explain": ""
  },
  {
   "id": "judge-1",
@@ -2243,7 +2167,7 @@
   "stem": "循环可以相互嵌套。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-2",
@@ -2253,7 +2177,7 @@
   "stem": "二维数组可以视为数组元素为一维数组的一维数组。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-3",
@@ -2263,7 +2187,7 @@
   "stem": "数组中的单个元素可以通过数组的名称来直接访问，不需要任何其他信息。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-4",
@@ -2273,7 +2197,7 @@
   "stem": "嵌入式系统由硬件部分和软件部分构成，系统内核属于嵌入式系统软件。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-5",
@@ -2283,7 +2207,7 @@
   "stem": "嵌入式系统由硬件部分和软件部分构成，JAVA不属于嵌入式系统软件。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-6",
@@ -2293,7 +2217,7 @@
   "stem": "U-Boot将对于与硬件平台相关的代码定义成宏并保留在配置文件中，开发者往往只需要修改宏变量就能成功使用这些硬件资源。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-7",
@@ -2303,7 +2227,7 @@
   "stem": "需求分析工作完成的一个基本标志是形成了一份完整、规范的需求规格说明书。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-8",
@@ -2313,7 +2237,7 @@
   "stem": "可行性研究的最根本的任务是对以后的行动方针提出建议。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-9",
@@ -2323,7 +2247,7 @@
   "stem": "下面属于blob运行过程第一阶段的是寄存器的初始化。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-10",
@@ -2333,7 +2257,7 @@
   "stem": "串口调试中，严禁带电插拔串口。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-11",
@@ -2343,7 +2267,7 @@
   "stem": "取指从存储器装载一条指令。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-12",
@@ -2353,7 +2277,7 @@
   "stem": "执行处理指令并将结果写会寄存器。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-13",
@@ -2363,7 +2287,7 @@
   "stem": "STM32的5个中断源优先级相同。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-14",
@@ -2373,7 +2297,7 @@
   "stem": "在ARM cortexA8处理器中，Reset中断方式优先级最高。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-15",
@@ -2383,7 +2307,7 @@
   "stem": "Cortex-M处理器的时钟频率以MHz为单位，越高表示处理器每秒钟可以执行的指令数越多。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-16",
@@ -2393,7 +2317,7 @@
   "stem": "当多个中断同时发生时，STM32单片机按照中断的优先级顺序进行处理。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-17",
@@ -2403,7 +2327,7 @@
   "stem": "中断处理程序必须是无阻塞的，否则会影响其他中断的处理（　　）。",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-18",
@@ -2413,7 +2337,7 @@
   "stem": "在STM32单片机中，需要设置NVIC寄存器来实现中断的初始化和设置（　　）。",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-19",
@@ -2423,7 +2347,7 @@
   "stem": "中断服务程序是用于处理中断请求的程序，必须包含在中断向量中。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-20",
@@ -2433,7 +2357,7 @@
   "stem": "中断向量是指在中断向量表中指示中断处理程序的入口地址。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-21",
@@ -2443,7 +2367,7 @@
   "stem": "DAC的输出信号幅度范围通常与其输入数字信号的位数有关。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-22",
@@ -2453,7 +2377,7 @@
   "stem": "DAC的信号处理速度通常受其转换时间和分辨率的限制。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-23",
@@ -2463,7 +2387,7 @@
   "stem": "在进行DAC初始化之前，需要先配置DAC通道的输出类型。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-24",
@@ -2473,7 +2397,7 @@
   "stem": "DAC初始化需要使用STM32的HAL库函数。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-25",
@@ -2483,7 +2407,7 @@
   "stem": "PWM是一种数字控制脉冲宽度的技术。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-26",
@@ -2493,7 +2417,7 @@
   "stem": "STM32单片机的RTC模块具有硬件日历功能，因此不需要额外的硬件电路。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-27",
@@ -2503,7 +2427,7 @@
   "stem": "在STM32单片机中，可以使用RTC模块来实现电子钟功能。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-28",
@@ -2513,7 +2437,7 @@
   "stem": "模块化编程是将程序按照功能划分为多个独立的模块，每个模块完成特定的功能。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-29",
@@ -2523,7 +2447,7 @@
   "stem": "在单片机中，可以使用全局变量来实现模块之间的数据传递。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-30",
@@ -2533,7 +2457,7 @@
   "stem": "键盘的按键都是以其状态来设置控制功能或输入数据的。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-31",
@@ -2543,7 +2467,7 @@
   "stem": "编写C语言程序需要安装C编译器。 （　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-32",
@@ -2553,7 +2477,7 @@
   "stem": "C语言程序可以使用多种不同的编译器。 （　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-33",
@@ -2563,7 +2487,7 @@
   "stem": "在C语言中，int是一种基本数据类型。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-34",
@@ -2573,7 +2497,7 @@
   "stem": "在C语言中，bool是一种基本数据类型。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-35",
@@ -2583,7 +2507,7 @@
   "stem": "函数的标量参数通过传值的方式进行传递，而数组名参数则具有传址调用的语义。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-36",
@@ -2593,7 +2517,7 @@
   "stem": "有数组定义int a[2][2]={{1},{2,3}};则a[0][1]的值为。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-37",
@@ -2603,7 +2527,7 @@
   "stem": "C语言中的栈的压入和弹出是由操作系统管理的。（　　）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-38",
@@ -2613,7 +2537,7 @@
   "stem": "堆（Heap）、栈（Stack）和静态区都位于RAM内。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-39",
@@ -2623,17 +2547,17 @@
   "stem": "由于CPU内部寄存器的访问速度较高，根据ATPC标准，应尽可能使函数的参数控制在4个以下。（　　）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-40",
   "kind": "judge",
   "kind_name": "判断题",
   "num": 40,
-  "stem": "下列程序的输出结果是 （“Hello you”） 。（   ）",
+  "stem": "下列程序的输出结果是 （“Hello you”） 。（   ）\nmaim （）\n{ char b［］=\"\"Hello you\"\"；\nb［5］=0；\nprintf （\"\"%s＼n\"\",b）; }",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-41",
@@ -2643,7 +2567,7 @@
   "stem": "进程有三种状态是准备态、执行态和退出态。（   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-42",
@@ -2653,7 +2577,7 @@
   "stem": "从后台启动进程，应在命令的结尾加上符号@。（   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-43",
@@ -2663,7 +2587,7 @@
   "stem": "在嵌入式Linux系统中，一个进程可以直接访问另一个进程的内存空间。（   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-44",
@@ -2673,7 +2597,7 @@
   "stem": "进程的同步是解决进程间协作关系（ 直接制约关系） 的手段。（   ）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-45",
@@ -2683,7 +2607,7 @@
   "stem": "信号量是解决进程或线程之间的同步与互斥问题的一种通信机制。（   ）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  },
  {
   "id": "judge-46",
@@ -2693,7 +2617,7 @@
   "stem": "嵌入式Linux中的线程拥有独立的地址空间，与进程相同。 （   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-47",
@@ -2703,7 +2627,7 @@
   "stem": "在Linux系统中，read()函数用于从标准输出读取数据。（   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-48",
@@ -2713,7 +2637,7 @@
   "stem": "在Linux系统中，文件读写操作是同步的，即一次只能读取或写入一个字符。（   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-49",
@@ -2723,7 +2647,7 @@
   "stem": "Linux标准IO接口中的文件指针是通过文件描述符实现的。（   ）",
   "options": [],
   "answer": "×",
-  "explain": "×"
+  "explain": ""
  },
  {
   "id": "judge-50",
@@ -2733,6 +2657,6 @@
   "stem": "Linux标准IO接口中，使用fseek函数可以实现对文件指针的定位。（   ）",
   "options": [],
   "answer": "√",
-  "explain": "√"
+  "explain": ""
  }
 ]
