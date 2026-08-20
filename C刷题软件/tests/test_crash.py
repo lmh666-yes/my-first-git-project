@@ -4,17 +4,18 @@
 考试状态损坏(非dict / 失效id)"""
 import sys, io, os, json, shutil, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 faulthandler.dump_traceback_later(150, exit=True)
 
 import importlib.util
 HERE = os.path.dirname(os.path.abspath(__file__))
-spec = importlib.util.spec_from_file_location("bs", os.path.join(HERE, "刷题软件.py"))
+ROOT = os.path.dirname(HERE)
+spec = importlib.util.spec_from_file_location("bs", os.path.join(ROOT, "core", "刷题软件.py"))
 bs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bs)
 
-BANK = os.path.join(HERE, "题库.json")
-PROG = os.path.join(HERE, "progress.json")
+BANK = os.path.join(ROOT, "题库.json")
+PROG = os.path.join(ROOT, "progress.json")
 BAK_BANK = os.path.join(HERE, "题库.json.bak")
 BAK_PROG = os.path.join(HERE, "progress.json.bak")
 

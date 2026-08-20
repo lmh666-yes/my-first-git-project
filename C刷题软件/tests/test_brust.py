@@ -3,7 +3,7 @@
 错题回顾/重新考试/中断恢复/关闭提醒) / 重置(3次确认)"""
 import sys, io, os, json
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import tkinter as tk
 import 刷题软件 as bs
 

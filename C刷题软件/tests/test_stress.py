@@ -4,10 +4,10 @@
 重新考试) / 随机混合 / 控件泄漏检测 / 定时器零残留"""
 import sys, io, os, random, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
-sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 faulthandler.dump_traceback_later(150, exit=True)
 import importlib.util
-spec = importlib.util.spec_from_file_location("bs", os.path.join(os.path.dirname(os.path.abspath(__file__)), "刷题软件.py"))
+spec = importlib.util.spec_from_file_location("bs", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "刷题软件.py"))
 bs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bs)
 

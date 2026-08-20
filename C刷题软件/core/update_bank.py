@@ -8,8 +8,9 @@ sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_bufferin
 import bank_parser
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BANK_DIR = os.path.join(HERE, "题库")
-OUT = os.path.join(HERE, "题库.json")
+ROOT = os.path.dirname(HERE)          # 上一级 = C刷题软件 根目录
+BANK_DIR = os.path.join(ROOT, "题库")
+OUT = os.path.join(ROOT, "题库.json")
 
 
 def _input(prompt=""):

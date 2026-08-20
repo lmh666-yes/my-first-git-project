@@ -10,8 +10,9 @@ import tkinter as tk
 from tkinter import ttk, messagebox
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-BANK_PATH = os.path.join(HERE, "题库.json")
-PROG_PATH = os.path.join(HERE, "progress.json")
+ROOT = os.path.dirname(HERE)          # 上一级 = C刷题软件 根目录
+BANK_PATH = os.path.join(ROOT, "题库.json")
+PROG_PATH = os.path.join(ROOT, "progress.json")
 
 COLOR_OK = "#1a7f37"
 COLOR_NO = "#c62828"

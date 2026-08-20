@@ -14,8 +14,8 @@ rem ============================================================
 
 cd /d "%~dp0"
 
-if not exist "%~dp0刷题软件.py" (
-    echo [错误] 未找到 刷题软件.py 主程序。
+if not exist "%~dp0core\刷题软件.py" (
+    echo [错误] 未找到 主程序 core\刷题软件.py。
     echo        请确认整个 C刷题软件 文件夹完整解压（不要只拷单个文件）。
     echo.
     pause
@@ -32,7 +32,7 @@ if not exist "%~dp0题库.json" (
         call :show_python_help
         exit /b 1
     )
-    %PY% "%~dp0build_bank.py"
+    %PY% "%~dp0core\build_bank.py"
     if not exist "%~dp0题库.json" (
         echo.
         echo [错误] 题库生成失败。
@@ -59,7 +59,7 @@ echo ================================================
 echo [信息] 正在启动刷题软件，请稍候 ...
 echo [提示] 关闭窗口即退出程序。
 echo.
-%PY% "%~dp0刷题软件.py"
+%PY% "%~dp0core\刷题软件.py"
 set "RC=%ERRORLEVEL%"
 if not "%RC%"=="0" (
     echo.
