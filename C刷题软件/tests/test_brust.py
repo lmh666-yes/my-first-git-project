@@ -70,6 +70,7 @@ app.show_question()
 root.update()
 jit = app.queue[80]
 app.answer_judge(jit["answer"])
+app.check()            # 选择后点「确认答案」判分
 root.update()
 check(app.progress[jit["id"]]["ok"] is True, "判断答对")
 

@@ -67,6 +67,7 @@ def main():
                 app.check()
             else:
                 app.answer_judge("√")
+                app.check()
         except Exception as e:
             err += 1
     ok("全题库作答", err == 0, f"err={err}")
@@ -115,6 +116,7 @@ def main():
                     app.check()
                 else:
                     app.answer_judge("√")
+                    app.check()
             app.finish_exam()
             root.update_idletasks()
             app._exam_toggle_pause()
@@ -143,6 +145,7 @@ def main():
                 app.check()
             elif op == "judge":
                 app.answer_judge(random.choice(["√", "×"]))
+                app.check()
             elif op == "fav":
                 app.toggle_fav()
             elif op == "redo":

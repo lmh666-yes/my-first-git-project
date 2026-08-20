@@ -4,7 +4,7 @@
 功能：顺序/随机/错题/考试；判分+解析+统计+收藏+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.0.8"""
+版本：1.1.8"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -624,13 +624,21 @@ class App:
                 self._add_btn(f"你的答案：{exam_answered}",
                               COLOR_NO if str(exam_answered) != ans else COLOR_OK, False)
             else:
-                self._add_btn("请判断对错：", COLOR_BLUE, False)
+                self._add_btn("请判断对错（选择后点「确认答案」）：", COLOR_BLUE, False)
+                # 判断题也走“选择→确认”交互：点击高亮，确认答案后才判分
                 for txt, key in (("✔ 正确", "√"), ("✘ 错误", "×")):
-                    b = tk.Button(self.opt_frame, text=txt, command=lambda k=key: self.answer_judge(k),
-                                  width=14, cursor="hand2", font=("Microsoft YaHei", 11),
-                                  bg="#34495e", fg="white")
-                    b.pack(side=tk.LEFT, padx=10, pady=8)
-                    self.opt_widgets.append(b)
+                    row = tk.Frame(self.opt_frame, bg="#ffffff", cursor="hand2",
+                                   highlightthickness=1, highlightbackground="#d5dbdb")
+                    row.pack(fill=tk.X, pady=3)
+                    lbl = tk.Label(row, text=txt,
+                                   font=("Microsoft YaHei", 11, "bold"), bg="#ffffff",
+                                   anchor="w", padx=8, pady=4)
+                    lbl.pack(fill=tk.X)
+                    for wid in (row, lbl):
+                        wid.bind("<Button-1>",
+                                 lambda e, kk=key: self._select_option(kk))
+                    self._choice_rows.append({"frame": row, "label": lbl, "key": key})
+                    self.opt_widgets.append(row)
         else:
             self._add_btn("简答/编程题：先自行作答，再点「查看答案」对照。",
                           "#8e44ad", disabled=False)
@@ -668,8 +676,9 @@ class App:
 
     # ---------- 作答 ----------
     def check(self):
+        """单选/判断提交：选择后点「确认答案」才判分"""
         it = self.queue[self.idx]
-        if it.get("kind") != "choice":
+        if it.get("kind") not in ("choice", "judge"):
             return
         sel = self.choice_var.get()
         if not sel:
@@ -678,33 +687,14 @@ class App:
         if self.mode == "考试":
             self._exam_answer(it, sel)
             return
-        self.record(it.get("id", ""), sel == str(it.get("answer", "")).upper())
+        self.record(it.get("id", ""), self._is_ok(it, sel))
         self._show_result(it, sel)
         self._load_note(it.get("id", ""))      # 确认答案后显示笔记
         self._update_stat()
 
     def answer_judge(self, key):
-        it = self.queue[self.idx]
-        if self.mode == "考试":
-            self._exam_answer(it, key)
-            return
-        ans = str(it.get("answer", "")).strip()
-        ok = (key == ans) or (key == "√" and ans in ("对", "T", "true", "√")) \
-             or (key == "×" and ans in ("错", "F", "false", "×"))
-        self.record(it.get("id", ""), ok)
-        self._load_note(it.get("id", ""))      # 确认答案后显示笔记
-        rec = self.progress.get(it.get("id", ""), {})
-        wc = rec.get("wrong_count", 0)
-        self.fb.config(state=tk.NORMAL)
-        self.fb.delete("1.0", "end")
-        tag = "✅ 回答正确" if ok else "❌ 回答错误"
-        self.fb.insert(tk.END, tag + f"（你的答案：{key}，正确答案：{ans}）\n")
-        if wc:
-            self.fb.insert(tk.END, f"🔁 本题累计错误：{wc} 次\n")
-        if it.get("explain"):
-            self.fb.insert(tk.END, "\n解析：\n" + it.get("explain", ""))
-        self.fb.config(state=tk.DISABLED)
-        self._update_stat()
+        """判断题选择：只高亮选中，点「确认答案」才判分（兼容旧调用）"""
+        self._select_option(key)
 
     def reveal_qa(self):
         it = self.queue[self.idx]
@@ -735,11 +725,12 @@ class App:
 
     def _show_result(self, it, sel):
         ans = str(it.get("answer", "")).upper()
+        ok = self._is_ok(it, sel)
         rec = self.progress.get(it.get("id", ""), {})
         wc = rec.get("wrong_count", 0)
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
-        if sel == ans:
+        if ok:
             self.fb.insert(tk.END, "✅ 回答正确！\n", ("ok",))
         else:
             self.fb.insert(tk.END, f"❌ 回答错误。正确答案：{ans}（你选了 {sel}）\n", ("no",))
