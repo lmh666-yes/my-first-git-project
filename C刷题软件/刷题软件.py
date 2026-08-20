@@ -60,6 +60,7 @@ class App:
         self.queue = []
         self.idx = 0
         self.choice_var = tk.StringVar()
+        self._choice_rows = []           # 单选选项行（自定义选中态）
         self.exam_left = 0
         self._exam_timer = None
         self._note_save_job = None
@@ -428,6 +429,7 @@ class App:
         self.exam["left"] = self.exam_left
         self._save_exam()
         self.record(qid, ok)
+        self._load_note(qid)                    # 考试作答后显示笔记
         self._exam_render_q()
 
     def _is_ok(self, it, sel):
@@ -564,7 +566,11 @@ class App:
             self.fb.insert(tk.END, "⭐ 已收藏\n")
         self.fb.config(state=tk.DISABLED)
         self._render_options(it)
-        self._load_note(it.get("id", ""))
+        # 笔记：确认答案（已作答）后才显示，未作答时清空
+        if self.progress.get(it.get("id", ""), {}).get("ok") is not None:
+            self._load_note(it.get("id", ""))
+        else:
+            self._clear_note()
         self._update_stat()
 
     def _set_stem(self, text):
@@ -577,6 +583,7 @@ class App:
         for w in self.opt_frame.winfo_children():
             w.destroy()
         self.opt_widgets = []
+        self._choice_rows = []
         self.choice_var.set("")
         kind = it.get("kind", "qa")
         if kind == "choice":
@@ -593,13 +600,21 @@ class App:
                     self._add_btn(f"{k}. {o.get('text', '')}{mark}", color, False)
             else:
                 self._add_btn("请选择答案：", COLOR_BLUE, False)
+                # 自定义选项行：未选中右侧空白，点击后整行背景变蓝
                 for o in it.get("options", []):
-                    rb = tk.Radiobutton(
-                        self.opt_frame, text=f"{o.get('key', '?')}. {o.get('text', '')}",
-                        variable=self.choice_var, value=o.get("key", "?"),
-                        font=("Microsoft YaHei", 11), anchor="w", padx=6)
-                    rb.pack(fill=tk.X, pady=2)
-                    self.opt_widgets.append(rb)
+                    k = o.get("key", "?")
+                    row = tk.Frame(self.opt_frame, bg="#ffffff", cursor="hand2",
+                                   highlightthickness=1, highlightbackground="#d5dbdb")
+                    row.pack(fill=tk.X, pady=3)
+                    lbl = tk.Label(row, text=f"{k}. {o.get('text', '')}",
+                                   font=("Microsoft YaHei", 11), bg="#ffffff",
+                                   anchor="w", padx=8, pady=4)
+                    lbl.pack(fill=tk.X)
+                    for wid in (row, lbl):
+                        wid.bind("<Button-1>",
+                                 lambda e, kk=k: self._select_option(kk))
+                    self._choice_rows.append({"frame": row, "label": lbl, "key": k})
+                    self.opt_widgets.append(row)
         elif kind == "judge":
             if exam_answered is not None:
                 ans = str(it.get("answer", "")).upper().strip()
@@ -639,6 +654,17 @@ class App:
         lbl.pack(fill=tk.X, pady=(6, 2))
         self.opt_widgets.append(lbl)
 
+    def _select_option(self, key):
+        """单选选项选中：对应行背景变蓝，其余恢复白色"""
+        self.choice_var.set(key)
+        for item in getattr(self, "_choice_rows", []):
+            if item["key"] == key:
+                item["frame"].config(bg=COLOR_BLUE, highlightbackground=COLOR_BLUE)
+                item["label"].config(bg=COLOR_BLUE, fg="white")
+            else:
+                item["frame"].config(bg="#ffffff", highlightbackground="#d5dbdb")
+                item["label"].config(bg="#ffffff", fg="#000000")
+
     # ---------- 作答 ----------
     def check(self):
         it = self.queue[self.idx]
@@ -653,6 +679,7 @@ class App:
             return
         self.record(it.get("id", ""), sel == str(it.get("answer", "")).upper())
         self._show_result(it, sel)
+        self._load_note(it.get("id", ""))      # 确认答案后显示笔记
         self._update_stat()
 
     def answer_judge(self, key):
@@ -664,6 +691,7 @@ class App:
         ok = (key == ans) or (key == "√" and ans in ("对", "T", "true", "√")) \
              or (key == "×" and ans in ("错", "F", "false", "×"))
         self.record(it.get("id", ""), ok)
+        self._load_note(it.get("id", ""))      # 确认答案后显示笔记
         rec = self.progress.get(it.get("id", ""), {})
         wc = rec.get("wrong_count", 0)
         self.fb.config(state=tk.NORMAL)
@@ -753,6 +781,16 @@ class App:
         self.note_text.delete("1.0", "end")
         rec = self.progress.get(qid, {})
         self.note_text.insert("1.0", rec.get("notes", ""))
+
+    def _clear_note(self):
+        """未作答时清空笔记区（确认答案后才显示）"""
+        if self._note_save_job:
+            try:
+                self.root.after_cancel(self._note_save_job)
+            except Exception:
+                pass
+            self._note_save_job = None
+        self.note_text.delete("1.0", "end")
 
     def _save_note(self):
         it = self._cur_item()
