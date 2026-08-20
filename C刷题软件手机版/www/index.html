@@ -111,7 +111,7 @@ function setMode(m){
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
   if(m==="顺序") queue=BANK.slice();
   else if(m==="随机"){ queue=BANK.slice(); for(let i=queue.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[queue[i],queue[j]]=[queue[j],queue[i]];} }
-  else if(m==="错题"){ queue=BANK.filter(x=>rec(x.id).ok===false); if(!queue.length){msg("错题本","太棒了，当前没有错题！");return;} }
+  else if(m==="错题"){ queue=BANK.filter(x=>rec(x.id).ok===false); if(!queue.length){ msg("错题本","太棒了，当前没有错题！"); setMode("顺序"); return; } }
   else if(m==="考试"){ renderExamReady(); return; }
   idx=0; renderQ();
 }
@@ -127,7 +127,8 @@ function startExam(){
   const q=BANK.filter(x=>x.kind==="choice"||x.kind==="judge");
   const ids=shuffle(q).slice(0,Math.min(EXAM_NUM,q.length)).map(x=>x.id);
   exam={active:true,finished:false,paused:false,ids,idx:0,left:EXAM_MIN*60,answers:{}};
-  queue=ids.map(byId); idx=0; examLeft=EXAM_MIN*60;
+  progress.exam=exam; save();
+  queue=ids.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
   examBarShow(); tick(); renderQ();
 }
 function tick(){
@@ -149,16 +150,19 @@ function examBarShow(){
   b.innerHTML+=`<button style="background:#c62828" onclick="quitExam()">🚪 退出考试</button>`;
 }
 function examBarHide(){ const b=$("#examBar"); b.style.display="none"; b.innerHTML=""; }
+function showPaused(){
+  examBarShow();
+  $("#head").textContent="⏸ 考试已暂停";
+  $("#stem").textContent=`考试已暂停。\n\n剩余时间：${fmt(examLeft)}\n已完成 ${Object.keys(exam.answers).length}/${queue.length} 题\n\n点击顶部「▶ 继续考试」恢复答题。`;
+  $("#opts").innerHTML=""; hideFb(); hideNote();
+}
 function togglePause(){
-  if(exam.paused){ exam.paused=false; save(); examBarShow(); tick(); renderQ(); }
-  else{ stopExamTimer(); exam.paused=true; exam.left=examLeft; save(); examBarShow();
-    $("#head").textContent="⏸ 考试已暂停";
-    $("#stem").textContent=`考试已暂停。\n\n剩余时间：${fmt(examLeft)}\n已完成 ${Object.keys(exam.answers).length}/${queue.length} 题\n\n点击顶部「▶ 继续考试」恢复答题。`;
-    $("#opts").innerHTML=""; hideFb(); hideNote(); }
+  if(exam.paused){ exam.paused=false; progress.exam=exam; save(); examBarShow(); tick(); renderQ(); }
+  else{ stopExamTimer(); exam.paused=true; exam.left=examLeft; progress.exam=exam; save(); showPaused(); }
 }
 function quitExam(){
   confirm("退出考试","确定要退出考试吗？本次考试将作废。",()=>{
-    stopExamTimer(); exam=null; examBarHide(); setMode("顺序");
+    stopExamTimer(); delete progress.exam; save(); exam=null; examBarHide(); setMode("顺序");
   });
 }
 function renderQ(){
@@ -279,7 +283,11 @@ function redoQ(){
 function finishExam(){
   stopExamTimer();
   if(!exam||!exam.active||exam.finished)return;
-  exam.finished=true; exam.paused=false; exam.left=examLeft; save(); examBarHide();
+  exam.finished=true; exam.paused=false; exam.left=examLeft; progress.exam=exam; save(); examBarHide();
+  renderResult();
+}
+function renderResult(){
+  if(!exam)return;
   const qs=queue, ans=exam.answers;
   let correct=0, wrong=[], un=0;
   qs.forEach(x=>{ if(ans[x.id]===undefined)un++; else if(isOk(x,ans[x.id]))correct++; else wrong.push(x); });
@@ -318,7 +326,7 @@ function reviewWrong(qid){
   }
   if(it.explain){ const e=document.createElement("div"); e.style.cssText="font-size:13px;color:#555;margin-top:8px"; e.textContent="解析："+it.explain; o.appendChild(e); }
   showFb(`你的答案：${your||"未作答"}　正确答案：${it.answer}`);
-  footerBtns([["⬅ 返回成绩","#1a5276",finishExam]]);
+  footerBtns([["⬅ 返回成绩","#1a5276",renderResult]]);
 }
 /* ---------- 笔记 ---------- */
 function showNote(qid){
@@ -360,14 +368,24 @@ function resetProgress(){ resetStep(1); }function resetStep(n){
   else if(n===3) confirm("重置进度（3/3）","最后一次确认：立即清空全部数据并重新开始！",()=>{ progress={}; save(); stopExamTimer(); exam=null; examBarHide(); setMode("顺序"); msg("完成","🗑 已清除全部做题记录，重新开始！"); });
 }
 /* 考试中关页面自动保存 */
-window.addEventListener("beforeunload",()=>{ if(mode==="考试"&&exam&&exam.active&&!exam.finished){ exam.paused=true; exam.left=examLeft; save(); } });
+window.addEventListener("beforeunload",()=>{ if(mode==="考试"&&exam&&exam.active&&!exam.finished){ exam.paused=true; exam.left=examLeft; progress.exam=exam; save(); } });
 /* 启动:恢复考试 */
 document.querySelectorAll("#tabs button").forEach(function(b){
   b.addEventListener("click",function(){ setMode(b.dataset.mode); });
 });
 (function init(){
-  if(exam&&exam.active){ setMode("考试"); if(exam.finished){ finishExam(); } else if(exam.paused){ togglePause(); } else { queue=exam.ids.map(byId); idx=exam.idx||0; examLeft=exam.left; examBarShow(); tick(); renderQ(); } }
-  else setMode("顺序");
+  exam = progress.exam && typeof progress.exam==="object" ? progress.exam : null;
+  if(exam&&exam.active){
+    // 直接进入考试板块恢复（不走 renderExamReady，避免闪待开始页）
+    mode="考试";
+    document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.mode==="考试"));
+    queue=exam.ids.map(byId).filter(Boolean);
+    idx=Math.min(exam.idx||0, Math.max(0,queue.length-1));
+    examLeft=exam.left;
+    if(exam.finished){ renderResult(); }
+    else if(exam.paused){ showPaused(); }        // 暂停态：停留，用户手动继续
+    else { examBarShow(); tick(); renderQ(); }   // 运行中：恢复倒计时
+  } else setMode("顺序");
 })();
 </script>
 </body>
