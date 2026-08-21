@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.1.9"""
+版本：1.2.0"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -95,6 +95,25 @@ class App:
         self.root.destroy()
 
     # ---------- UI ----------
+    def _bind_hover(self, widget, base, hover):
+        """鼠标悬停变色（动态效果）"""
+        def on_enter(_e):
+            try:
+                widget.config(bg=hover)
+            except Exception:
+                pass
+
+        def on_leave(_e):
+            try:
+                widget.config(bg=base)
+            except Exception:
+                pass
+        widget.bind("<Enter>", on_enter)
+        widget.bind("<Leave>", on_leave)
+
+    def _is_row_selected(self, key):
+        return self.choice_var.get() == key
+
     def _build_ui(self):
         self.root.grid_rowconfigure(2, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
@@ -118,7 +137,17 @@ class App:
         self.stat_label.pack(side=tk.RIGHT, padx=12)
 
         # 进度条
-        self.pbar = ttk.Progressbar(self.root, maximum=100, value=0)
+        self._pbar_style = ttk.Style(self.root)
+        try:
+            self._pbar_style.theme_use("clam")
+            self._pbar_style.configure("green.Horizontal.TProgressbar",
+                                       troughcolor="#d5dbdb", background="#27ae60",
+                                       lightcolor="#27ae60", darkcolor="#27ae60",
+                                       bordercolor="#27ae60")
+        except Exception:
+            pass
+        self.pbar = ttk.Progressbar(self.root, maximum=100, value=0,
+                                    style="green.Horizontal.TProgressbar")
         self.pbar.grid(row=1, column=0, sticky="ew")
 
         # 主体：左=题目区，右=笔记区
@@ -166,6 +195,7 @@ class App:
         nav = tk.Frame(self.root, bg="#f0f0f0")
         nav.grid(row=3, column=0, sticky="ew")
         self.nav_btns = []
+        hover_map = {COLOR_BLUE: "#2471a3", COLOR_NO: "#e74c3c"}
         for txt, fn, color in (("◀ 上一题", self.prev_q, COLOR_BLUE),
                                ("确认答案", self.check, COLOR_BLUE),
                                ("下一题 ▶", self.next_q, COLOR_BLUE),
@@ -174,6 +204,7 @@ class App:
                           cursor="hand2", padx=12, pady=5,
                           font=("Microsoft YaHei", 10))
             b.pack(side=tk.LEFT, padx=4, pady=6)
+            self._bind_hover(b, color, hover_map.get(color, color))
             self.nav_btns.append((b, txt))
 
     # ---------- 模式 ----------
@@ -603,7 +634,18 @@ class App:
                                    font=("Microsoft YaHei", 11), bg="#ffffff",
                                    anchor="w", padx=8, pady=4)
                     lbl.pack(fill=tk.X)
+                    def row_enter(_e):
+                        if not self._is_row_selected(k):
+                            row.config(bg="#eaf2f8", highlightbackground="#aed6f1")
+                            lbl.config(bg="#eaf2f8")
+
+                    def row_leave(_e):
+                        if not self._is_row_selected(k):
+                            row.config(bg="#ffffff", highlightbackground="#d5dbdb")
+                            lbl.config(bg="#ffffff")
                     for wid in (row, lbl):
+                        wid.bind("<Enter>", row_enter)
+                        wid.bind("<Leave>", row_leave)
                         wid.bind("<Button-1>",
                                  lambda e, kk=k: self._select_option(kk))
                     self._choice_rows.append({"frame": row, "label": lbl, "key": k})
@@ -626,7 +668,18 @@ class App:
                                    font=("Microsoft YaHei", 11, "bold"), bg="#ffffff",
                                    anchor="w", padx=8, pady=4)
                     lbl.pack(fill=tk.X)
+                    def jrow_enter(_e):
+                        if not self._is_row_selected(key):
+                            row.config(bg="#eaf2f8", highlightbackground="#aed6f1")
+                            lbl.config(bg="#eaf2f8")
+
+                    def jrow_leave(_e):
+                        if not self._is_row_selected(key):
+                            row.config(bg="#ffffff", highlightbackground="#d5dbdb")
+                            lbl.config(bg="#ffffff")
                     for wid in (row, lbl):
+                        wid.bind("<Enter>", jrow_enter)
+                        wid.bind("<Leave>", jrow_leave)
                         wid.bind("<Button-1>",
                                  lambda e, kk=key: self._select_option(kk))
                     self._choice_rows.append({"frame": row, "label": lbl, "key": key})

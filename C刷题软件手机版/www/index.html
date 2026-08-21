@@ -6,59 +6,73 @@
 <title>刷题软件 · 手机版</title>
 <style>
 *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
-html,body{height:100%;font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:#f2f4f7}
+html,body{height:100%;font-family:"Microsoft YaHei","PingFang SC",sans-serif;background:linear-gradient(165deg,#e8f0fa 0%,#f6f8fc 45%,#eaf6ef 100%)}
 #app{display:flex;flex-direction:column;height:100%;max-width:520px;margin:0 auto}
 /* 顶部 */
-header{background:#1a5276;color:#fff;padding:10px 12px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap}
-header .title{font-size:16px;font-weight:bold}
+header{background:linear-gradient(135deg,#14486e 0%,#1a5276 55%,#2980b9 100%);color:#fff;padding:12px 14px;display:flex;justify-content:space-between;align-items:center;flex-wrap:wrap;box-shadow:0 3px 12px rgba(26,82,118,.28)}
+header .title{font-size:16px;font-weight:bold;letter-spacing:.5px}
 header .stat{font-size:11px;opacity:.95}
 /* 模式栏 */
 .tabs{display:flex;background:#2c3e50}
-.tabs button{flex:1;padding:10px 0;border:none;background:transparent;color:#bdc3c7;font-size:14px;cursor:pointer}
-.tabs button.active{background:#1a5276;color:#fff;font-weight:bold}
+.tabs button{flex:1;padding:11px 0;border:none;background:transparent;color:#bdc3c7;font-size:14px;cursor:pointer;transition:color .25s,background .25s}
+.tabs button.active{background:#1a5276;color:#fff;font-weight:bold;box-shadow:inset 0 -3px 0 #58d68d}
 /* 考试栏(考试模式专用按钮) */
 #examBar{display:none;background:#34495e;padding:6px 8px;gap:6px}
-#examBar button{flex:1;border:none;border-radius:6px;padding:8px;color:#fff;font-size:13px;cursor:pointer}
+#examBar button{flex:1;border:none;border-radius:8px;padding:8px;color:#fff;font-size:13px;cursor:pointer;transition:transform .12s,filter .2s}
+#examBar button:active{transform:scale(.96)}
 /* 进度条 */
-.pbar{height:4px;background:#d5dbdb}
-.pbar div{height:100%;background:#27ae60;width:0%;transition:width .3s}
+.pbar{height:5px;background:#d5dbdb}
+.pbar div{height:100%;background:linear-gradient(90deg,#27ae60,#2ecc71);width:0%;transition:width .6s cubic-bezier(.4,0,.2,1)}
 /* 主体 */
-main{flex:1;overflow-y:auto;padding:12px;display:flex;flex-direction:column;gap:10px}
+main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
 .head{color:#1a5276;font-size:13px;font-weight:bold}
-.stem{background:#fff;border-radius:10px;padding:12px;font-size:15px;line-height:1.6;white-space:pre-wrap;word-break:break-word;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.stem{background:#fff;border-radius:14px;padding:14px 16px;font-size:15px;line-height:1.7;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 12px rgba(0,0,0,.07)}
 /* 选项 */
-#opts{display:flex;flex-direction:column;gap:8px}
-.opt{background:#fff;border:1px solid #d5dbdb;border-radius:10px;padding:11px 12px;font-size:15px;cursor:pointer;transition:.15s}
-.opt.selected{background:#1a5276;color:#fff;border-color:#1a5276}
-.opt.right{background:#e8f8f0;color:#1a7f37;border-color:#1a7f37;font-weight:bold}
-.opt.wrong{background:#fdecea;color:#c62828;border-color:#c62828}
+#opts{display:flex;flex-direction:column;gap:9px}
+.opt{background:#fff;border:1.5px solid #e3e8ee;border-radius:12px;padding:12px 14px;font-size:15px;cursor:pointer;transition:transform .12s,border-color .2s,background .2s,box-shadow .2s;box-shadow:0 1px 3px rgba(0,0,0,.04)}
+.opt:active{transform:scale(.985)}
+.opt.selected{background:linear-gradient(135deg,#1a5276,#2471a3);color:#fff;border-color:#1a5276;box-shadow:0 4px 12px rgba(26,82,118,.3);animation:pop .22s ease}
+.opt.right{background:#e8f8f0;color:#1a7f37;border-color:#2ecc71;font-weight:bold;animation:pop .3s ease}
+.opt.wrong{background:#fdecea;color:#c62828;border-color:#e74c3c;animation:shake .3s ease}
 /* 判断按钮 */
 .judgeBtns{display:flex;gap:10px}
-.judgeBtns button{flex:1;border:none;border-radius:10px;padding:14px;font-size:15px;color:#fff;cursor:pointer;opacity:.85}
-.judgeBtns button.sel{opacity:1;outline:3px solid #1a5276;font-weight:bold}
-.judgeBtns button.t{background:#1a7f37}
-.judgeBtns button.f{background:#c62828}
+.judgeBtns button{flex:1;border:none;border-radius:12px;padding:14px;font-size:15px;color:#fff;cursor:pointer;opacity:.88;transition:transform .12s,opacity .2s,box-shadow .2s}
+.judgeBtns button:active{transform:scale(.97)}
+.judgeBtns button.sel{opacity:1;outline:3px solid #1a5276;font-weight:bold;animation:pop .22s ease;box-shadow:0 4px 12px rgba(0,0,0,.22)}
+.judgeBtns button.t{background:linear-gradient(135deg,#1a7f37,#27ae60)}
+.judgeBtns button.f{background:linear-gradient(135deg,#c62828,#e74c3c)}
 /* 反馈 */
-#fb{background:#fff;border-radius:10px;padding:10px 12px;font-size:13px;line-height:1.6;display:none}
+#fb{background:#fff;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.7;display:none;box-shadow:0 2px 10px rgba(0,0,0,.06);animation:fadeSlide .3s ease}
 #fb .tag-ok{color:#1a7f37;font-weight:bold}
 #fb .tag-no{color:#c62828;font-weight:bold}
 /* 笔记 */
-#noteBox{background:#fdf6e3;border-radius:10px;padding:10px;display:none}
+#noteBox{background:#fdf6e3;border-radius:12px;padding:12px;display:none;box-shadow:0 2px 10px rgba(123,88,4,.08)}
 #noteBox .nt{font-size:12px;color:#7b5804;font-weight:bold;margin-bottom:4px}
-#noteBox textarea{width:100%;min-height:60px;border:1px solid #e8d9a8;border-radius:8px;background:#fffdf5;font-size:13px;padding:8px;font-family:inherit;resize:vertical}
+#noteBox textarea{width:100%;min-height:60px;border:1px solid #e8d9a8;border-radius:10px;background:#fffdf5;font-size:13px;padding:9px;font-family:inherit;resize:vertical;outline:none;transition:border-color .2s}
+#noteBox textarea:focus{border-color:#b98a1e}
 /* 底部操作栏 */
-footer{background:#fff;padding:8px;display:flex;gap:6px;box-shadow:0 -1px 4px rgba(0,0,0,.08)}
-footer button{flex:1;border:none;border-radius:8px;padding:11px 2px;font-size:12px;color:#fff;cursor:pointer;white-space:nowrap}
+footer{background:#fff;padding:9px;display:flex;gap:6px;box-shadow:0 -2px 8px rgba(0,0,0,.08)}
+footer button{flex:1;border:none;border-radius:10px;padding:12px 2px;font-size:12px;color:#fff;cursor:pointer;white-space:nowrap;transition:transform .12s,filter .2s}
+footer button:active{transform:scale(.95);filter:brightness(.92)}
 /* 弹窗 */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:99}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:99;animation:fadeIn .18s ease}
 .modal.show{display:flex}
-.mbox{background:#fff;border-radius:12px;width:86%;max-width:360px;padding:16px;text-align:center}
+.mbox{background:#fff;border-radius:16px;width:86%;max-width:360px;padding:18px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25);animation:zoomIn .25s ease}
 .mbox h3{font-size:16px;margin-bottom:8px}
-.mbox p{font-size:14px;line-height:1.6;color:#333;margin-bottom:12px;white-space:pre-wrap;text-align:left}
+.mbox p{font-size:14px;line-height:1.6;color:#333;margin-bottom:14px;white-space:pre-wrap;text-align:left}
 .mbox .btns{display:flex;gap:10px;justify-content:center}
-.mbox button{border:none;border-radius:8px;padding:10px 22px;font-size:14px;color:#fff;cursor:pointer}
+.mbox button{border:none;border-radius:10px;padding:10px 22px;font-size:14px;color:#fff;cursor:pointer;transition:transform .12s,filter .2s}
+.mbox button:active{transform:scale(.95)}
 /* 成绩页/错题按钮 */
-.chip{border:none;border-radius:20px;padding:6px 12px;margin:3px;background:#c62828;color:#fff;font-size:12px;cursor:pointer}
+.chip{border:none;border-radius:20px;padding:7px 13px;margin:3px;background:linear-gradient(135deg,#c62828,#e74c3c);color:#fff;font-size:12px;cursor:pointer;transition:transform .12s,filter .2s;box-shadow:0 2px 6px rgba(198,40,40,.25)}
+.chip:active{transform:scale(.94)}
+/* 动画 */
+@keyframes fadeSlide{from{opacity:0;transform:translateY(10px)}to{opacity:1;transform:none}}
+@keyframes pop{0%{transform:scale(.9)}55%{transform:scale(1.05)}100%{transform:scale(1)}}
+@keyframes shake{0%,100%{transform:translateX(0)}25%{transform:translateX(-6px)}75%{transform:translateX(6px)}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes zoomIn{from{opacity:0;transform:scale(.85)}to{opacity:1;transform:scale(1)}}
+@keyframes staggerIn{from{opacity:0;transform:translateY(12px)}to{opacity:1;transform:none}}
 </style>
 </head>
 <body>
@@ -175,10 +189,13 @@ function renderQ(){
     const mm=String(Math.floor(examLeft/60)).padStart(2,"0"),ss=String(examLeft%60).padStart(2,"0");
     $("#head").textContent=`⏱ ${mm}:${ss} · 第 ${idx+1}/${queue.length} 题`;
   }
-  $("#stem").textContent=it.stem||"";
+  const stemEl=$("#stem"); stemEl.textContent=it.stem||"";
+  stemEl.style.animation="none"; void stemEl.offsetWidth; stemEl.style.animation="";
   sel="";
   const examSel=exam?exam.answers[it.id]:undefined;
   renderOpts(it,examSel);
+  // 选项逐个进入动画
+  Array.from(document.querySelectorAll("#opts .opt,#opts .judgeBtns")).forEach((el,i)=>{ el.style.animation=`staggerIn .3s ease ${i*0.06}s both`; });
   // 反馈:历史状态
   const r=rec(it.id);
   let txt="";
@@ -214,7 +231,7 @@ function renderOpts(it,examSel){
       const d=document.createElement("div");
       d.className="opt"; d.textContent=`${op.key}. ${op.text}`;
       d.onclick=()=>{ document.querySelectorAll(".opt").forEach(x=>x.classList.remove("selected"));
-        d.classList.add("selected"); sel=op.key; };
+        d.classList.add("selected"); d.style.animation=""; sel=op.key; };
       o.appendChild(d);
     });
   }else if(it.kind==="judge"){
@@ -230,7 +247,7 @@ function renderOpts(it,examSel){
       const b=document.createElement("button"); b.className=cls; b.textContent=txt;
       b.onclick=function(){
         document.querySelectorAll("#opts .judgeBtns button").forEach(x=>x.classList.remove("sel"));
-        b.classList.add("sel"); sel=k;
+        b.classList.add("sel"); b.style.animation=""; sel=k;
       };
       return b;
     };
