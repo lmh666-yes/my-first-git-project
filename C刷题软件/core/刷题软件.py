@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.0"""
+版本：1.2.1"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox

@@ -3,8 +3,11 @@
 选择要使用的题库并解析，把结果覆盖生成 题库.json —— 实现多种题库切换。
 
 用法：双击 更新题库.bat，或命令行 python update_bank.py"""
-import sys, io, os, glob, json
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
+import sys, os, glob, json
+try:
+    sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+except Exception:
+    pass
 import bank_parser
 
 HERE = os.path.dirname(os.path.abspath(__file__))

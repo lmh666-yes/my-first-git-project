@@ -2,8 +2,11 @@
 """题库构建器：从 题库/ 文件夹中的第一个 Word 题库文档（自带答案）生成 题库.json。
 用法：python build_bank.py   （或由 启动刷题软件.bat 在缺失题库时自动调用）
 更多功能：支持多题库选择/切换，请用 更新题库.bat。"""
-import sys, io, os, glob, json
-sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
+import sys, os, glob, json
+try:
+    sys.stdout.reconfigure(encoding="utf-8", line_buffering=True)
+except Exception:
+    pass
 import bank_parser
 
 HERE = os.path.dirname(os.path.abspath(__file__))

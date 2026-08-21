@@ -85,10 +85,14 @@ def parse_choice_block(lines, ans_line):
             stem_lines, opt_lines = lines[:1], lines[1:]
         opts = [{"key": "ABCD"[i] if i < 4 else "?", "text": ln}
                 for i, ln in enumerate(opt_lines)]
-        # 一行内多个选项（制表符 / 2+ 空格分隔）
+        # 一行内多个选项（制表符 / 2+ 空格分隔）；若带 A-D 前缀则一并去除
         if len(opts) == 1 and re.search(r"\t|\s{2,}", opts[0]["text"]):
             parts = re.split(r"\t|\s{2,}", opts[0]["text"].strip())
-            opts = [{"key": "ABCD"[i], "text": p} for i, p in enumerate(parts)]
+            cleaned = []
+            for p in parts:
+                m3 = re.match(r"^[A-Da-d][\.、．]\s*(.*)$", p.strip())
+                cleaned.append(m3.group(1).strip() if m3 else p.strip())
+            opts = [{"key": "ABCD"[i], "text": t} for i, t in enumerate(cleaned)]
     stem = "\n".join(stem_lines)
     # 已知笔误修正
     for kw, fix in FIXES.items():
