@@ -28,6 +28,9 @@ bs.messagebox.showwarning = lambda t, m: None
 bs.messagebox.askyesno = lambda t, m: True
 
 def main():
+    # 自包含：清掉上次遗留的进度/考试状态，避免 App 自动进入考试板块、queue 为空
+    if os.path.exists(bs.PROG_PATH):
+        os.remove(bs.PROG_PATH)
     root = tk.Tk()
     root.geometry("1180x720")
     app = bs.App(root)
@@ -76,7 +79,7 @@ def main():
     err = 0
     for _ in range(500):
         try:
-            app.set_mode(random.choice(["顺序", "随机", "错题"]))
+            app.set_mode(random.choice(["顺序", "错题"]))
             root.update_idletasks()
         except Exception as e:
             err += 1
@@ -131,7 +134,7 @@ def main():
 
     # ---- 6. 3000 次随机混合 ----
     app.set_mode("顺序")
-    ops = ["next", "prev", "check", "judge", "fav", "redo", "note"]
+    ops = ["next", "prev", "check", "judge", "note"]
     err = 0
     for _ in range(3000):
         op = random.choice(ops)
@@ -146,10 +149,6 @@ def main():
             elif op == "judge":
                 app.answer_judge(random.choice(["√", "×"]))
                 app.check()
-            elif op == "fav":
-                app.toggle_fav()
-            elif op == "redo":
-                app.redo_q()
             else:
                 app.note_text.insert("end", "x")
                 app._note_edited()

@@ -69,7 +69,6 @@ footer button{flex:1;border:none;border-radius:8px;padding:11px 2px;font-size:12
   </header>
   <div class="tabs" id="tabs">
     <button data-mode="顺序" class="active">顺序</button>
-    <button data-mode="随机">随机</button>
     <button data-mode="错题">错题</button>
     <button data-mode="考试">考试</button>
   </div>
@@ -105,7 +104,7 @@ function save(){ try{localStorage.setItem(LS_KEY,JSON.stringify(progress))}catch
 function byId(qid){ return BANK.find(x=>x.id===qid) }
 function isOk(it,s){ const a=(it.answer||"").toUpperCase().trim(); s=String(s||"").trim();
   return s===a || (s==="√"&&["对","T","TRUE","√"].includes(a)) || (s==="×"&&["错","F","FALSE","×"].includes(a)); }
-function rec(qid){ return progress[qid]||(progress[qid]={ok:null,fav:false,wrong_count:0,notes:""}) }
+function rec(qid){ return progress[qid]||(progress[qid]={ok:null,wrong_count:0,notes:""}) }
 
 /* ---------- 渲染 ---------- */
 function setMode(m){
@@ -113,7 +112,6 @@ function setMode(m){
   stopExamTimer(); mode=m;
   document.querySelectorAll("#tabs button").forEach(b=>b.classList.toggle("active",b.dataset.mode===m));
   if(m==="顺序") queue=BANK.slice();
-  else if(m==="随机"){ queue=BANK.slice(); for(let i=queue.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[queue[i],queue[j]]=[queue[j],queue[i]];} }
   else if(m==="错题"){ queue=BANK.filter(x=>rec(x.id).ok===false); if(!queue.length){ msg("错题本","太棒了，当前没有错题！"); setMode("顺序"); return; } }
   else if(m==="考试"){ renderExamReady(); return; }
   idx=0; renderQ();
@@ -186,7 +184,6 @@ function renderQ(){
   let txt="";
   if(r.ok===true)txt+="✅ 上次作答：正确\n"; else if(r.ok===false)txt+="❌ 上次作答：错误\n"; else txt+="未作答\n";
   if(r.wrong_count)txt+=`🔁 本题累计错误：${r.wrong_count} 次\n`;
-  if(r.fav)txt+="⭐ 已收藏\n";
   showFb(txt);
   // 笔记:确认答案(已作答)后才显示
   if(rec(it.id).ok!==null){ showNote(it.id); } else { hideNote(); }
@@ -194,7 +191,7 @@ function renderQ(){
   if(mode==="考试"&&exam&&exam.active&&!exam.finished){
     footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)]]);
   }else{
-    footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)],["⭐收藏","#8e44ad",()=>toggleFav()],["重新做","#b9770e",()=>redoQ()],["重置","#c62828",()=>resetProgress()]]);
+    footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)],["重置","#c62828",()=>resetProgress()]]);
   }
   stat();
 }
@@ -287,13 +284,6 @@ function nav(d){
     return;
   }
   idx=ni; renderQ();
-}
-function toggleFav(){
-  const it=queue[idx]; const r=rec(it.id); r.fav=!r.fav; save();
-  showFb(r.fav?"⭐ 已收藏，可在错题中回顾":"已取消收藏");
-}
-function redoQ(){
-  const it=queue[idx]; delete progress[it.id]; save(); hideNote(); renderQ();
 }
 function finishExam(){
   stopExamTimer();

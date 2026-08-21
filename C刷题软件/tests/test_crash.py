@@ -113,8 +113,6 @@ def test_missing_fields():
                 app.show_question()
                 app.check()
                 app.answer_judge("√")
-                app.toggle_fav()
-                app.redo_q()
             except Exception as e:
                 err2 += 1
     ok("缺字段题目作答不崩溃", err2 == 0, f"err={err2}")
@@ -210,15 +208,13 @@ def main():
     if os.path.exists(PROG):
         shutil.copy(PROG, BAK_PROG)
     try:
-        test_normal()
-        test_broken_json()
-        test_empty_list()
-        test_not_list()
-        test_missing_fields()
-        test_huge_stem()
-        test_broken_progress()
-        test_exam_corrupt()
-        test_missing_bank()
+        # 每个场景从干净的 progress.json 开始（避免上次测试遗留的考试状态
+        # 导致 App 自动进入考试板块、queue 为空而报 IndexError）
+        for fn in (test_normal, test_broken_json, test_empty_list, test_not_list,
+                   test_missing_fields, test_huge_stem, test_broken_progress,
+                   test_exam_corrupt, test_missing_bank):
+            write_prog("{}")
+            fn()
     finally:
         restore()
     print(f"\n===== 崩溃测试结果: PASS={PASS} FAIL={FAIL} =====")

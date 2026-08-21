@@ -1,0 +1,10 @@
+﻿python.exe : C:\Users\Administrator\AppData\Local\Python\pythoncore-3.14-64\pyt
+hon.exe: can't open file 'D:\\github\\diag_crash.py': [Errno 2] No such file or
+ directory
+所在位置 行:1 字符: 63
++ ... lyContinue; & "C:/Users/Administrator/AppData/Local/Python/pythoncore ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (C:\Users\Admini...le or directory 
+   :String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 

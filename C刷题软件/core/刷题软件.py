@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """C 语言刷题软件 · 类似软考通
 题库来源：题库.json（由 build_bank.py 从 docx 生成）
-功能：顺序/随机/错题/考试；判分+解析+统计+收藏+错题本+笔记+重置进度。
+功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.1.8"""
+版本：1.1.9"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -104,7 +104,7 @@ class App:
         tk.Label(bar, text="🎯 C 语言刷题", bg="#2c3e50", fg="white",
                  font=("Microsoft YaHei", 13, "bold"), padx=12).pack(side=tk.LEFT, pady=6)
         self.mode_btns = {}
-        for m in ("顺序", "随机", "错题", "考试"):
+        for m in ("顺序", "错题", "考试"):
             b = tk.Button(bar, text=m, command=lambda mm=m: self.set_mode(mm),
                           relief=tk.FLAT, padx=10, cursor="hand2",
                           font=("Microsoft YaHei", 10))
@@ -169,8 +169,6 @@ class App:
         for txt, fn, color in (("◀ 上一题", self.prev_q, COLOR_BLUE),
                                ("确认答案", self.check, COLOR_BLUE),
                                ("下一题 ▶", self.next_q, COLOR_BLUE),
-                               ("⭐ 收藏", self.toggle_fav, "#8e44ad"),
-                               ("重新做题", self.redo_q, "#b9770e"),
                                ("🗑 重置进度", self.reset_progress, COLOR_NO)):
             b = tk.Button(nav, text=txt, command=fn, bg=color, fg="white",
                           cursor="hand2", padx=12, pady=5,
@@ -193,10 +191,6 @@ class App:
         self.mode_btns[mode].config(bg="#1a5276", fg="white")
         if mode == "顺序":
             self.queue = list(self.bank)
-        elif mode == "随机":
-            q = list(self.bank)
-            random.shuffle(q)
-            self.queue = q
         elif mode == "错题":
             wrong = [it for it in self.bank
                      if self.progress.get(it.get("id", ""), {}).get("ok") is False]
@@ -563,8 +557,6 @@ class App:
         wc = rec.get("wrong_count", 0)
         if wc:
             self.fb.insert(tk.END, f"🔁 本题累计错误：{wc} 次\n")
-        if rec.get("fav"):
-            self.fb.insert(tk.END, "⭐ 已收藏\n")
         self.fb.config(state=tk.DISABLED)
         self._render_options(it)
         # 笔记：确认答案（已作答）后才显示，未作答时清空
@@ -716,7 +708,7 @@ class App:
         self._update_stat()
 
     def record(self, qid, ok):
-        rec = self.progress.setdefault(qid, {"ok": None, "fav": False,
+        rec = self.progress.setdefault(qid, {"ok": None,
                                              "wrong_count": 0, "notes": ""})
         rec["ok"] = ok
         if not ok:
@@ -748,7 +740,7 @@ class App:
         if it is None:
             return
         qid = it.get("id", "")
-        rec = self.progress.setdefault(qid, {"ok": None, "fav": False,
+        rec = self.progress.setdefault(qid, {"ok": None,
                                              "wrong_count": 0, "notes": ""})
         rec["notes"] = self.note_text.get("1.0", "end-1c")
         if self._note_save_job:
@@ -789,33 +781,12 @@ class App:
         if it is None:
             return
         qid = it.get("id", "")
-        rec = self.progress.setdefault(qid, {"ok": None, "fav": False,
+        rec = self.progress.setdefault(qid, {"ok": None,
                                              "wrong_count": 0, "notes": ""})
         rec["notes"] = self.note_text.get("1.0", "end-1c")
         self._save_progress()
 
-    # ---------- 收藏 / 重做 / 重置 ----------
-    def toggle_fav(self):
-        it = self.queue[self.idx]
-        rec = self.progress.setdefault(it.get("id", ""), {"ok": None, "fav": False,
-                                                          "wrong_count": 0, "notes": ""})
-        rec["fav"] = not rec.get("fav", False)
-        self._save_progress()
-        self.fb.config(state=tk.NORMAL)
-        self.fb.delete("1.0", "end")
-        self.fb.insert(tk.END, "⭐ 已收藏，可在错题/收藏中回顾" if rec["fav"] else "已取消收藏")
-        self.fb.config(state=tk.DISABLED)
-
-    def redo_q(self):
-        if self.mode == "考试":
-            messagebox.showinfo("提示", "考试中不能重新做题")
-            return
-        it = self.queue[self.idx]
-        if it.get("id", "") in self.progress:
-            del self.progress[it.get("id", "")]
-            self._save_progress()
-        self.show_question()
-
+    # ---------- 重置 ----------
     def reset_progress(self):
         """清除记忆：3 次确认 + 5 秒冷静期"""
         if not messagebox.askyesno("重置进度（1/3）",
