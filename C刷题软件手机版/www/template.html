@@ -238,6 +238,12 @@ function quitExam(){
     stopExamTimer(); delete progress.exam; save(); exam=null; examBarHide(); setMode("顺序");
   });
 }
+function restartToReady(){
+  // 重新考试：先回到待开始页（说明页），点「开始考试」才正式开考
+  stopExamTimer(); exam=null;
+  delete progress.exam; save(); examBarHide();
+  renderExamReady();
+}
 function renderQ(){
   const it=queue[idx];
   if(!it){ $("#head").textContent="暂无题目"; $("#stem").textContent=""; $("#opts").innerHTML=""; return; }
@@ -395,7 +401,7 @@ function renderResult(){
   }else{
     const t=document.createElement("div"); t.className="opt"; t.textContent="🎉 全部答对，太棒了！"; t.classList.add("right"); o.appendChild(t);
   }
-  footerBtns([["🔄 重新考试","#b9770e",startExam],["返回顺序","#1a5276",()=>setMode("顺序")]]);
+  footerBtns([["🔄 重新考试","#b9770e",restartToReady],["返回顺序","#1a5276",()=>setMode("顺序")]]);
   renderQnav();
   stat();
 }

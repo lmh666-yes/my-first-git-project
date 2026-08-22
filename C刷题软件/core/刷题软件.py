@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.6"""
+版本：1.2.7"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -289,7 +289,7 @@ class App:
                           font=("Microsoft YaHei", 10))
             b.pack(side=tk.LEFT, padx=3)
         elif self._exam_finished():
-            b = tk.Button(self.exam_bar, text="🔄 重新考试", command=self._exam_start,
+            b = tk.Button(self.exam_bar, text="🔄 重新考试", command=self._exam_restart_to_ready,
                           bg="#b9770e", fg="white", cursor="hand2", padx=12,
                           font=("Microsoft YaHei", 10))
             b.pack(side=tk.LEFT, padx=3)
@@ -569,6 +569,15 @@ class App:
         self.progress.pop("exam", None)
         self._save_progress()
         self.set_mode("顺序")
+
+    def _exam_restart_to_ready(self):
+        """重新考试：先回到考试待开始页（说明页），点「开始考试」才正式开考"""
+        self._stop_exam_timer()
+        self.exam = {}
+        self.progress.pop("exam", None)
+        self._save_progress()
+        self.mode = "考试"
+        self._exam_show_ready()
 
     def _exam_answer(self, it, sel):
         """考试中作答（每题一次，答错自动进错题库）"""
