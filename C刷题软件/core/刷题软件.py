@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.3"""
+版本：1.2.4"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -441,7 +441,7 @@ class App:
         answers = self.exam.get("answers", {}) if self.exam else {}
         legend = tk.Frame(self.exam_nav, bg="#f8f9fa")
         legend.pack(fill=tk.X, padx=8)
-        for txt, c in (("未做", "#ffffff"), ("答对", "#27ae60"), ("答错", "#2980b9")):
+        for txt, c in (("未做", "#ffffff"), ("答对", "#27ae60"), ("答错", "#c62828")):
             tk.Label(legend, text=txt, bg=c,
                      fg="#333333" if c == "#ffffff" else "#ffffff",
                      font=("Microsoft YaHei", 8), padx=6, pady=1, bd=1,
@@ -460,22 +460,26 @@ class App:
             elif self._is_ok(it, ans):
                 bg, fg = "#27ae60", "#ffffff"
             else:
-                bg, fg = "#2980b9", "#ffffff"
+                bg, fg = "#c62828", "#ffffff"
             b = tk.Button(row, text=str(k + 1), width=3, bg=bg, fg=fg,
                           command=lambda q=k: self._exam_jump(q),
                           relief=tk.FLAT, cursor="hand2", font=("Microsoft YaHei", 9))
             b.grid(row=0, column=k % 6, padx=2, pady=3)
 
     def _exam_jump(self, k):
-        """点击题号直接跳转到对应题目（考试中）"""
-        if not self._exam_active() or self.exam.get("finished"):
+        """点击题号跳转：考试中跳到对应题作答；交卷后跳到该题回顾"""
+        if not self._exam_active():
             return
-        if 0 <= k < len(self.queue):
-            self.idx = k
-            self.exam["idx"] = k
-            self.exam["left"] = self.exam_left
-            self._save_exam()
-            self._exam_render_q()
+        if not (0 <= k < len(self.queue)):
+            return
+        self.idx = k
+        if self.exam.get("finished"):
+            self._exam_review(self.queue[k].get("id"))
+            return
+        self.exam["idx"] = k
+        self.exam["left"] = self.exam_left
+        self._save_exam()
+        self._exam_render_q()
 
     def _exam_toggle_pause(self):
         if self._exam_paused():
@@ -563,7 +567,7 @@ class App:
         self._add_btn(f"🏆 成绩：{score} 分（答对 {correct}/{total}）",
                       COLOR_OK if score >= total * EXAM_SCORE * 0.6 else COLOR_NO, False)
         if wrong:
-            self._add_btn("📌 点击错题号回顾题目与答案：", COLOR_NO, False)
+            self._add_btn("📌 点击错题号回顾题目与答案（红色为答错题）：", COLOR_NO, False)
             # 用 grid 每行 6 个按钮自动换行，避免错题多时挤在一起
             cols = 6
             for k, it in enumerate(wrong):
@@ -571,7 +575,8 @@ class App:
                     row = tk.Frame(self.opt_frame, bg="#ffffff")
                     row.pack(fill=tk.X, pady=2)
                     self.opt_widgets.append(row)
-                b = tk.Button(row, text=f"错题 {it.get('num', '?')}", width=9,
+                exam_idx = qs.index(it) + 1      # 考试内序号（与右侧题号导航对应）
+                b = tk.Button(row, text=f"错题 {it.get('num', '?')}·第{exam_idx}题", width=13,
                               command=lambda q=it.get("id"): self._exam_review(q),
                               bg=COLOR_NO, fg="white", cursor="hand2",
                               font=("Microsoft YaHei", 10))

@@ -212,7 +212,8 @@ if len(app.queue) > 1:
 root.update()
 nav_btns2 = find_btn_all(app.exam_nav)
 cols = {b.cget("bg") for b in nav_btns2}
-ok("答后导航含白/绿/蓝三色", cols >= {"#ffffff", "#27ae60", "#2980b9"}, str(cols))
+ok("答后导航含白/绿/红三色", cols >= {"#ffffff", "#27ae60", "#c62828"}, str(cols))
+ok("答错导航为红色非蓝色", "#c62828" in cols and "#2980b9" not in cols)
 app._exam_jump(15)
 root.update()
 ok("题号跳转", app.idx == 15)
@@ -220,6 +221,22 @@ app.finish_exam()
 root.update()
 ok("交卷后导航仍显示", any(w.winfo_class() == "Button"
    for w in find_btn_all(app.exam_nav)))
+# 交卷后：左侧错题按钮带考试序号（与右侧导航对应）
+left_wrong = [b for b in find_btn_all(app.opt_frame) if "错题" in b.cget("text")]
+ok("错题按钮带考试序号", len(left_wrong) >= 1 and "·第2题" in left_wrong[0].cget("text"),
+   left_wrong[0].cget("text") if left_wrong else "无")
+# 交卷后点题号进入回顾 + 返回成绩
+app._exam_jump(1)
+root.update()
+ok("交卷后点题号进入回顾", "回顾" in app.head_label.cget("text"),
+   app.head_label.cget("text"))
+back = [b for b in find_btn_all(app.opt_frame) if "返回成绩" in b.cget("text")]
+ok("回顾有返回成绩按钮", len(back) == 1)
+if back:
+    back[0].invoke()
+    root.update()
+    ok("返回成绩页", "考试结束" in app.head_label.cget("text"),
+       app.head_label.cget("text"))
 
 # ---- 12. 伪随机覆盖性：连续 5 次考试收集题目 ----
 seen_c, seen_j = set(), set()
