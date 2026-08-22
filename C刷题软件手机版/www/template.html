@@ -45,11 +45,15 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:
 #fb{background:#fff;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.7;display:none;box-shadow:0 2px 10px rgba(0,0,0,.06);animation:fadeSlide .3s ease}
 #fb .tag-ok{color:#1a7f37;font-weight:bold}
 #fb .tag-no{color:#c62828;font-weight:bold}
-/* 笔记 */
-#noteBox{background:#fdf6e3;border-radius:12px;padding:12px;display:none;box-shadow:0 2px 10px rgba(123,88,4,.08)}
-#noteBox .nt{font-size:12px;color:#7b5804;font-weight:bold;margin-bottom:4px}
-#noteBox textarea{width:100%;min-height:60px;border:1px solid #e8d9a8;border-radius:10px;background:#fffdf5;font-size:13px;padding:9px;font-family:inherit;resize:vertical;outline:none;transition:border-color .2s}
-#noteBox textarea:focus{border-color:#b98a1e}
+/* 笔记独立弹窗 */
+.nmodal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:98;animation:fadeIn .18s ease}
+.nmodal.show{display:flex}
+.nbox{background:#fff;border-radius:16px;width:88%;max-width:420px;height:68%;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 12px 40px rgba(0,0,0,.25);animation:zoomIn .25s ease}
+.nbox .nt{background:#fdf6e3;color:#7b5804;font-size:14px;font-weight:bold;padding:11px 14px;flex-shrink:0}
+.nbox textarea{flex:1;border:none;outline:none;resize:none;padding:12px;font-size:14px;font-family:inherit;line-height:1.7;background:#fffdf5}
+.nbox .nfoot{display:flex;justify-content:flex-end;padding:8px 12px;border-top:1px solid #eee;flex-shrink:0}
+.nbox .nfoot button{border:none;border-radius:10px;padding:9px 26px;background:#1a5276;color:#fff;font-size:14px;cursor:pointer;transition:transform .12s,filter .2s}
+.nbox .nfoot button:active{transform:scale(.95)}
 /* 底部操作栏 */
 footer{background:#fff;padding:9px;display:flex;gap:6px;box-shadow:0 -2px 8px rgba(0,0,0,.08)}
 footer button{flex:1;border:none;border-radius:10px;padding:12px 2px;font-size:12px;color:#fff;cursor:pointer;white-space:nowrap;transition:transform .12s,filter .2s}
@@ -93,25 +97,30 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
     <div class="stem" id="stem"></div>
     <div id="opts"></div>
     <div id="fb"></div>
-    <div id="noteBox">
-      <div class="nt">📝 我的笔记（确认答案后可写，自动保存）</div>
-      <textarea id="noteText" placeholder="写下你的笔记…"></textarea>
-    </div>
   </main>
   <footer id="footer"></footer>
 </div>
 
 <!-- 弹窗 -->
 <div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<!-- 笔记独立弹窗 -->
+<div class="nmodal" id="nmodal">
+  <div class="nbox">
+    <div class="nt" id="nnoteTitle">📝 我的笔记</div>
+    <textarea id="nnote" placeholder="写下你的笔记…"></textarea>
+    <div class="nfoot"><button onclick="closeNote()">关闭</button></div>
+  </div>
+</div>
 
 <script>
 /*__BANK__*/
-const EXAM_MIN=20, EXAM_NUM=20, EXAM_SCORE=5;
+const EXAM_MIN=40, EXAM_NUM=30, EXAM_CHOICE_NUM=20, EXAM_JUDGE_NUM=10, EXAM_SCORE=5;
 const LS_KEY="cquiz_progress_v1";
 let mode="顺序", queue=[], idx=0, sel="";
 let exam=null, examLeft=0, examTimer=null;
 let progress=load();
 let noteTimer=null;
+let noteOpen=false;
 
 function load(){ try{return JSON.parse(localStorage.getItem(LS_KEY)||"{}")}catch(e){return {}} }
 function save(){ try{localStorage.setItem(LS_KEY,JSON.stringify(progress))}catch(e){} }
@@ -133,17 +142,21 @@ function setMode(m){
 function renderExamReady(){
   stopExamTimer();
   $("#head").textContent="📝 模拟考试";
-  $("#stem").textContent=`考试说明：\n\n· 共 ${EXAM_NUM} 题（单选+判断），限时 ${EXAM_MIN} 分钟\n· 每题 ${EXAM_SCORE} 分，满分 ${EXAM_NUM*EXAM_SCORE} 分\n· 每题只能作答一次，答错自动进入错题库\n· 考试中可暂停/退出，强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块\n\n点击下方「开始考试」按钮开始。`;
-  $("#opts").innerHTML=""; hideFb(); hideNote();
+  $("#stem").textContent=`考试说明：\n\n· 共 ${EXAM_NUM} 题（单选 ${EXAM_CHOICE_NUM} + 判断 ${EXAM_JUDGE_NUM}），限时 ${EXAM_MIN} 分钟\n· 每题 ${EXAM_SCORE} 分，满分 ${EXAM_NUM*EXAM_SCORE} 分\n· 每题只能作答一次，答错自动进入错题库\n· 考试中可暂停/退出，强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块，也不能打开笔记\n\n点击下方「开始考试」按钮开始。`;
+  $("#opts").innerHTML=""; hideFb();
   footerBtns([["开始考试","#1a5276",startExam]]);
   stat();
 }
 function startExam(){
-  const q=BANK.filter(x=>x.kind==="choice"||x.kind==="judge");
-  const ids=shuffle(q).slice(0,Math.min(EXAM_NUM,q.length)).map(x=>x.id);
-  exam={active:true,finished:false,paused:false,ids,idx:0,left:EXAM_MIN*60,answers:{}};
+  // 随机抽 20 道单选 + 10 道判断，共 30 题
+  const choices=BANK.filter(x=>x.kind==="choice");
+  const judges=BANK.filter(x=>x.kind==="judge");
+  const ids=shuffle(choices).slice(0,Math.min(EXAM_CHOICE_NUM,choices.length)).map(x=>x.id)
+    .concat(shuffle(judges).slice(0,Math.min(EXAM_JUDGE_NUM,judges.length)).map(x=>x.id));
+  const qs=shuffle(ids);
+  exam={active:true,finished:false,paused:false,ids:qs,idx:0,left:EXAM_MIN*60,answers:{}};
   progress.exam=exam; save();
-  queue=ids.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
+  queue=qs.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
   examBarShow(); tick(); renderQ();
 }
 function tick(){
@@ -169,7 +182,7 @@ function showPaused(){
   examBarShow();
   $("#head").textContent="⏸ 考试已暂停";
   $("#stem").textContent=`考试已暂停。\n\n剩余时间：${fmt(examLeft)}\n已完成 ${Object.keys(exam.answers).length}/${queue.length} 题\n\n点击顶部「▶ 继续考试」恢复答题。`;
-  $("#opts").innerHTML=""; hideFb(); hideNote();
+  $("#opts").innerHTML=""; hideFb();
 }
 function togglePause(){
   if(exam.paused){ exam.paused=false; progress.exam=exam; save(); examBarShow(); tick(); renderQ(); }
@@ -202,13 +215,13 @@ function renderQ(){
   if(r.ok===true)txt+="✅ 上次作答：正确\n"; else if(r.ok===false)txt+="❌ 上次作答：错误\n"; else txt+="未作答\n";
   if(r.wrong_count)txt+=`🔁 本题累计错误：${r.wrong_count} 次\n`;
   showFb(txt);
-  // 笔记:确认答案(已作答)后才显示
-  if(rec(it.id).ok!==null){ showNote(it.id); } else { hideNote(); }
+  // 笔记弹窗跟随当前题（若打开）
+  if(noteOpen){ noteQid=it.id; $("#nnote").value=rec(it.id).notes||""; }
   // 底部按钮
   if(mode==="考试"&&exam&&exam.active&&!exam.finished){
     footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)]]);
   }else{
-    footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)],["重置","#c62828",()=>resetProgress()]]);
+    footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)],["📝 笔记","#8e44ad",openNote],["重置","#c62828",()=>resetProgress()]]);
   }
   stat();
 }
@@ -267,7 +280,8 @@ function checkAnswer(){
   }
   if(!sel){ msg("提示", it.kind==="choice"?"请先选择一个答案":"请先选择答案（正确/错误）"); return; }
   const ok=isOk(it,sel);
-  record(it,sel,ok); showResult(it,sel,ok); showNote(it.id);
+  record(it,sel,ok); showResult(it,sel,ok);
+  if(noteOpen){ noteQid=it.id; $("#nnote").value=rec(it.id).notes||""; }
   stat();
 }
 function answerJudge(key){
@@ -280,7 +294,7 @@ function answerJudge(key){
 function examAnswer(it,k){
   if(exam.answers[it.id]){ msg("提示","本题已作答，不能更改"); return; }
   const ok=isOk(it,k); exam.answers[it.id]=k; exam.left=examLeft; save();
-  record(it,k,ok); showNote(it.id); renderQ();
+  record(it,k,ok); renderQ();
 }
 function record(it,ans,ok){
   const r=rec(it.id); r.ok=ok; if(!ok)r.wrong_count=(r.wrong_count||0)+1; save();
@@ -351,13 +365,27 @@ function reviewWrong(qid){
   footerBtns([["⬅ 返回成绩","#1a5276",renderResult]]);
 }
 /* ---------- 笔记 ---------- */
-function showNote(qid){
-  const nb=$("#noteBox"); nb.style.display="block";
-  $("#noteText").value=rec(qid).notes||"";
+/* ---------- 笔记（独立弹窗） ---------- */
+let noteQid="";
+function openNote(){
+  if(mode==="考试"&&exam&&exam.active&&!exam.finished){ msg("考试中","考试进行中，不能打开笔记！"); return; }
+  const it=queue[idx]; if(!it)return;
+  noteQid=it.id;
+  $("#nnoteTitle").textContent=`📝 我的笔记 · ${it.id}`;
+  $("#nnote").value=rec(it.id).notes||"";
+  $("#nmodal").classList.add("show"); noteOpen=true;
 }
-function hideNote(){ $("#noteBox").style.display="none"; }
-$("#noteText").addEventListener("input",()=>{
-  const it=queue[idx]; if(!it)return; rec(it.id).notes=$("#noteText").value;
+function closeNote(){
+  saveNoteNow();
+  $("#nmodal").classList.remove("show"); noteOpen=false;
+}
+function saveNoteNow(){
+  if(!noteQid)return;
+  rec(noteQid).notes=$("#nnote").value; save();
+}
+$("#nnote").addEventListener("input",()=>{
+  if(!noteQid)return;
+  rec(noteQid).notes=$("#nnote").value;
   clearTimeout(noteTimer); noteTimer=setTimeout(save,800);
 });
 /* ---------- 工具 ---------- */

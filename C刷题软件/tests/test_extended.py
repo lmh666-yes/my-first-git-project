@@ -58,8 +58,9 @@ ok("选择题答案在选项内且key唯一", not bada, str(bada[:3]))
 mode_btns = list(app.mode_btns.keys())
 ok("模式按钮=顺序/错题/考试", mode_btns == ["顺序", "错题", "考试"], str(mode_btns))
 nav_texts = [t for _, t in app.nav_btns]
-ok("底部导航4按钮且无收藏/重做",
-   len(nav_texts) == 4 and not any("收藏" in t or "重新做" in t for t in nav_texts),
+ok("底部导航5按钮含笔记且无收藏/重做",
+   len(nav_texts) == 5 and "我的笔记" in "".join(nav_texts)
+   and not any("收藏" in t or "重新做" in t for t in nav_texts),
    str(nav_texts))
 
 # ---- 3. 判断题交互：选择不判分，确认才判分 ----
@@ -80,27 +81,38 @@ root.update()
 fb_text = app.fb.get("1.0", "end-1c")
 ok("已答题反馈显示上次作答", "上次作答" in fb_text, fb_text[:30].replace("\n", " "))
 
-# ---- 5. 笔记时机 ----
+# ---- 5. 笔记时机（独立窗口） ----
+app._open_note()
+root.update()
+ok("笔记窗口打开", app.note_win is not None and app.note_win.winfo_exists())
 un = next((i for i, it in enumerate(bank)
            if app.progress.get(it["id"], {}).get("ok") is None), None)
 if un is not None:
     app.idx = un
     app.show_question()
     root.update()
-    ok("未作答不显示笔记", app.note_text.get("1.0", "end-1c") == "",
+    ok("未作答笔记为空", app.note_text.get("1.0", "end-1c") == "",
        repr(app.note_text.get("1.0", "end-1c")))
     it = app.queue[un]
+    app.note_text.insert("1.0", "测试笔记")
+    app._note_edited()
     if it["kind"] == "choice":
         app.choice_var.set(it["options"][0]["key"])
     else:
         app.answer_judge("√")
     app.check()
     root.update()
-    ok("作答后笔记区出现", app.note_text.winfo_ismapped()
-       or app.note_text.get("1.0", "end-1c") == "",
-       "note:" + repr(app.note_text.get("1.0", "end-1c")))
+    ok("作答后笔记保存", app.progress.get(it["id"], {}).get("notes") == "测试笔记",
+       repr(app.progress.get(it["id"], {}).get("notes")))
+    app.next_q()
+    root.update()
+    app.prev_q()
+    root.update()
+    ok("切题后窗口跟随回显", app.note_text.get("1.0", "end-1c") == "测试笔记",
+       repr(app.note_text.get("1.0", "end-1c")))
 else:
     ok("找到未答题", False, "未找到")
+app._close_note()
 
 # ---- 6. 错题进出 ----
 app.set_mode("顺序")
@@ -156,7 +168,7 @@ root.update()
 ok("考试作答已记录", len(app.exam["answers"]) >= 1)
 app._exam_start()
 ok("重新考试清空答案", not app.exam["answers"])
-ok("考试队列20题", len(app.queue) == 20)
+ok("考试队列30题", len(app.queue) == 30)
 app.finish_exam()
 root.update()
 ok("交卷finished", app.exam.get("finished") is True)

@@ -85,8 +85,9 @@ def main():
             err += 1
     ok("500次模式切换", err == 0, f"err={err}")
 
-    # ---- 4. 笔记压力 ----
+    # ---- 4. 笔记压力（独立窗口） ----
     app.set_mode("顺序")
+    app._open_note()
     err = 0
     for i in range(N):
         try:

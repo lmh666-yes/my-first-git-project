@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.1"""
+版本：1.2.2"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -17,8 +17,10 @@ PROG_PATH = os.path.join(ROOT, "progress.json")
 COLOR_OK = "#1a7f37"
 COLOR_NO = "#c62828"
 COLOR_BLUE = "#1a5276"
-EXAM_MIN = 20          # 考试时长（分钟）
-EXAM_NUM = 20          # 考试题数
+EXAM_MIN = 40          # 考试时长（分钟）
+EXAM_NUM = 30          # 考试总题数（20 单选 + 10 判断）
+EXAM_CHOICE_NUM = 20   # 考试中单选题数
+EXAM_JUDGE_NUM = 10    # 考试中判断题数
 EXAM_SCORE = 5         # 每题分值
 
 
@@ -65,6 +67,9 @@ class App:
         self.exam_left = 0
         self._exam_timer = None
         self._note_save_job = None
+        self.note_win = None          # 笔记独立窗口
+        self.note_text = None
+        self.note_title = None
         self._build_ui()
         # 有未完成/未结算的考试 → 直接进入考试板块恢复
         if self.exam.get("active"):
@@ -150,17 +155,14 @@ class App:
                                     style="green.Horizontal.TProgressbar")
         self.pbar.grid(row=1, column=0, sticky="ew")
 
-        # 主体：左=题目区，右=笔记区
+        # 主体：左=题目区（笔记已改为独立窗口）
         body = tk.Frame(self.root, bg="#ffffff")
         body.grid(row=2, column=0, sticky="nsew")
         body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=3)
-        body.grid_columnconfigure(1, weight=1)
+        body.grid_columnconfigure(0, weight=1)
 
         left = tk.Frame(body, bg="#ffffff")
         left.grid(row=0, column=0, sticky="nsew")
-        right = tk.Frame(body, bg="#fdf6e3", bd=1, relief=tk.GROOVE)
-        right.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
 
         self.head_label = tk.Label(left, text="", bg="#eaf2f8", fg=COLOR_BLUE,
                                    font=("Microsoft YaHei", 12, "bold"),
@@ -179,26 +181,15 @@ class App:
                           height=7, relief=tk.GROOVE, bd=1, padx=10, pady=6)
         self.fb.pack(fill=tk.X, padx=10, pady=(2, 6))
 
-        # 右：笔记区
-        tk.Label(right, text="📝 我的笔记", bg="#fdf6e3", fg="#7b5804",
-                 font=("Microsoft YaHei", 11, "bold"), anchor="w",
-                 padx=8, pady=6).pack(fill=tk.X)
-        self.note_text = tk.Text(right, font=("Microsoft YaHei", 10), wrap="word",
-                                 bg="#fffdf5", relief=tk.FLAT, padx=8, pady=6)
-        self.note_text.pack(fill=tk.BOTH, expand=True)
-        self.note_text.bind("<KeyRelease>", lambda e: self._note_edited())
-        tk.Label(right, text="笔记自动保存，下次做到这题自动显示",
-                 bg="#fdf6e3", fg="#a08030", font=("Microsoft YaHei", 8),
-                 anchor="w", padx=8, pady=4).pack(fill=tk.X)
-
         # 底部导航
         nav = tk.Frame(self.root, bg="#f0f0f0")
         nav.grid(row=3, column=0, sticky="ew")
         self.nav_btns = []
-        hover_map = {COLOR_BLUE: "#2471a3", COLOR_NO: "#e74c3c"}
+        hover_map = {COLOR_BLUE: "#2471a3", COLOR_NO: "#e74c3c", "#8e44ad": "#a569bd"}
         for txt, fn, color in (("◀ 上一题", self.prev_q, COLOR_BLUE),
                                ("确认答案", self.check, COLOR_BLUE),
                                ("下一题 ▶", self.next_q, COLOR_BLUE),
+                               ("📝 我的笔记", self._open_note, "#8e44ad"),
                                ("🗑 重置进度", self.reset_progress, COLOR_NO)):
             b = tk.Button(nav, text=txt, command=fn, bg=color, fg="white",
                           cursor="hand2", padx=12, pady=5,
@@ -332,11 +323,11 @@ class App:
         self.head_label.config(text="📝 模拟考试")
         self._set_stem(
             "考试说明：\n\n"
-            f"· 共 {EXAM_NUM} 题（单选+判断），限时 {EXAM_MIN} 分钟\n"
+            f"· 共 {EXAM_NUM} 题（单选 {EXAM_CHOICE_NUM} + 判断 {EXAM_JUDGE_NUM}），限时 {EXAM_MIN} 分钟\n"
             f"· 每题 {EXAM_SCORE} 分，满分 {EXAM_NUM * EXAM_SCORE} 分\n"
             "· 每题只能作答一次，答错会自动进入错题库\n"
             "· 考试中可暂停 / 退出；强制关闭程序会自动保存，下次打开继续\n"
-            "· 考试中不能切换到其他板块\n\n"
+            "· 考试中不能切换到其他板块，也不能打开笔记\n\n"
             "点击右上角「▶ 开始考试」按钮开始。")
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
@@ -345,16 +336,20 @@ class App:
         self._update_stat()
 
     def _exam_start(self):
-        """开始 / 重新开始考试"""
+        """开始 / 重新开始考试：随机抽 20 单选 + 10 判断"""
         self._stop_exam_timer()
         self.mode = "考试"
-        q = [it for it in self.bank if it.get("kind") in ("choice", "judge")]
-        n = min(EXAM_NUM, len(q))
-        random.shuffle(q)
-        ids = [it["id"] for it in q[:n]]
+        choices = [it for it in self.bank if it.get("kind") == "choice"]
+        judges = [it for it in self.bank if it.get("kind") == "judge"]
+        random.shuffle(choices)
+        random.shuffle(judges)
+        cn = min(EXAM_CHOICE_NUM, len(choices))
+        jn = min(EXAM_JUDGE_NUM, len(judges))
+        ids = [it["id"] for it in choices[:cn]] + [it["id"] for it in judges[:jn]]
+        random.shuffle(ids)   # 混合打乱顺序
         self.exam = {"active": True, "finished": False, "paused": False,
                      "ids": ids, "idx": 0, "left": EXAM_MIN * 60, "answers": {}}
-        self.queue = [it for it in self.bank if it.get("id") in ids]
+        self.queue = [it for it in self.bank if it.get("id") in set(ids)]
         self.idx = 0
         self.exam_left = EXAM_MIN * 60
         self._save_exam()
@@ -590,11 +585,8 @@ class App:
             self.fb.insert(tk.END, f"🔁 本题累计错误：{wc} 次\n")
         self.fb.config(state=tk.DISABLED)
         self._render_options(it)
-        # 笔记：确认答案（已作答）后才显示，未作答时清空
-        if self.progress.get(it.get("id", ""), {}).get("ok") is not None:
-            self._load_note(it.get("id", ""))
-        else:
-            self._clear_note()
+        # 笔记窗口：始终同步当前题笔记（用户主动点「我的笔记」打开，未作答也显示历史笔记）
+        self._refresh_note_win()
         self._update_stat()
 
     def _set_stem(self, text):
@@ -634,12 +626,12 @@ class App:
                                    font=("Microsoft YaHei", 11), bg="#ffffff",
                                    anchor="w", padx=8, pady=4)
                     lbl.pack(fill=tk.X)
-                    def row_enter(_e):
+                    def row_enter(_e, row=row, lbl=lbl, k=k):
                         if not self._is_row_selected(k):
                             row.config(bg="#eaf2f8", highlightbackground="#aed6f1")
                             lbl.config(bg="#eaf2f8")
 
-                    def row_leave(_e):
+                    def row_leave(_e, row=row, lbl=lbl, k=k):
                         if not self._is_row_selected(k):
                             row.config(bg="#ffffff", highlightbackground="#d5dbdb")
                             lbl.config(bg="#ffffff")
@@ -668,12 +660,12 @@ class App:
                                    font=("Microsoft YaHei", 11, "bold"), bg="#ffffff",
                                    anchor="w", padx=8, pady=4)
                     lbl.pack(fill=tk.X)
-                    def jrow_enter(_e):
+                    def jrow_enter(_e, row=row, lbl=lbl, key=key):
                         if not self._is_row_selected(key):
                             row.config(bg="#eaf2f8", highlightbackground="#aed6f1")
                             lbl.config(bg="#eaf2f8")
 
-                    def jrow_leave(_e):
+                    def jrow_leave(_e, row=row, lbl=lbl, key=key):
                         if not self._is_row_selected(key):
                             row.config(bg="#ffffff", highlightbackground="#d5dbdb")
                             lbl.config(bg="#ffffff")
@@ -787,10 +779,59 @@ class App:
             self.fb.insert(tk.END, "\n解析：\n" + it.get("explain", ""))
         self.fb.config(state=tk.DISABLED)
 
-    # ---------- 笔记 ----------
+    # ---------- 笔记（独立窗口） ----------
+    def _open_note(self):
+        """打开 / 聚焦当前题目的笔记窗口（考试中禁止）"""
+        if self.mode == "考试" and self._exam_active() and not self._exam_finished():
+            messagebox.showwarning("考试中", "考试进行中，不能打开笔记！")
+            return
+        if self.note_win is not None and self.note_win.winfo_exists():
+            self.note_win.lift()
+            self._refresh_note_win()
+            return
+        win = tk.Toplevel(self.root)
+        win.title("📝 我的笔记")
+        win.geometry("400x460")
+        win.minsize(320, 280)
+        win.grid_rowconfigure(1, weight=1)
+        win.grid_columnconfigure(0, weight=1)
+        self.note_title = tk.Label(win, text="", bg="#fdf6e3", fg="#7b5804",
+                                   font=("Microsoft YaHei", 11, "bold"),
+                                   anchor="w", padx=10, pady=6)
+        self.note_title.grid(row=0, column=0, sticky="ew")
+        self.note_text = tk.Text(win, font=("Microsoft YaHei", 10), wrap="word",
+                                 bg="#fffdf5", relief=tk.GROOVE, bd=1,
+                                 padx=8, pady=6)
+        self.note_text.grid(row=1, column=0, sticky="nsew", padx=8, pady=4)
+        self.note_text.bind("<KeyRelease>", lambda e: self._note_edited())
+        tk.Label(win, text="笔记自动保存；窗口可自由缩放，切换题目时内容跟随当前题",
+                 bg="#fdf6e3", fg="#a08030", font=("Microsoft YaHei", 9),
+                 anchor="w", padx=10, pady=4).grid(row=2, column=0, sticky="ew")
+        self.note_win = win
+        win.protocol("WM_DELETE_WINDOW", self._close_note)
+        self._refresh_note_win()
+
+    def _close_note(self):
+        if self.note_win is not None and self.note_win.winfo_exists():
+            self.note_win.destroy()
+        self.note_win = None
+        self.note_text = None
+
+    def _refresh_note_win(self):
+        """把当前题目的笔记同步到笔记窗口（未打开则忽略）"""
+        if self.note_win is None or self.note_text is None \
+                or not self.note_win.winfo_exists():
+            return
+        it = self._cur_item()
+        qid = it.get("id", "") if it else ""
+        self.note_title.config(text=f"📝 我的笔记 · {qid}")
+        self.note_text.delete("1.0", "end")
+        rec = self.progress.get(qid, {})
+        self.note_text.insert("1.0", rec.get("notes", ""))
+
     def _note_edited(self):
         it = self._cur_item()
-        if it is None:
+        if it is None or self.note_text is None:
             return
         qid = it.get("id", "")
         rec = self.progress.setdefault(qid, {"ok": None,
@@ -809,29 +850,23 @@ class App:
         return None
 
     def _load_note(self, qid):
-        if self._note_save_job:
-            try:
-                self.root.after_cancel(self._note_save_job)
-            except Exception:
-                pass
-            self._note_save_job = None
-        self.note_text.delete("1.0", "end")
-        rec = self.progress.get(qid, {})
-        self.note_text.insert("1.0", rec.get("notes", ""))
+        """同步笔记窗口到当前题（窗口未开则忽略）"""
+        self._refresh_note_win()
 
     def _clear_note(self):
-        """未作答时清空笔记区（确认答案后才显示）"""
+        """未作答时清空笔记窗口（若已打开）"""
         if self._note_save_job:
             try:
                 self.root.after_cancel(self._note_save_job)
             except Exception:
                 pass
             self._note_save_job = None
-        self.note_text.delete("1.0", "end")
+        if self.note_text is not None:
+            self.note_text.delete("1.0", "end")
 
     def _save_note(self):
         it = self._cur_item()
-        if it is None:
+        if it is None or self.note_text is None:
             return
         qid = it.get("id", "")
         rec = self.progress.setdefault(qid, {"ok": None,
@@ -858,7 +893,8 @@ class App:
         self.idx = 0
         self.mode = "顺序"
         self._save_progress()
-        self.note_text.delete("1.0", "end")
+        if self.note_text is not None:
+            self.note_text.delete("1.0", "end")
         for w in self.exam_bar.winfo_children():
             w.destroy()
         self.fb.config(state=tk.NORMAL)

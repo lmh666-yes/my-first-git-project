@@ -74,9 +74,11 @@ app.check()            # 选择后点「确认答案」判分
 root.update()
 check(app.progress[jit["id"]]["ok"] is True, "判断答对")
 
-# 4. 笔记
+# 4. 笔记（独立窗口）
 app.idx = 0
 app.show_question()
+root.update()
+app._open_note()          # 打开笔记独立窗口
 root.update()
 app.note_text.insert("1.0", "笔记XYZ")
 app._note_edited()
@@ -87,6 +89,7 @@ check(app.progress.get(it["id"], {}).get("notes") == "笔记XYZ", "笔记保存"
 app.prev_q()
 root.update()
 check(app.note_text.get("1.0", "end-1c") == "笔记XYZ", "笔记回显")
+app._close_note()
 
 # 5. 考试板块：待开始
 app.set_mode("考试")
@@ -97,8 +100,8 @@ check(len(find_btns(app.exam_bar, ["开始考试"])) == 1, "右上角有开始�
 # 6. 开考
 app._exam_start()
 root.update()
-check(app._exam_running() and len(app.queue) == 20, "开考20题")
-check(1190 < app.exam_left <= 1200, f"倒计时20分钟 ({app.exam_left})")
+check(app._exam_running() and len(app.queue) == 30, "开考30题")
+check(2390 < app.exam_left <= 2400, f"倒计时40分钟 ({app.exam_left})")
 
 # 7. 考试中切板块被拦截
 warned.clear()
@@ -149,7 +152,7 @@ if err_btns:
 # 12. 重新考试
 app._exam_start()
 root.update()
-check(app._exam_running() and len(app.queue) == 20, "重新考试")
+check(app._exam_running() and len(app.queue) == 30, "重新考试")
 
 # 13. 考试中断恢复 + 关闭提醒
 app.exam_left = 500
