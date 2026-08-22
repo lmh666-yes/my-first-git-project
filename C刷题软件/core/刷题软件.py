@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.2"""
+版本：1.2.3"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -120,7 +120,7 @@ class App:
         return self.choice_var.get() == key
 
     def _build_ui(self):
-        self.root.grid_rowconfigure(2, weight=1)
+        self.root.grid_rowconfigure(1, weight=1)
         self.root.grid_columnconfigure(0, weight=1)
         # 顶部栏
         bar = tk.Frame(self.root, bg="#2c3e50")
@@ -141,28 +141,19 @@ class App:
                                    font=("Microsoft YaHei", 10, "bold"))
         self.stat_label.pack(side=tk.RIGHT, padx=12)
 
-        # 进度条
-        self._pbar_style = ttk.Style(self.root)
-        try:
-            self._pbar_style.theme_use("clam")
-            self._pbar_style.configure("green.Horizontal.TProgressbar",
-                                       troughcolor="#d5dbdb", background="#27ae60",
-                                       lightcolor="#27ae60", darkcolor="#27ae60",
-                                       bordercolor="#27ae60")
-        except Exception:
-            pass
-        self.pbar = ttk.Progressbar(self.root, maximum=100, value=0,
-                                    style="green.Horizontal.TProgressbar")
-        self.pbar.grid(row=1, column=0, sticky="ew")
-
-        # 主体：左=题目区（笔记已改为独立窗口）
+        # 主体：左=题目区，右=考试题号导航（仅考试时显示）
         body = tk.Frame(self.root, bg="#ffffff")
-        body.grid(row=2, column=0, sticky="nsew")
+        body.grid(row=1, column=0, sticky="nsew")
         body.grid_rowconfigure(0, weight=1)
-        body.grid_columnconfigure(0, weight=1)
+        body.grid_columnconfigure(0, weight=3)
+        body.grid_columnconfigure(1, weight=1)
 
         left = tk.Frame(body, bg="#ffffff")
         left.grid(row=0, column=0, sticky="nsew")
+
+        self.exam_nav = tk.Frame(body, bg="#f8f9fa", bd=1, relief=tk.GROOVE)
+        self.exam_nav.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
+        self.exam_nav.grid_remove()          # 默认隐藏，仅考试时显示
 
         self.head_label = tk.Label(left, text="", bg="#eaf2f8", fg=COLOR_BLUE,
                                    font=("Microsoft YaHei", 12, "bold"),
@@ -183,7 +174,7 @@ class App:
 
         # 底部导航
         nav = tk.Frame(self.root, bg="#f0f0f0")
-        nav.grid(row=3, column=0, sticky="ew")
+        nav.grid(row=2, column=0, sticky="ew")
         self.nav_btns = []
         hover_map = {COLOR_BLUE: "#2471a3", COLOR_NO: "#e74c3c", "#8e44ad": "#a569bd"}
         for txt, fn, color in (("◀ 上一题", self.prev_q, COLOR_BLUE),
@@ -225,6 +216,7 @@ class App:
         # 非考试板块：清空右上角考试按钮
         for w in self.exam_bar.winfo_children():
             w.destroy()
+        self.exam_nav.grid_remove()
         self.idx = 0
         self.show_question()
 
@@ -320,11 +312,14 @@ class App:
             w.destroy()
         self.opt_widgets = []
         self.choice_var.set("")
-        self.head_label.config(text="📝 模拟考试")
+        cnt = self.progress.get("_exam_count", 0)
+        self.head_label.config(text=f"📝 模拟考试 · 第 {cnt + 1} 次考试")
         self._set_stem(
             "考试说明：\n\n"
             f"· 共 {EXAM_NUM} 题（单选 {EXAM_CHOICE_NUM} + 判断 {EXAM_JUDGE_NUM}），限时 {EXAM_MIN} 分钟\n"
             f"· 每题 {EXAM_SCORE} 分，满分 {EXAM_NUM * EXAM_SCORE} 分\n"
+            f"· 当前第 {cnt + 1} 次考试 · 已累计完成 {cnt} 次 · 每 5 次为一轮，已进入第 {cnt // 5 + 1} 轮\n"
+            "· 伪随机抽题：每 5 次考试覆盖全部题目，不重复遗漏\n"
             "· 每题只能作答一次，答错会自动进入错题库\n"
             "· 考试中可暂停 / 退出；强制关闭程序会自动保存，下次打开继续\n"
             "· 考试中不能切换到其他板块，也不能打开笔记\n\n"
@@ -333,20 +328,35 @@ class App:
         self.fb.delete("1.0", "end")
         self.fb.config(state=tk.DISABLED)
         self._add_btn("点击右上角「▶ 开始考试」按钮开始考试。", COLOR_BLUE, False)
+        self.exam_nav.grid()
+        self._exam_render_nav()
         self._update_stat()
 
-    def _exam_start(self):
-        """开始 / 重新开始考试：随机抽 20 单选 + 10 判断"""
-        self._stop_exam_timer()
-        self.mode = "考试"
+    def _exam_pick_ids(self):
+        """伪随机抽题：按考试次数分组游标取段，每 5 次考试覆盖全部题目。
+        单选 80/次20 = 4 组，判断 50/次10 = 5 组；组内打乱、组间混合。"""
+        cnt = self.progress.get("_exam_count", 0)
         choices = [it for it in self.bank if it.get("kind") == "choice"]
         judges = [it for it in self.bank if it.get("kind") == "judge"]
-        random.shuffle(choices)
-        random.shuffle(judges)
-        cn = min(EXAM_CHOICE_NUM, len(choices))
-        jn = min(EXAM_JUDGE_NUM, len(judges))
-        ids = [it["id"] for it in choices[:cn]] + [it["id"] for it in judges[:jn]]
-        random.shuffle(ids)   # 混合打乱顺序
+        nc, nj = len(choices), len(judges)
+        if nc == 0 or nj == 0:
+            return []
+        c0 = (cnt * EXAM_CHOICE_NUM) % nc
+        picked_c = (choices[c0:] + choices[:c0])[:EXAM_CHOICE_NUM]
+        j0 = (cnt * EXAM_JUDGE_NUM) % nj
+        picked_j = (judges[j0:] + judges[:j0])[:EXAM_JUDGE_NUM]
+        random.shuffle(picked_c)
+        random.shuffle(picked_j)
+        ids = [it["id"] for it in picked_c] + [it["id"] for it in picked_j]
+        random.shuffle(ids)
+        return ids
+
+    def _exam_start(self):
+        """开始 / 重新开始考试：伪随机抽 20 单选 + 10 判断，考试计数 +1"""
+        self._stop_exam_timer()
+        self.mode = "考试"
+        self.progress["_exam_count"] = self.progress.get("_exam_count", 0) + 1
+        ids = self._exam_pick_ids()
         self.exam = {"active": True, "finished": False, "paused": False,
                      "ids": ids, "idx": 0, "left": EXAM_MIN * 60, "answers": {}}
         self.queue = [it for it in self.bank if it.get("id") in set(ids)]
@@ -354,6 +364,8 @@ class App:
         self.exam_left = EXAM_MIN * 60
         self._save_exam()
         self._exam_update_topbar()
+        self.exam_nav.grid()
+        self._exam_render_nav()
         self._exam_tick()
         self._exam_render_q()
 
@@ -393,6 +405,8 @@ class App:
             self.fb.insert(tk.END, "请作答（每题只能答一次）\n")
         self.fb.config(state=tk.DISABLED)
         self._render_options(it, exam_answered=sel)
+        self.exam_nav.grid()
+        self._exam_render_nav()
         self._update_stat()
 
     def _exam_render_paused(self):
@@ -412,7 +426,56 @@ class App:
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
         self.fb.config(state=tk.DISABLED)
+        self.exam_nav.grid()
+        self._exam_render_nav()
         self._update_stat()
+
+    def _exam_render_nav(self):
+        """渲染考试题号导航：未答白色 / 答对绿色 / 答错蓝色，点击跳转"""
+        for w in self.exam_nav.winfo_children():
+            w.destroy()
+        tk.Label(self.exam_nav, text="📋 题目导航", bg="#f8f9fa", fg=COLOR_BLUE,
+                 font=("Microsoft YaHei", 11, "bold"), anchor="w",
+                 padx=10, pady=8).pack(fill=tk.X)
+        qs = self._exam_qlist()
+        answers = self.exam.get("answers", {}) if self.exam else {}
+        legend = tk.Frame(self.exam_nav, bg="#f8f9fa")
+        legend.pack(fill=tk.X, padx=8)
+        for txt, c in (("未做", "#ffffff"), ("答对", "#27ae60"), ("答错", "#2980b9")):
+            tk.Label(legend, text=txt, bg=c,
+                     fg="#333333" if c == "#ffffff" else "#ffffff",
+                     font=("Microsoft YaHei", 8), padx=6, pady=1, bd=1,
+                     relief=tk.SOLID).pack(side=tk.LEFT, padx=2, pady=2)
+        if not qs:
+            return
+        row = tk.Frame(self.exam_nav, bg="#f8f9fa")
+        row.pack(fill=tk.X, padx=6, pady=4)
+        for k, it in enumerate(qs):
+            if k % 6 == 0 and k > 0:
+                row = tk.Frame(self.exam_nav, bg="#f8f9fa")
+                row.pack(fill=tk.X, padx=6, pady=4)
+            ans = answers.get(it.get("id"))
+            if ans is None:
+                bg, fg = "#ffffff", "#333333"
+            elif self._is_ok(it, ans):
+                bg, fg = "#27ae60", "#ffffff"
+            else:
+                bg, fg = "#2980b9", "#ffffff"
+            b = tk.Button(row, text=str(k + 1), width=3, bg=bg, fg=fg,
+                          command=lambda q=k: self._exam_jump(q),
+                          relief=tk.FLAT, cursor="hand2", font=("Microsoft YaHei", 9))
+            b.grid(row=0, column=k % 6, padx=2, pady=3)
+
+    def _exam_jump(self, k):
+        """点击题号直接跳转到对应题目（考试中）"""
+        if not self._exam_active() or self.exam.get("finished"):
+            return
+        if 0 <= k < len(self.queue):
+            self.idx = k
+            self.exam["idx"] = k
+            self.exam["left"] = self.exam_left
+            self._save_exam()
+            self._exam_render_q()
 
     def _exam_toggle_pause(self):
         if self._exam_paused():
@@ -516,6 +579,8 @@ class App:
                 self.opt_widgets.append(b)
         else:
             self._add_btn("🎉 全部答对，太棒了！", COLOR_OK, False)
+        self.exam_nav.grid()
+        self._exam_render_nav()
         self._update_stat()
 
     def _exam_review(self, qid):
@@ -986,7 +1051,6 @@ class App:
         rate = round(len(ok) / len(done) * 100) if done else 0
         self.stat_label.config(
             text=f"已做 {len(done)}/{len(self.bank)} · 正确率 {rate}% · 错题 {wrong}")
-        self.pbar["value"] = rate
 
     def _save_progress(self):
         try:

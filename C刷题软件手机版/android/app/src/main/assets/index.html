@@ -20,9 +20,13 @@ header .stat{font-size:11px;opacity:.95}
 #examBar{display:none;background:#34495e;padding:6px 8px;gap:6px}
 #examBar button{flex:1;border:none;border-radius:8px;padding:8px;color:#fff;font-size:13px;cursor:pointer;transition:transform .12s,filter .2s}
 #examBar button:active{transform:scale(.96)}
-/* 进度条 */
-.pbar{height:5px;background:#d5dbdb}
-.pbar div{height:100%;background:linear-gradient(90deg,#27ae60,#2ecc71);width:0%;transition:width .6s cubic-bezier(.4,0,.2,1)}
+/* 考试题号导航 */
+#qnav{display:none;flex-wrap:wrap;gap:5px;padding:8px 10px;background:#fff;border-radius:12px;margin:0 12px;box-shadow:0 1px 5px rgba(0,0,0,.06);max-height:130px;overflow-y:auto}
+#qnav button{width:32px;height:32px;border:none;border-radius:9px;font-size:12px;cursor:pointer;transition:transform .12s,filter .2s}
+#qnav button:active{transform:scale(.92)}
+#qnav button.un{background:#f1f3f5;color:#555}
+#qnav button.ok{background:#27ae60;color:#fff}
+#qnav button.no{background:#2980b9;color:#fff}
 /* 主体 */
 main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:12px}
 .head{color:#1a5276;font-size:13px;font-weight:bold}
@@ -91,7 +95,7 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
     <button data-mode="考试">考试</button>
   </div>
   <div id="examBar"></div>
-  <div class="pbar"><div id="pbarFill"></div></div>
+  <div id="qnav"></div>
   <main id="main">
     <div class="head" id="head"></div>
     <div class="stem" id="stem"></div>
@@ -141,19 +145,26 @@ function setMode(m){
 }
 function renderExamReady(){
   stopExamTimer();
-  $("#head").textContent="📝 模拟考试";
-  $("#stem").textContent=`考试说明：\n\n· 共 ${EXAM_NUM} 题（单选 ${EXAM_CHOICE_NUM} + 判断 ${EXAM_JUDGE_NUM}），限时 ${EXAM_MIN} 分钟\n· 每题 ${EXAM_SCORE} 分，满分 ${EXAM_NUM*EXAM_SCORE} 分\n· 每题只能作答一次，答错自动进入错题库\n· 考试中可暂停/退出，强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块，也不能打开笔记\n\n点击下方「开始考试」按钮开始。`;
+  const cnt=progress._exam_count||0;
+  $("#head").textContent=`📝 模拟考试 · 第 ${cnt+1} 次考试`;
+  $("#stem").textContent=`考试说明：\n\n· 共 ${EXAM_NUM} 题（单选 ${EXAM_CHOICE_NUM} + 判断 ${EXAM_JUDGE_NUM}），限时 ${EXAM_MIN} 分钟\n· 每题 ${EXAM_SCORE} 分，满分 ${EXAM_NUM*EXAM_SCORE} 分\n· 当前第 ${cnt+1} 次考试 · 已累计完成 ${cnt} 次 · 每 5 次为一轮，已进入第 ${Math.floor(cnt/5)+1} 轮\n· 伪随机抽题：每 5 次考试覆盖全部题目，不重复遗漏\n· 每题只能作答一次，答错自动进入错题库\n· 考试中可暂停/退出，强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块，也不能打开笔记\n\n点击下方「开始考试」按钮开始。`;
   $("#opts").innerHTML=""; hideFb();
+  $("#qnav").style.display="none"; $("#qnav").innerHTML="";
   footerBtns([["开始考试","#1a5276",startExam]]);
   stat();
 }
 function startExam(){
-  // 随机抽 20 道单选 + 10 道判断，共 30 题
+  // 伪随机抽题：按考试次数分组游标取段，5 次考试覆盖全部（单选4组+判断5组）
+  const cnt=progress._exam_count||0;
   const choices=BANK.filter(x=>x.kind==="choice");
   const judges=BANK.filter(x=>x.kind==="judge");
-  const ids=shuffle(choices).slice(0,Math.min(EXAM_CHOICE_NUM,choices.length)).map(x=>x.id)
-    .concat(shuffle(judges).slice(0,Math.min(EXAM_JUDGE_NUM,judges.length)).map(x=>x.id));
+  const c0=(cnt*EXAM_CHOICE_NUM)%choices.length;
+  const j0=(cnt*EXAM_JUDGE_NUM)%judges.length;
+  const pickedC=(choices.slice(c0).concat(choices.slice(0,c0))).slice(0,EXAM_CHOICE_NUM);
+  const pickedJ=(judges.slice(j0).concat(judges.slice(0,j0))).slice(0,EXAM_JUDGE_NUM);
+  const ids=shuffle(pickedC).map(x=>x.id).concat(shuffle(pickedJ).map(x=>x.id));
   const qs=shuffle(ids);
+  progress._exam_count=(progress._exam_count||0)+1;
   exam={active:true,finished:false,paused:false,ids:qs,idx:0,left:EXAM_MIN*60,answers:{}};
   progress.exam=exam; save();
   queue=qs.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
@@ -182,7 +193,22 @@ function showPaused(){
   examBarShow();
   $("#head").textContent="⏸ 考试已暂停";
   $("#stem").textContent=`考试已暂停。\n\n剩余时间：${fmt(examLeft)}\n已完成 ${Object.keys(exam.answers).length}/${queue.length} 题\n\n点击顶部「▶ 继续考试」恢复答题。`;
-  $("#opts").innerHTML=""; hideFb();
+  $("#opts").innerHTML=""; hideFb(); renderQnav();
+}
+function renderQnav(){
+  const nv=$("#qnav"); nv.innerHTML="";
+  if(mode!=="考试"||!exam||!exam.active){ nv.style.display="none"; return; }
+  nv.style.display="flex";
+  queue.forEach((q,i)=>{
+    const b=document.createElement("button");
+    b.textContent=i+1;
+    const a=exam.answers?exam.answers[q.id]:undefined;
+    if(a===undefined) b.className="un";
+    else if(isOk(q,a)) b.className="ok";
+    else b.className="no";
+    b.onclick=()=>{ idx=i; exam.idx=i; renderQ(); };
+    nv.appendChild(b);
+  });
 }
 function togglePause(){
   if(exam.paused){ exam.paused=false; progress.exam=exam; save(); examBarShow(); tick(); renderQ(); }
@@ -223,6 +249,7 @@ function renderQ(){
   }else{
     footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)],["📝 笔记","#8e44ad",openNote],["重置","#c62828",()=>resetProgress()]]);
   }
+  renderQnav();
   stat();
 }
 function renderOpts(it,examSel){
@@ -345,6 +372,7 @@ function renderResult(){
     const t=document.createElement("div"); t.className="opt"; t.textContent="🎉 全部答对，太棒了！"; t.classList.add("right"); o.appendChild(t);
   }
   footerBtns([["🔄 重新考试","#b9770e",startExam],["返回顺序","#1a5276",()=>setMode("顺序")]]);
+  renderQnav();
   stat();
 }
 function reviewWrong(qid){
@@ -403,7 +431,6 @@ function stat(){
   const rate=done.length?Math.round(okN/done.length*100):0;
   const wrong=BANK.filter(x=>rec(x.id).ok===false).length;
   $("#stat").textContent=`已做 ${done.length}/${BANK.length} · 正确率 ${rate}% · 错题 ${wrong}`;
-  $("#pbarFill").style.width=rate+"%";
 }
 /* ---------- 弹窗 ---------- */
 let modalCb=null;

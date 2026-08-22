@@ -23,6 +23,15 @@ bs.messagebox.showerror = lambda t, m: None
 bs.messagebox.showwarning = lambda t, m: None
 bs.messagebox.askyesno = lambda t, m: True
 
+def find_btn_all(widget):
+    """递归查找所有 Button 控件"""
+    out = []
+    for w in widget.winfo_children():
+        if w.winfo_class() == "Button":
+            out.append(w)
+        out += find_btn_all(w)
+    return out
+
 bp = bs.PROG_PATH
 tmp = bp + ".bak"
 if os.path.exists(bp):
@@ -173,8 +182,59 @@ app.finish_exam()
 root.update()
 ok("交卷finished", app.exam.get("finished") is True)
 
-# ---- 11. 进度条样式 ----
-ok("进度条样式应用", "green" in str(app.pbar.cget("style")))
+# ---- 11. 考试题号导航 / 伪随机 / 次数 ----
+app.set_mode("考试")
+before_count = app.progress.get("_exam_count", 0)
+app._exam_start()
+root.update()
+ok("考试次数+1", app.progress.get("_exam_count", 0) == before_count + 1)
+nav_btns = find_btn_all(app.exam_nav)
+ok("考试导航30个题号按钮", len(nav_btns) == 30, str(len(nav_btns)))
+q0 = app.queue[0]
+# 第1题答对
+if q0["kind"] == "choice":
+    app.choice_var.set(q0["answer"].upper().strip())
+else:
+    app.answer_judge("√")
+app.check()
+# 第2题答错
+if len(app.queue) > 1:
+    q1 = app.queue[1]
+    app.idx = 1
+    app._exam_render_q()
+    if q1["kind"] == "choice":
+        wrong = next(o["key"] for o in q1["options"]
+                     if o["key"] != q1["answer"].upper().strip())
+        app.choice_var.set(wrong)
+    else:
+        app.answer_judge("×")
+    app.check()
+root.update()
+nav_btns2 = find_btn_all(app.exam_nav)
+cols = {b.cget("bg") for b in nav_btns2}
+ok("答后导航含白/绿/蓝三色", cols >= {"#ffffff", "#27ae60", "#2980b9"}, str(cols))
+app._exam_jump(15)
+root.update()
+ok("题号跳转", app.idx == 15)
+app.finish_exam()
+root.update()
+ok("交卷后导航仍显示", any(w.winfo_class() == "Button"
+   for w in find_btn_all(app.exam_nav)))
+
+# ---- 12. 伪随机覆盖性：连续 5 次考试收集题目 ----
+seen_c, seen_j = set(), set()
+for k in range(5):
+    app.progress["_exam_count"] = k      # 模拟第 k 次考试
+    ids = app._exam_pick_ids()
+    for qid in ids:
+        it = app._by_id(qid)
+        if it and it["kind"] == "choice":
+            seen_c.add(qid)
+        elif it and it["kind"] == "judge":
+            seen_j.add(qid)
+ok("5次考试覆盖全部单选(80)", len(seen_c) == 80, f"({len(seen_c)})")
+ok("5次考试覆盖全部判断(50)", len(seen_j) == 50, f"({len(seen_j)})")
+ok("5次共150题", len(seen_c) + len(seen_j) >= 130, f"({len(seen_c)}+{len(seen_j)})")
 
 # 恢复 progress
 if os.path.exists(tmp):
