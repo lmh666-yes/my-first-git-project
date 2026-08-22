@@ -131,6 +131,11 @@ function save(){ try{localStorage.setItem(LS_KEY,JSON.stringify(progress))}catch
 function byId(qid){ return BANK.find(x=>x.id===qid) }
 function isOk(it,s){ const a=(it.answer||"").toUpperCase().trim(); s=String(s||"").trim();
   return s===a || (s==="√"&&["对","T","TRUE","√"].includes(a)) || (s==="×"&&["错","F","FALSE","×"].includes(a)); }
+function examIsOk(it,k){
+  const oinfo=(mode==="考试"&&exam&&exam.opts)?exam.opts[it.id]:undefined;
+  if(oinfo) return String(k||"").trim()===String(oinfo.answer||"").trim();
+  return isOk(it,k);
+}
 function rec(qid){ return progress[qid]||(progress[qid]={ok:null,wrong_count:0,notes:""}) }
 
 /* ---------- 渲染 ---------- */
@@ -167,6 +172,17 @@ function startExam(){
   exam={active:true,finished:false,paused:false,ids:qs,idx:0,left:EXAM_MIN*60,answers:{}};
   progress.exam=exam; save();
   queue=qs.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
+  // 考试选项随机化：单选题选项顺序打乱，答案 key 跟随内容（不修改原题库）
+  const opts={};
+  queue.filter(x=>x.kind==="choice").forEach(q=>{
+    const src=q.options||[];
+    const ansText=(src.find(o=>o.key===(q.answer||"").toUpperCase().trim())||{}).text;
+    const sh=shuffle(src.map(o=>({key:o.key,text:o.text})));
+    let newKey=(q.answer||"A").toUpperCase().trim();
+    sh.forEach((o,i)=>{ o.key="ABCD"[i]||"?"; if(ansText!==undefined&&o.text===ansText) newKey=o.key; });
+    opts[q.id]={options:sh, answer:newKey};
+  });
+  exam.opts=opts;
   examBarShow(); tick(); renderQ();
 }
 function tick(){
@@ -203,7 +219,7 @@ function renderQnav(){
     b.textContent=i+1;
     const a=exam.answers?exam.answers[q.id]:undefined;
     if(a===undefined) b.className="un";
-    else if(isOk(q,a)) b.className="ok";
+    else if(examIsOk(q,a)) b.className="ok";
     else b.className="no";
     b.onclick=()=>{
       idx=i;
@@ -258,9 +274,11 @@ function renderQ(){
 function renderOpts(it,examSel){
   const o=$("#opts"); o.innerHTML="";
   if(it.kind==="choice"){
+    const oinfo=(mode==="考试"&&exam&&exam.opts)?exam.opts[it.id]:undefined;
+    const ans=((oinfo?oinfo.answer:it.answer)||"").toUpperCase().trim();
+    const opts=(oinfo?oinfo.options:it.options)||[];
     if(examSel!==undefined){
-      const ans=(it.answer||"").toUpperCase().trim();
-      it.options.forEach(op=>{
+      opts.forEach(op=>{
         const d=document.createElement("div");
         d.className="opt";
         d.textContent=wrapCn(`${op.key}. ${op.text}`);
@@ -270,7 +288,7 @@ function renderOpts(it,examSel){
       });
       return;
     }
-    it.options.forEach(op=>{
+    opts.forEach(op=>{
       const d=document.createElement("div");
       d.className="opt"; d.textContent=wrapCn(`${op.key}. ${op.text}`);
       d.onclick=()=>{ document.querySelectorAll(".opt").forEach(x=>x.classList.remove("selected"));
@@ -323,7 +341,7 @@ function answerJudge(key){
 }
 function examAnswer(it,k){
   if(exam.answers[it.id]){ msg("提示","本题已作答，不能更改"); return; }
-  const ok=isOk(it,k); exam.answers[it.id]=k; exam.left=examLeft; save();
+  const ok=examIsOk(it,k); exam.answers[it.id]=k; exam.left=examLeft; save();
   record(it,k,ok); renderQ();
 }
 function record(it,ans,ok){
@@ -358,7 +376,7 @@ function renderResult(){
   if(!exam)return;
   const qs=queue, ans=exam.answers;
   let correct=0, wrong=[], un=0;
-  qs.forEach(x=>{ if(ans[x.id]===undefined)un++; else if(isOk(x,ans[x.id]))correct++; else wrong.push(x); });
+  qs.forEach(x=>{ if(ans[x.id]===undefined)un++; else if(examIsOk(x,ans[x.id]))correct++; else wrong.push(x); });
   const score=correct*EXAM_SCORE;
   $("#head").textContent="🏁 考试结束";
   $("#stem").textContent=`🏆 考试成绩：${score} 分 / 满分 ${qs.length*EXAM_SCORE} 分\n\n✅ 答对 ${correct} 题 · ❌ 答错 ${wrong.length} 题 · ⭕ 未答 ${un} 题`;
@@ -386,9 +404,10 @@ function reviewWrong(qid){
   $("#head").textContent=`📖 错题回顾 · 第 ${it.num} 题`;
   $("#stem").textContent=it.stem||"";
   const o=$("#opts"); o.innerHTML="";
-  const ans=(it.answer||"").toUpperCase().trim(), your=exam.answers[qid];
+  const oinfo=exam&&exam.opts?exam.opts[qid]:undefined;
+  const ans=((oinfo?oinfo.answer:it.answer)||"").toUpperCase().trim(), your=exam.answers[qid];
   if(it.kind==="choice"){
-    it.options.forEach(op=>{ const d=document.createElement("div"); d.className="opt"; d.textContent=wrapCn(`${op.key}. ${op.text}`);
+    ((oinfo?oinfo.options:it.options)||[]).forEach(op=>{ const d=document.createElement("div"); d.className="opt"; d.textContent=wrapCn(`${op.key}. ${op.text}`);
       if(op.key===ans)d.classList.add("right"); else if(op.key===your)d.classList.add("wrong"); o.appendChild(d); });
   }else{
     const d1=document.createElement("div"); d1.className="opt"; d1.textContent=`正确答案：${it.answer}`; d1.classList.add("right"); o.appendChild(d1);

@@ -191,9 +191,11 @@ ok("开始考试不计数", app.progress.get("_exam_count", 0) == before_count)
 nav_btns = find_btn_all(app.exam_nav)
 ok("考试导航30个题号按钮", len(nav_btns) == 30, str(len(nav_btns)))
 q0 = app.queue[0]
-# 第1题答对
+# 第1题答对（考试选项已随机打乱，用打乱后的答案 key）
+oinfo0 = app.exam.get("opts", {}).get(q0["id"])
 if q0["kind"] == "choice":
-    app.choice_var.set(q0["answer"].upper().strip())
+    ans0 = oinfo0["answer"] if oinfo0 else q0["answer"].upper().strip()
+    app.choice_var.set(ans0)
 else:
     app.answer_judge("√")
 app.check()
@@ -202,9 +204,11 @@ if len(app.queue) > 1:
     q1 = app.queue[1]
     app.idx = 1
     app._exam_render_q()
+    oinfo1 = app.exam.get("opts", {}).get(q1["id"])
     if q1["kind"] == "choice":
-        wrong = next(o["key"] for o in q1["options"]
-                     if o["key"] != q1["answer"].upper().strip())
+        opts1 = oinfo1["options"] if oinfo1 else q1["options"]
+        ans1 = oinfo1["answer"] if oinfo1 else q1["answer"].upper().strip()
+        wrong = next(o["key"] for o in opts1 if o["key"] != ans1)
         app.choice_var.set(wrong)
     else:
         app.answer_judge("×")

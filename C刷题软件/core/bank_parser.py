@@ -78,13 +78,18 @@ def parse_choice_block(lines, ans_line):
             if m2:
                 opts.append({"key": m2.group(1).upper(), "text": m2.group(2).strip()})
     else:
-        # 无前缀：最后 4 行是选项，其余（含代码）是题干
+        # 无前缀（或部分带前缀）：最后 4 行是选项，其余（含代码）是题干
         if len(lines) > 4:
             stem_lines, opt_lines = lines[:-4], lines[-4:]
         else:
             stem_lines, opt_lines = lines[:1], lines[1:]
-        opts = [{"key": "ABCD"[i] if i < 4 else "?", "text": ln}
-                for i, ln in enumerate(opt_lines)]
+        # 清理选项前缀：原文档可能存在“A.-3 / B.9 / -12 / 6”这类部分带前缀的混合格式
+        cleaned_opts = []
+        for ln in opt_lines:
+            m3 = re.match(r"^[A-Da-d][\.、．]\s*(.*)$", ln.strip())
+            cleaned_opts.append(m3.group(1).strip() if m3 else ln.strip())
+        opts = [{"key": "ABCD"[i] if i < 4 else "?", "text": t}
+                for i, t in enumerate(cleaned_opts)]
         # 一行内多个选项（制表符 / 2+ 空格分隔）；若带 A-D 前缀则一并去除
         if len(opts) == 1 and re.search(r"\t|\s{2,}", opts[0]["text"]):
             parts = re.split(r"\t|\s{2,}", opts[0]["text"].strip())

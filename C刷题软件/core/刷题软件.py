@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.5"""
+版本：1.2.6"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -354,6 +354,35 @@ class App:
         random.shuffle(ids)
         return ids
 
+    def _exam_shuffle_choices(self):
+        """为考试中的每道单选题生成打乱的选项顺序与新答案 key（仅考试使用，不改原题库）。
+        思路：按选项内容识别正确答案，重排后按新位置分配 A/B/C/D，答案字母跟随内容。"""
+        opts_map = {}
+        for it in self.queue:
+            if it.get("kind") != "choice":
+                continue
+            src = it.get("options", [])
+            ans_key = str(it.get("answer", "")).strip().upper()
+            ans_text = next((o.get("text") for o in src if o.get("key") == ans_key), None)
+            shuffled = [dict(o) for o in src]
+            random.shuffle(shuffled)
+            new_key = None
+            for i, o in enumerate(shuffled):
+                o["key"] = "ABCD"[i] if i < 4 else "?"
+                if ans_text is not None and o.get("text") == ans_text:
+                    new_key = o["key"]
+            if new_key is None:
+                new_key = ans_key   # 兜底：找不到内容时保持原答案
+            opts_map[it.get("id")] = {"options": shuffled, "answer": new_key}
+        return opts_map
+
+    def _exam_is_ok(self, it, sel):
+        """考试判分：单选题用打乱后的答案 key，判断题用原答案"""
+        oinfo = self.exam.get("opts", {}).get(it.get("id"))
+        if oinfo:
+            return str(sel).strip() == str(oinfo.get("answer"))
+        return self._is_ok(it, sel)
+
     def _exam_start(self):
         """开始 / 重新开始考试：伪随机抽 20 单选 + 10 判断（完成交卷才计入考试次数）"""
         self._stop_exam_timer()
@@ -362,6 +391,7 @@ class App:
         self.exam = {"active": True, "finished": False, "paused": False,
                      "ids": ids, "idx": 0, "left": EXAM_MIN * 60, "answers": {}}
         self.queue = [it for it in self.bank if it.get("id") in set(ids)]
+        self.exam["opts"] = self._exam_shuffle_choices()   # 选择题选项随机化
         self.idx = 0
         self.exam_left = EXAM_MIN * 60
         self._save_exam()
@@ -400,13 +430,14 @@ class App:
         answers = self.exam.get("answers", {})
         sel = answers.get(it.get("id"))
         if sel is not None:
-            ok = self._is_ok(it, sel)
+            ok = self._exam_is_ok(it, sel)
             tag = "✅ 正确" if ok else "❌ 错误"
             self.fb.insert(tk.END, f"已作答：{sel} · {tag}（此题不可更改）\n")
         else:
             self.fb.insert(tk.END, "请作答（每题只能答一次）\n")
         self.fb.config(state=tk.DISABLED)
-        self._render_options(it, exam_answered=sel)
+        oinfo = self.exam.get("opts", {}).get(it.get("id"))
+        self._render_options(it, exam_answered=sel, exam_opts=oinfo)
         self.exam_nav.grid()
         self._exam_render_nav()
         self._update_stat()
@@ -436,7 +467,10 @@ class App:
         """主窗口尺寸变化时，防抖重排考试导航（避免子控件销毁触发递归）"""
         if self.mode != "考试" or not self._exam_active():
             return
-        w = self.exam_nav.winfo_width()
+        try:
+            w = self.exam_nav.winfo_width()
+        except Exception:
+            return   # 窗口销毁过程中 exam_nav 已失效
         if w <= 0:
             return
         if abs(w - getattr(self, "_nav_last_w", 0)) < 30:
@@ -488,7 +522,7 @@ class App:
             ans = answers.get(it.get("id"))
             if ans is None:
                 bg, fg = "#ffffff", "#333333"
-            elif self._is_ok(it, ans):
+            elif self._exam_is_ok(it, ans):
                 bg, fg = "#27ae60", "#ffffff"
             else:
                 bg, fg = "#c62828", "#ffffff"
@@ -543,7 +577,7 @@ class App:
         if qid in answers:
             messagebox.showinfo("提示", "本题已作答，不能更改")
             return
-        ok = self._is_ok(it, sel)
+        ok = self._exam_is_ok(it, sel)
         answers[qid] = sel
         self.exam["left"] = self.exam_left
         self._save_exam()
@@ -582,9 +616,9 @@ class App:
         answers = self.exam.get("answers", {})
         qs = self._exam_qlist()
         total = len(qs)
-        correct = sum(1 for it in qs if self._is_ok(it, answers.get(it.get("id"))))
+        correct = sum(1 for it in qs if self._exam_is_ok(it, answers.get(it.get("id"))))
         wrong = [it for it in qs
-                 if it.get("id") in answers and not self._is_ok(it, answers.get(it.get("id")))]
+                 if it.get("id") in answers and not self._exam_is_ok(it, answers.get(it.get("id")))]
         unanswered = [it for it in qs if it.get("id") not in answers]
         score = correct * EXAM_SCORE
         self.head_label.config(text="🏁 考试结束")
@@ -632,10 +666,12 @@ class App:
         self.choice_var.set("")
         self.head_label.config(text=f"📖 错题回顾 · 第 {it.get('num', '?')} 题")
         self._set_stem(str(it.get("stem", "")))
-        ans = str(it.get("answer", "")).upper().strip()
+        oinfo = self.exam.get("opts", {}).get(qid)
+        ans = str(oinfo["answer"] if oinfo else it.get("answer", "")).upper().strip()
+        opts = oinfo["options"] if oinfo else it.get("options", [])
         your = self.exam.get("answers", {}).get(qid, "")
         if it.get("kind") == "choice":
-            for o in it.get("options", []):
+            for o in opts:
                 k = o.get("key", "?")
                 mark, color = "", "#000000"
                 if k == ans:
@@ -719,7 +755,7 @@ class App:
         self.stem.config(height=lines)
         self.stem.config(state=tk.DISABLED)
 
-    def _render_options(self, it, exam_answered=None):
+    def _render_options(self, it, exam_answered=None, exam_opts=None):
         for w in self.opt_frame.winfo_children():
             w.destroy()
         self.opt_widgets = []
@@ -727,10 +763,12 @@ class App:
         self.choice_var.set("")
         kind = it.get("kind", "qa")
         if kind == "choice":
+            # 考试中单选题使用打乱后的选项顺序（exam_opts），其余板块用原题库顺序
+            opts = exam_opts["options"] if exam_opts else it.get("options", [])
+            ans = str(exam_opts["answer"] if exam_opts else it.get("answer", "")).upper().strip()
             if exam_answered is not None:
-                ans = str(it.get("answer", "")).upper().strip()
                 self._add_btn("本题已作答：", COLOR_BLUE, False)
-                for o in it.get("options", []):
+                for o in opts:
                     k = o.get("key", "?")
                     mark, color = "", "#000000"
                     if str(k) == ans:
@@ -741,7 +779,7 @@ class App:
             else:
                 self._add_btn("请选择答案：", COLOR_BLUE, False)
                 # 自定义选项行：未选中右侧空白，点击后整行背景变蓝
-                for o in it.get("options", []):
+                for o in opts:
                     k = o.get("key", "?")
                     row = tk.Frame(self.opt_frame, bg="#ffffff", cursor="hand2",
                                    highlightthickness=1, highlightbackground="#d5dbdb")

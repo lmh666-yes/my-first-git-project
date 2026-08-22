@@ -4,7 +4,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 1,
-  "stem": "嵌入式处理器指令的执行周期包括（　　）。",
+  "stem": "1、嵌入式处理器指令的执行周期包括（　　）。",
   "options": [
    {
     "key": "A",
@@ -31,7 +31,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 2,
-  "stem": "ARM嵌入式系统中，PC指向的是正在（　　）的指令地址。",
+  "stem": "2、ARM嵌入式系统中，PC指向的是正在（　　）的指令地址。",
   "options": [
    {
     "key": "A",
@@ -58,7 +58,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 3,
-  "stem": "在蓝牙4.0中，引入了一种新的连接模式，特别适用于哪种类型的应用？（　　）。",
+  "stem": "3、在蓝牙4.0中，引入了一种新的连接模式，特别适用于哪种类型的应用？（　　）。",
   "options": [
    {
     "key": "A",
@@ -85,7 +85,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 4,
-  "stem": "主要应用于高速情况下的瞬态信号处理、快速波形存储与记录、高速数据采集、视频信号量化及高速数字通讯技术等领域的是（　　）。",
+  "stem": "4、主要应用于高速情况下的瞬态信号处理、快速波形存储与记录、高速数据采集、视频信号量化及高速数字通讯技术等领域的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -112,7 +112,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 5,
-  "stem": "在页式存储管理中，为了实现主存的空间分配，应设置（　　）。",
+  "stem": "*5、在页式存储管理中，为了实现主存的空间分配，应设置（　　）。",
   "options": [
    {
     "key": "A",
@@ -131,7 +131,7 @@
     "text": "页表"
    }
   ],
-  "answer": "D",
+  "answer": "C",
   "explain": ""
  },
  {
@@ -139,7 +139,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 6,
-  "stem": "计算机系统的二级存储包括（　　）。",
+  "stem": "6、计算机系统的二级存储包括（　　）。",
   "options": [
    {
     "key": "A",
@@ -166,7 +166,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 7,
-  "stem": "以数字表示的声音在时间上是离散的，而模拟声音在时间上是连续的。要把模拟声音转换 为数字声音，就需在某些特定的时刻获取模拟声音，该过程称为（　　）。",
+  "stem": "7、以数字表示的声音在时间上是离散的，而模拟声音在时间上是连续的。要把模拟声音转换 为数字声音，就需在某些特定的时刻获取模拟声音，该过程称为（　　）。",
   "options": [
    {
     "key": "A",
@@ -193,7 +193,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 8,
-  "stem": "计算机处理模拟视频信号过程中首先要进行（　　）。",
+  "stem": "8、计算机处理模拟视频信号过程中首先要进行（　　）。",
   "options": [
    {
     "key": "A",
@@ -220,7 +220,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 9,
-  "stem": "在存储体系中，位于主存与CPU 之间的高速缓存(Cache)用于存放主存中部分信息的副本，主存地址与 Cache 地址之间的转换工作（　　）。",
+  "stem": "9、在存储体系中，位于主存与CPU 之间的高速缓存(Cache)用于存放主存中部分信息的副本，主存地址与 Cache 地址之间的转换工作（　　）。",
   "options": [
    {
     "key": "A",
@@ -247,7 +247,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 10,
-  "stem": "软件按功能可以分为：应用软件、系统软件和支持软件（或工具软件）。下面属于应用软件的是（　　）。",
+  "stem": "10、软件按功能可以分为：应用软件、系统软件和支持软件（或工具软件）。下面属于应用软件的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -274,7 +274,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 11,
-  "stem": "嵌入式系统有硬件和软件部分构成，以下（　　）不属于嵌入式系统软件。",
+  "stem": "11、嵌入式系统有硬件和软件部分构成，以下（　　）不属于嵌入式系统软件。",
   "options": [
    {
     "key": "A",
@@ -301,7 +301,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 12,
-  "stem": "嵌入式系统的开发通常是在交叉开发环境实现的，交叉开发环境是指（　　）。",
+  "stem": "12、嵌入式系统的开发通常是在交叉开发环境实现的，交叉开发环境是指（　　）。",
   "options": [
    {
     "key": "A",
@@ -328,7 +328,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 13,
-  "stem": "嵌入式系统应用软件一般在宿主机上开发，在目标机上运行，因此需要一个（　　）环境。",
+  "stem": "13、嵌入式系统应用软件一般在宿主机上开发，在目标机上运行，因此需要一个（　　）环境。",
   "options": [
    {
     "key": "A",
@@ -355,7 +355,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 14,
-  "stem": "I2C通信中的“ACK”是指什么？（　　）",
+  "stem": "14、I2C通信中的“ACK”是指什么？（　　）",
   "options": [
    {
     "key": "A",
@@ -382,7 +382,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 15,
-  "stem": "RS-485使得（　　）的配置成为可能。",
+  "stem": "15、RS-485使得（　　）的配置成为可能。",
   "options": [
    {
     "key": "A",
@@ -409,7 +409,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 16,
-  "stem": "RS232-C串口通信中，表示逻辑1的电平是（　　）。",
+  "stem": "16、RS232-C串口通信中，表示逻辑1的电平是（　　）。",
   "options": [
    {
     "key": "A",
@@ -436,7 +436,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 17,
-  "stem": "调试RS485常用工具是（　　）。",
+  "stem": "17、调试RS485常用工具是（　　）。",
   "options": [
    {
     "key": "A",
@@ -463,7 +463,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 18,
-  "stem": "在Linux系统中，使用哪个命令可以查看系统的内核版本？（   ）",
+  "stem": "18、在Linux系统中，使用哪个命令可以查看系统的内核版本？（   ）",
   "options": [
    {
     "key": "A",
@@ -490,7 +490,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 19,
-  "stem": "如果用ST-Link仿真器进行调试，在C 代码工程配置中，以下说法错误的是（　　）。",
+  "stem": "19、如果用ST-Link仿真器进行调试，在C 代码工程配置中，以下说法错误的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -517,7 +517,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 20,
-  "stem": "仿真器的作用是（　　）。",
+  "stem": "*20、仿真器的作用是（　　）。",
   "options": [
    {
     "key": "A",
@@ -536,7 +536,7 @@
     "text": "只能做各种模拟实验"
    }
   ],
-  "answer": "A",
+  "answer": "C",
   "explain": ""
  },
  {
@@ -544,7 +544,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 21,
-  "stem": "在vi编辑器中命令模式下保存修改的命令是（　　 ）。",
+  "stem": "21、在vi编辑器中命令模式下保存修改的命令是（　　 ）。",
   "options": [
    {
     "key": "A",
@@ -571,7 +571,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 22,
-  "stem": "非安全逻辑仿真器简称（　　）。",
+  "stem": "22、非安全逻辑仿真器简称（　　）。",
   "options": [
    {
     "key": "A",
@@ -598,7 +598,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 23,
-  "stem": "服务器一般配置4个以上的以太网口。需要根据现场实际要使用的网口来配置 （　　）。",
+  "stem": "23、服务器一般配置4个以上的以太网口。需要根据现场实际要使用的网口来配置 （　　）。",
   "options": [
    {
     "key": "A",
@@ -625,7 +625,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 24,
-  "stem": "查看服务器网口配置的命令是什么?（　　）",
+  "stem": "*24、查看服务器网口配置的命令是什么?（　　）",
   "options": [
    {
     "key": "A",
@@ -652,7 +652,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 25,
-  "stem": "Linux文件权限中保存了（ 　  ）信息。",
+  "stem": "25、Linux文件权限中保存了（ 　  ）信息。",
   "options": [
    {
     "key": "A",
@@ -679,7 +679,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 26,
-  "stem": "以下关于网口配置的说法,正确的是（　　）。",
+  "stem": "26、以下关于网口配置的说法,正确的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -706,7 +706,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 27,
-  "stem": "单片机应用程序一般存放在（　　）。",
+  "stem": "27、单片机应用程序一般存放在（　　）。",
   "options": [
    {
     "key": "A",
@@ -733,7 +733,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 28,
-  "stem": "以下关于高级程序设计语言的编译和解释的叙述中，正确的是（　　）。",
+  "stem": "28、以下关于高级程序设计语言的编译和解释的叙述中，正确的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -760,7 +760,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 29,
-  "stem": "单片机能直接运行的程序叫（   ）。",
+  "stem": "29、单片机能直接运行的程序叫（   ）。",
   "options": [
    {
     "key": "A",
@@ -787,7 +787,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 30,
-  "stem": "开发单片机的集成开发环境工具（IDE）有很多，包含“通用”IDE、“专用”IDE、“搭建”IDE。Keil属于（　　）。",
+  "stem": "*30、开发单片机的集成开发环境工具（IDE）有很多，包含“通用”IDE、“专用”IDE、“搭建”IDE。Keil属于（　　）。",
   "options": [
    {
     "key": "A",
@@ -806,7 +806,7 @@
     "text": "其它"
    }
   ],
-  "answer": "A",
+  "answer": "B",
   "explain": ""
  },
  {
@@ -814,7 +814,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 31,
-  "stem": "目前Keil有四种产品（软件），以下哪种不属于其中（　　）。",
+  "stem": "31、目前Keil有四种产品（软件），以下哪种不属于其中（　　）。",
   "options": [
    {
     "key": "A",
@@ -841,7 +841,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 32,
-  "stem": "STC-ISP这种方式，通过（　　）连接单片机。",
+  "stem": "32、STC-ISP这种方式，通过（　　）连接单片机。",
   "options": [
    {
     "key": "A",
@@ -868,7 +868,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 33,
-  "stem": "定时器/计数器工作方式0为（　　）。",
+  "stem": "33、定时器/计数器工作方式0为（　　）。",
   "options": [
    {
     "key": "A",
@@ -895,7 +895,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 34,
-  "stem": "在下列寄存器中，与定时器/计数器无关的是（　　）。",
+  "stem": "34、在下列寄存器中，与定时器/计数器无关的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -922,7 +922,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 35,
-  "stem": "当晶振频率为6MHz，定时器/计数器工作于方式1，最大定时时间为（　　）。",
+  "stem": "35、当晶振频率为6MHz，定时器/计数器工作于方式1，最大定时时间为（　　）。",
   "options": [
    {
     "key": "A",
@@ -938,7 +938,7 @@
    },
    {
     "key": "D",
-    "text": "131.072"
+    "text": "131.072ms"
    }
   ],
   "answer": "D",
@@ -949,7 +949,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 36,
-  "stem": "使C51定时/计数器 T停止计数的 C51命令为（　　）。",
+  "stem": "36、使C51定时/计数器 T停止计数的 C51命令为（　　）。",
   "options": [
    {
     "key": "A",
@@ -976,7 +976,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 37,
-  "stem": "C51的定时器TO用作定时方式且选择模式0时，C51初始化编程为（　　）。",
+  "stem": "37、C51的定时器TO用作定时方式且选择模式0时，C51初始化编程为（　　）。",
   "options": [
    {
     "key": "A",
@@ -1003,7 +1003,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 38,
-  "stem": "启动定时器0开始计数的指令是使TCON的（　　）。",
+  "stem": "38、启动定时器0开始计数的指令是使TCON的（　　）。",
   "options": [
    {
     "key": "A",
@@ -1030,7 +1030,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 39,
-  "stem": "设串行异步通信的数据格式是:1个起始位、7个数据位、1个校验和1位个停止位。若传输率为 1200，则每秒钟传输的最大字符数为（　　）。",
+  "stem": "39、设串行异步通信的数据格式是:1个起始位、7个数据位、1个校验和1位个停止位。若传输率为 1200，则每秒钟传输的最大字符数为（　　）。",
   "options": [
    {
     "key": "A",
@@ -1057,7 +1057,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 40,
-  "stem": "关于RISC指令系统描述不正确的是。（　　）",
+  "stem": "*40、关于RISC指令系统描述不正确的是。（　　）",
   "options": [
    {
     "key": "A",
@@ -1076,7 +1076,7 @@
     "text": "寻址方式种类少"
    }
   ],
-  "answer": "D",
+  "answer": "A",
   "explain": ""
  },
  {
@@ -1084,7 +1084,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 41,
-  "stem": "以下叙述中，不符合RISC指令系统特点的（　　）。",
+  "stem": "41、以下叙述中，不符合RISC指令系统特点的（　　）。",
   "options": [
    {
     "key": "A",
@@ -1111,7 +1111,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 42,
-  "stem": "下列描述不属于RISC计算机的特点的是（　　）。",
+  "stem": "42、下列描述不属于RISC计算机的特点的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1138,7 +1138,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 43,
-  "stem": "在经典ARM处理器中，下面哪种中断方式优先级最低（　　）。",
+  "stem": "*43、在经典ARM处理器中，下面哪种中断方式优先级最低（　　）。",
   "options": [
    {
     "key": "A",
@@ -1157,7 +1157,7 @@
     "text": "IRQ"
    }
   ],
-  "answer": "C",
+  "answer": "D",
   "explain": ""
  },
  {
@@ -1165,7 +1165,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 44,
-  "stem": "某软件开发公司的程序员小李正在进行Program-1 的编写和调试工作，项目经理给小李又安 排了一项临时性的紧急任务，要求优先处理。小李在执行紧急任务前对原工作的正确处理方式  为（　　）,转做紧急任务。",
+  "stem": "44、某软件开发公司的程序员小李正在进行Program-1 的编写和调试工作，项目经理给小李又安 排了一项临时性的紧急任务，要求优先处理。小李在执行紧急任务前对原工作的正确处理方式  为（　　）,转做紧急任务。",
   "options": [
    {
     "key": "A",
@@ -1192,7 +1192,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 45,
-  "stem": "Cortex-M3的提供的单周期乘法位数是（　　）。",
+  "stem": "45、Cortex-M3的提供的单周期乘法位数是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1219,7 +1219,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 46,
-  "stem": "下列哪个指令可以在一个Cortex-M处理器的时钟周期内执行（　　）。",
+  "stem": "*46、下列哪个指令可以在一个Cortex-M处理器的时钟周期内执行（　　）。",
   "options": [
    {
     "key": "A",
@@ -1238,7 +1238,7 @@
     "text": "以上都对"
    }
   ],
-  "answer": "D",
+  "answer": "A",
   "explain": ""
  },
  {
@@ -1246,7 +1246,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 47,
-  "stem": "Cortex-M处理器的指令周期取决于哪些因素（　　）。",
+  "stem": "47、Cortex-M处理器的指令周期取决于哪些因素（　　）。",
   "options": [
    {
     "key": "A",
@@ -1273,7 +1273,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 48,
-  "stem": "下面是Context-M3处理器的工作模式的是（　　）。",
+  "stem": "48、下面是Context-M3处理器的工作模式的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1300,7 +1300,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 49,
-  "stem": "Handle模式一般使用（　　）。",
+  "stem": "49、Handle模式一般使用（　　）。",
   "options": [
    {
     "key": "A",
@@ -1327,7 +1327,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 50,
-  "stem": "下面是Context-M3处理器代码执行方式的是（　　）。",
+  "stem": "50、下面是Context-M3处理器代码执行方式的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1354,7 +1354,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 51,
-  "stem": "下面哪一个选项中的程序段可以将AX寄存器的高4位移至BX的低4位。（　　）",
+  "stem": "51、下面哪一个选项中的程序段可以将AX寄存器的高4位移至BX的低4位。（　　）",
   "options": [
    {
     "key": "A",
@@ -1381,34 +1381,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 52,
-  "stem": "下列哪个说法正确描述了STM32单片机处理器的寄存器和存储器之间的关系。（　　）",
-  "options": [
-   {
-    "key": "A",
-    "text": "存放指令"
-   },
-   {
-    "key": "B",
-    "text": "存放16位地址，作间址寄存器"
-   },
-   {
-    "key": "C",
-    "text": "存放下一条指令地址"
-   },
-   {
-    "key": "D",
-    "text": "存放上一条指令地址"
-   }
-  ],
-  "answer": "B",
-  "explain": ""
- },
- {
-  "id": "choice-53",
-  "kind": "choice",
-  "kind_name": "单选题",
-  "num": 53,
-  "stem": "STM32单片机处理器使用的是哪个系列的ARM Cortex处理器。（　　）",
+  "stem": "*52、下列哪个说法正确描述了STM32单片机处理器的寄存器和存储器之间的关系。（　　）",
   "options": [
    {
     "key": "A",
@@ -1427,6 +1400,33 @@
     "text": "以上说法都不正确"
    }
   ],
+  "answer": "B",
+  "explain": ""
+ },
+ {
+  "id": "choice-53",
+  "kind": "choice",
+  "kind_name": "单选题",
+  "num": 53,
+  "stem": "*53、STM32单片机处理器使用的是哪个系列的ARM Cortex处理器。（　　）",
+  "options": [
+   {
+    "key": "A",
+    "text": "存放指令"
+   },
+   {
+    "key": "B",
+    "text": "存放16位地址，作间址寄存器"
+   },
+   {
+    "key": "C",
+    "text": "存放下一条指令地址"
+   },
+   {
+    "key": "D",
+    "text": "存放上一条指令地址"
+   }
+  ],
   "answer": "C",
   "explain": ""
  },
@@ -1435,7 +1435,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 54,
-  "stem": "ST-Link可以用于连接哪些类型的STM系列MCU？",
+  "stem": "54、ST-Link可以用于连接哪些类型的STM系列MCU？",
   "options": [
    {
     "key": "A",
@@ -1462,7 +1462,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 55,
-  "stem": "ST-Link的哪个命令可以用于擦除芯片的闪存？",
+  "stem": "55、ST-Link的哪个命令可以用于擦除芯片的闪存？",
   "options": [
    {
     "key": "A",
@@ -1489,7 +1489,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 56,
-  "stem": "使用ST-Link进行调试时，哪个功能可以用于查看变量和寄存器的值？",
+  "stem": "56、使用ST-Link进行调试时，哪个功能可以用于查看变量和寄存器的值？",
   "options": [
    {
     "key": "A",
@@ -1516,7 +1516,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 57,
-  "stem": "大多数Modbus设备通信通过串口 （  ） 物理层进行。",
+  "stem": "57、大多数Modbus设备通信通过串口 （  ） 物理层进行。",
   "options": [
    {
     "key": "A",
@@ -1543,7 +1543,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 58,
-  "stem": "STM32F103的ADC是（  ）位逐次逼近型的模拟数字转换器。",
+  "stem": "58、STM32F103的ADC是（  ）位逐次逼近型的模拟数字转换器。",
   "options": [
    {
     "key": "A",
@@ -1570,7 +1570,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 59,
-  "stem": "STM32F103的ADC是12位逐次逼近型的模拟数字转换器，具有（  ）个外部通道。",
+  "stem": "59、STM32F103的ADC是12位逐次逼近型的模拟数字转换器，具有（  ）个外部通道。",
   "options": [
    {
     "key": "A",
@@ -1597,7 +1597,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 60,
-  "stem": "串口设备调试时模块之间波特率应该（  ）。",
+  "stem": "60、串口设备调试时模块之间波特率应该（  ）。",
   "options": [
    {
     "key": "A",
@@ -1624,7 +1624,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 61,
-  "stem": "串口通信配置描述错误的是（  ）。",
+  "stem": "61、串口通信配置描述错误的是（  ）。",
   "options": [
    {
     "key": "A",
@@ -1651,7 +1651,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 62,
-  "stem": "调试RS485设备时常常使用UART串口助手进行数据的显示，通常使用波特率为（  ）。",
+  "stem": "62、调试RS485设备时常常使用UART串口助手进行数据的显示，通常使用波特率为（  ）。",
   "options": [
    {
     "key": "A",
@@ -1678,7 +1678,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 63,
-  "stem": "连接J-Link下载与调试器，不能使用哪种类型的连接线？",
+  "stem": "63、连接J-Link下载与调试器，不能使用哪种类型的连接线？",
   "options": [
    {
     "key": "A",
@@ -1705,7 +1705,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 64,
-  "stem": "JLINK下载与调试程序时，需要使用哪个命令进行程序的下载？",
+  "stem": "*64、JLINK下载与调试程序时，需要使用哪个命令进行程序的下载？",
   "options": [
    {
     "key": "A",
@@ -1724,7 +1724,7 @@
     "text": "以上均可"
    }
   ],
-  "answer": "D",
+  "answer": "B",
   "explain": ""
  },
  {
@@ -1732,7 +1732,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 65,
-  "stem": "若a为int类型，且其值为3，则执行完表达式 a+=a-=a*a后，a的值是（　　）。",
+  "stem": "65、若a为int类型，且其值为3，则执行完表达式 a+=a-=a*a后，a的值是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1759,7 +1759,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 66,
-  "stem": "若变量已正确说明为float类型，要通过语句scanf(\"%f %f %f \",&a,&b,&c);给a赋于10.0，b赋予22.0，c赋予33.0，不正确的输入形式是（　　）。",
+  "stem": "66、若变量已正确说明为float类型，要通过语句scanf(\"%f %f %f \",&a,&b,&c);给a赋于10.0，b赋予22.0，c赋予33.0，不正确的输入形式是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1786,7 +1786,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 67,
-  "stem": "若已定义:\nint a[ ]={0,1,2,3,4,5,6,7,8,9}, *p=a,i;\n其中 0≤i≤9, 则对a数组元素不正确的引用上（　　）。",
+  "stem": "67、若已定义:\nint a[ ]={0,1,2,3,4,5,6,7,8,9}, *p=a,i;\n其中 0≤i≤9, 则对a数组元素不正确的引用上（　　）。",
   "options": [
    {
     "key": "A",
@@ -1813,7 +1813,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 68,
-  "stem": "设有数组定义: char array [ ]=\"China\"; 则数组 array所占的空间为（　　）。",
+  "stem": "68、设有数组定义: char array [ ]=\"China\"; 则数组 array所占的空间为（　　）。",
   "options": [
    {
     "key": "A",
@@ -1840,7 +1840,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 69,
-  "stem": "当调用函数时，实参是一个数组名，则向函数传送的是（　　）。",
+  "stem": "69、当调用函数时，实参是一个数组名，则向函数传送的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1867,7 +1867,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 70,
-  "stem": "堆是一种有用的数据结构，下列关键字序列中， （　　）是一个堆。",
+  "stem": "70、堆是一种有用的数据结构，下列关键字序列中， （　　）是一个堆。",
   "options": [
    {
     "key": "A",
@@ -1894,7 +1894,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 71,
-  "stem": "分区分配内存管理方式的主要保护措施是（　　）。",
+  "stem": "71、分区分配内存管理方式的主要保护措施是（　　）。",
   "options": [
    {
     "key": "A",
@@ -1921,7 +1921,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 72,
-  "stem": "栈和队列的共同特点是 （　　）。",
+  "stem": "72、栈和队列的共同特点是 （　　）。",
   "options": [
    {
     "key": "A",
@@ -1948,7 +1948,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 73,
-  "stem": "函数调用和返回控制是用（　　）实现的。",
+  "stem": "73、函数调用和返回控制是用（　　）实现的。",
   "options": [
    {
     "key": "A",
@@ -1975,7 +1975,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 74,
-  "stem": "以下所列的各函数首部中，正确的是（　　）。",
+  "stem": "74、以下所列的各函数首部中，正确的是（　　）。",
   "options": [
    {
     "key": "A",
@@ -2002,7 +2002,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 75,
-  "stem": "若定义了以下函数：\nvoid f(……)\n{……\n*p=(double *)malloc( 10*sizeof( double));\n……\n}\np是该函数的形参，要求通过p把动态分配存储单元的地址传回主调函数，则形参p的正确定义应当是（　　）。",
+  "stem": "75、若定义了以下函数：\nvoid f(……)\n{……\n*p=(double *)malloc( 10*sizeof( double));\n……\n}\np是该函数的形参，要求通过p把动态分配存储单元的地址传回主调函数，则形参p的正确定义应当是（　　）。",
   "options": [
    {
     "key": "A",
@@ -2029,7 +2029,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 76,
-  "stem": "设已有定义:char *st=\"how are you\";下列程序段中正确的是（  ）。",
+  "stem": "76、设已有定义:char *st=\"how are you\";下列程序段中正确的是（  ）。",
   "options": [
    {
     "key": "A",
@@ -2056,7 +2056,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 77,
-  "stem": "下列程序的输出结果是（  ）。\nstruct abc\n{ int a, b, c; };\nint main()\n{ struct abc s[2]={{1,2,3},{4,5,6}}; int t;\nt=s[0].a+s[1].b;\nprintf(\"\"%d \\n\"\",t);\n}",
+  "stem": "77、下列程序的输出结果是（  ）。\nstruct abc\n{ int a, b, c; };\nint main()\n{ struct abc s[2]={{1,2,3},{4,5,6}}; int t;\nt=s[0].a+s[1].b;\nprintf(\"\"%d \\n\"\",t);\n}",
   "options": [
    {
     "key": "A",
@@ -2083,7 +2083,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 78,
-  "stem": "下列程序的输出结果是（  ）。\nint b=2;\nint func(int *a)\n{ b += *a; return(b);}\nint main()\n{ int a=2, res=2;\nres += func(&a);\nprintf(\"\"%d \\n\"\",res);\n}\"",
+  "stem": "78、下列程序的输出结果是（  ）。\nint b=2;\nint func(int *a)\n{ b += *a; return(b);}\nint main()\n{ int a=2, res=2;\nres += func(&a);\nprintf(\"\"%d \\n\"\",res);\n}\"",
   "options": [
    {
     "key": "A",
@@ -2110,7 +2110,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 79,
-  "stem": "设有以下说明语句\nstruct ex\n{ int x ; float y; char z ;} example;\n则下面的叙述中不正确的是（  ）。\"",
+  "stem": "79、设有以下说明语句\nstruct ex\n{ int x ; float y; char z ;} example;\n则下面的叙述中不正确的是（  ）。\"",
   "options": [
    {
     "key": "A",
@@ -2137,7 +2137,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 80,
-  "stem": "以下程序的输出是（  ）。\nstruct st\n{ int x; int *y;} *p;\nint dt[4]={ 10,20,30,40 };\nstruct st aa[4]={ 50,&dt[0],60,&dt[0],60,&dt[0],60,&dt[0],};\nint main()\n{ p=aa;\nprintf(\"\"%d\\n\"\",++(p->x));\n}",
+  "stem": "80、以下程序的输出是（  ）。\nstruct st\n{ int x; int *y;} *p;\nint dt[4]={ 10,20,30,40 };\nstruct st aa[4]={ 50,&dt[0],60,&dt[0],60,&dt[0],60,&dt[0],};\nint main()\n{ p=aa;\nprintf(\"\"%d\\n\"\",++(p->x));\n}",
   "options": [
    {
     "key": "A",
@@ -2164,7 +2164,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 1,
-  "stem": "循环可以相互嵌套。（　　）",
+  "stem": "1.循环可以相互嵌套。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2174,7 +2174,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 2,
-  "stem": "二维数组可以视为数组元素为一维数组的一维数组。（　　）",
+  "stem": "2.二维数组可以视为数组元素为一维数组的一维数组。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2184,7 +2184,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 3,
-  "stem": "数组中的单个元素可以通过数组的名称来直接访问，不需要任何其他信息。（　　）",
+  "stem": "3.数组中的单个元素可以通过数组的名称来直接访问，不需要任何其他信息。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2194,7 +2194,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 4,
-  "stem": "嵌入式系统由硬件部分和软件部分构成，系统内核属于嵌入式系统软件。（　　）",
+  "stem": "4.嵌入式系统由硬件部分和软件部分构成，系统内核属于嵌入式系统软件。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2204,7 +2204,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 5,
-  "stem": "嵌入式系统由硬件部分和软件部分构成，JAVA不属于嵌入式系统软件。（　　）",
+  "stem": "5.嵌入式系统由硬件部分和软件部分构成，JAVA不属于嵌入式系统软件。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2214,7 +2214,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 6,
-  "stem": "U-Boot将对于与硬件平台相关的代码定义成宏并保留在配置文件中，开发者往往只需要修改宏变量就能成功使用这些硬件资源。（　　）",
+  "stem": "6.U-Boot将对于与硬件平台相关的代码定义成宏并保留在配置文件中，开发者往往只需要修改宏变量就能成功使用这些硬件资源。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2224,7 +2224,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 7,
-  "stem": "需求分析工作完成的一个基本标志是形成了一份完整、规范的需求规格说明书。（　　）",
+  "stem": "7.需求分析工作完成的一个基本标志是形成了一份完整、规范的需求规格说明书。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2234,7 +2234,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 8,
-  "stem": "可行性研究的最根本的任务是对以后的行动方针提出建议。（　　）",
+  "stem": "8.可行性研究的最根本的任务是对以后的行动方针提出建议。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2244,7 +2244,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 9,
-  "stem": "下面属于blob运行过程第一阶段的是寄存器的初始化。（　　）",
+  "stem": "9.下面属于blob运行过程第一阶段的是寄存器的初始化。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2254,7 +2254,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 10,
-  "stem": "串口调试中，严禁带电插拔串口。（　　）",
+  "stem": "10.串口调试中，严禁带电插拔串口。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2264,7 +2264,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 11,
-  "stem": "取指从存储器装载一条指令。（　　）",
+  "stem": "11.取指从存储器装载一条指令。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2274,7 +2274,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 12,
-  "stem": "执行处理指令并将结果写会寄存器。（　　）",
+  "stem": "12.执行处理指令并将结果写会寄存器。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2284,7 +2284,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 13,
-  "stem": "STM32的5个中断源优先级相同。（　　）",
+  "stem": "13.STM32的5个中断源优先级相同。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2294,7 +2294,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 14,
-  "stem": "在ARM cortexA8处理器中，Reset中断方式优先级最高。（　　）",
+  "stem": "14.在ARM cortexA8处理器中，Reset中断方式优先级最高。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2304,7 +2304,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 15,
-  "stem": "Cortex-M处理器的时钟频率以MHz为单位，越高表示处理器每秒钟可以执行的指令数越多。（　　）",
+  "stem": "15.Cortex-M处理器的时钟频率以MHz为单位，越高表示处理器每秒钟可以执行的指令数越多。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2314,7 +2314,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 16,
-  "stem": "当多个中断同时发生时，STM32单片机按照中断的优先级顺序进行处理。（　　）",
+  "stem": "16.当多个中断同时发生时，STM32单片机按照中断的优先级顺序进行处理。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2324,7 +2324,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 17,
-  "stem": "中断处理程序必须是无阻塞的，否则会影响其他中断的处理（　　）。",
+  "stem": "17.中断处理程序必须是无阻塞的，否则会影响其他中断的处理（　　）。",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2334,7 +2334,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 18,
-  "stem": "在STM32单片机中，需要设置NVIC寄存器来实现中断的初始化和设置（　　）。",
+  "stem": "18.在STM32单片机中，需要设置NVIC寄存器来实现中断的初始化和设置（　　）。",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2344,7 +2344,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 19,
-  "stem": "中断服务程序是用于处理中断请求的程序，必须包含在中断向量中。（　　）",
+  "stem": "19.中断服务程序是用于处理中断请求的程序，必须包含在中断向量中。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2354,7 +2354,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 20,
-  "stem": "中断向量是指在中断向量表中指示中断处理程序的入口地址。（　　）",
+  "stem": "20.中断向量是指在中断向量表中指示中断处理程序的入口地址。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2364,9 +2364,9 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 21,
-  "stem": "DAC的输出信号幅度范围通常与其输入数字信号的位数有关。（　　）",
+  "stem": "21.DAC的输出信号幅度范围通常与其输入数字信号的位数有关。（　　）",
   "options": [],
-  "answer": "√",
+  "answer": "×",
   "explain": ""
  },
  {
@@ -2374,7 +2374,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 22,
-  "stem": "DAC的信号处理速度通常受其转换时间和分辨率的限制。（　　）",
+  "stem": "22.DAC的信号处理速度通常受其转换时间和分辨率的限制。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2384,9 +2384,9 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 23,
-  "stem": "在进行DAC初始化之前，需要先配置DAC通道的输出类型。（　　）",
+  "stem": "23.在进行DAC初始化之前，需要先配置DAC通道的输出类型。（　　）",
   "options": [],
-  "answer": "√",
+  "answer": "×",
   "explain": ""
  },
  {
@@ -2394,9 +2394,9 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 24,
-  "stem": "DAC初始化需要使用STM32的HAL库函数。（　　）",
+  "stem": "24.DAC初始化需要使用STM32的HAL库函数。（　　）",
   "options": [],
-  "answer": "√",
+  "answer": "×",
   "explain": ""
  },
  {
@@ -2404,7 +2404,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 25,
-  "stem": "PWM是一种数字控制脉冲宽度的技术。（　　）",
+  "stem": "25.PWM是一种数字控制脉冲宽度的技术。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2414,9 +2414,9 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 26,
-  "stem": "STM32单片机的RTC模块具有硬件日历功能，因此不需要额外的硬件电路。（　　）",
+  "stem": "*26.STM32单片机的RTC模块具有硬件日历功能，因此不需要额外的硬件电路。（　　）",
   "options": [],
-  "answer": "√",
+  "answer": "×",
   "explain": ""
  },
  {
@@ -2424,7 +2424,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 27,
-  "stem": "在STM32单片机中，可以使用RTC模块来实现电子钟功能。（　　）",
+  "stem": "27.在STM32单片机中，可以使用RTC模块来实现电子钟功能。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2434,7 +2434,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 28,
-  "stem": "模块化编程是将程序按照功能划分为多个独立的模块，每个模块完成特定的功能。（　　）",
+  "stem": "28.模块化编程是将程序按照功能划分为多个独立的模块，每个模块完成特定的功能。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2444,9 +2444,9 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 29,
-  "stem": "在单片机中，可以使用全局变量来实现模块之间的数据传递。（　　）",
+  "stem": "*29.在单片机中，可以使用全局变量来实现模块之间的数据传递。（　　）",
   "options": [],
-  "answer": "×",
+  "answer": "√",
   "explain": ""
  },
  {
@@ -2454,7 +2454,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 30,
-  "stem": "键盘的按键都是以其状态来设置控制功能或输入数据的。（　　）",
+  "stem": "30.键盘的按键都是以其状态来设置控制功能或输入数据的。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2464,7 +2464,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 31,
-  "stem": "编写C语言程序需要安装C编译器。 （　　）",
+  "stem": "*31.编写C语言程序需要安装C编译器。 （　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2474,7 +2474,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 32,
-  "stem": "C语言程序可以使用多种不同的编译器。 （　　）",
+  "stem": "32.C语言程序可以使用多种不同的编译器。 （　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2484,7 +2484,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 33,
-  "stem": "在C语言中，int是一种基本数据类型。（　　）",
+  "stem": "33.在C语言中，int是一种基本数据类型。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2494,7 +2494,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 34,
-  "stem": "在C语言中，bool是一种基本数据类型。（　　）",
+  "stem": "34.在C语言中，bool是一种基本数据类型。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2504,7 +2504,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 35,
-  "stem": "函数的标量参数通过传值的方式进行传递，而数组名参数则具有传址调用的语义。（　　）",
+  "stem": "35.函数的标量参数通过传值的方式进行传递，而数组名参数则具有传址调用的语义。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2514,7 +2514,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 36,
-  "stem": "有数组定义int a[2][2]={{1},{2,3}};则a[0][1]的值为。（　　）",
+  "stem": "*36.有数组定义int a[2][2]={{1},{2,3}};则a[0][1]的值为1。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2524,7 +2524,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 37,
-  "stem": "C语言中的栈的压入和弹出是由操作系统管理的。（　　）",
+  "stem": "37.C语言中的栈的压入和弹出是由操作系统管理的。（　　）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2534,7 +2534,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 38,
-  "stem": "堆（Heap）、栈（Stack）和静态区都位于RAM内。（　　）",
+  "stem": "38.堆（Heap）、栈（Stack）和静态区都位于RAM内。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2544,7 +2544,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 39,
-  "stem": "由于CPU内部寄存器的访问速度较高，根据ATPC标准，应尽可能使函数的参数控制在4个以下。（　　）",
+  "stem": "39.由于CPU内部寄存器的访问速度较高，根据ATPC标准，应尽可能使函数的参数控制在4个以下。（　　）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2554,7 +2554,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 40,
-  "stem": "下列程序的输出结果是 （“Hello you”） 。（   ）\nmaim （）\n{ char b［］=\"\"Hello you\"\"；\nb［5］=0；\nprintf （\"\"%s＼n\"\",b）; }",
+  "stem": "40.下列程序的输出结果是 （“Hello you”） 。（   ）\nmaim （）\n{ char b［］=\"\"Hello you\"\"；\nb［5］=0；\nprintf （\"\"%s＼n\"\",b）; }",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2564,7 +2564,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 41,
-  "stem": "进程有三种状态是准备态、执行态和退出态。（   ）",
+  "stem": "41.进程有三种状态是准备态、执行态和退出态。（   ）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2574,7 +2574,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 42,
-  "stem": "从后台启动进程，应在命令的结尾加上符号@。（   ）",
+  "stem": "42.从后台启动进程，应在命令的结尾加上符号@。（   ）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2584,7 +2584,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 43,
-  "stem": "在嵌入式Linux系统中，一个进程可以直接访问另一个进程的内存空间。（   ）",
+  "stem": "43.在嵌入式Linux系统中，一个进程可以直接访问另一个进程的内存空间。（   ）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2594,7 +2594,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 44,
-  "stem": "进程的同步是解决进程间协作关系（ 直接制约关系） 的手段。（   ）",
+  "stem": "44.进程的同步是解决进程间协作关系（ 直接制约关系） 的手段。（   ）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2604,7 +2604,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 45,
-  "stem": "信号量是解决进程或线程之间的同步与互斥问题的一种通信机制。（   ）",
+  "stem": "45.信号量是解决进程或线程之间的同步与互斥问题的一种通信机制。（   ）",
   "options": [],
   "answer": "√",
   "explain": ""
@@ -2614,7 +2614,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 46,
-  "stem": "嵌入式Linux中的线程拥有独立的地址空间，与进程相同。 （   ）",
+  "stem": "46.嵌入式Linux中的线程拥有独立的地址空间，与进程相同。 （   ）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2624,7 +2624,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 47,
-  "stem": "在Linux系统中，read()函数用于从标准输出读取数据。（   ）",
+  "stem": "47.在Linux系统中，read()函数用于从标准输出读取数据。（   ）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2634,7 +2634,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 48,
-  "stem": "在Linux系统中，文件读写操作是同步的，即一次只能读取或写入一个字符。（   ）",
+  "stem": "48.在Linux系统中，文件读写操作是同步的，即一次只能读取或写入一个字符。（   ）",
   "options": [],
   "answer": "×",
   "explain": ""
@@ -2644,9 +2644,9 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 49,
-  "stem": "Linux标准IO接口中的文件指针是通过文件描述符实现的。（   ）",
+  "stem": "*49.Linux标准IO接口中的文件指针是通过文件描述符实现的。（   ）",
   "options": [],
-  "answer": "×",
+  "answer": "√",
   "explain": ""
  },
  {
@@ -2654,7 +2654,7 @@
   "kind": "judge",
   "kind_name": "判断题",
   "num": 50,
-  "stem": "Linux标准IO接口中，使用fseek函数可以实现对文件指针的定位。（   ）",
+  "stem": "50.Linux标准IO接口中，使用fseek函数可以实现对文件指针的定位。（   ）",
   "options": [],
   "answer": "√",
   "explain": ""
