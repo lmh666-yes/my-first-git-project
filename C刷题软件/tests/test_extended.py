@@ -187,7 +187,7 @@ app.set_mode("考试")
 before_count = app.progress.get("_exam_count", 0)
 app._exam_start()
 root.update()
-ok("考试次数+1", app.progress.get("_exam_count", 0) == before_count + 1)
+ok("开始考试不计数", app.progress.get("_exam_count", 0) == before_count)
 nav_btns = find_btn_all(app.exam_nav)
 ok("考试导航30个题号按钮", len(nav_btns) == 30, str(len(nav_btns)))
 q0 = app.queue[0]
@@ -219,6 +219,7 @@ root.update()
 ok("题号跳转", app.idx == 15)
 app.finish_exam()
 root.update()
+ok("交卷才计数+1", app.progress.get("_exam_count", 0) == before_count + 1)
 ok("交卷后导航仍显示", any(w.winfo_class() == "Button"
    for w in find_btn_all(app.exam_nav)))
 # 交卷后：左侧错题按钮带考试序号（与右侧导航对应）
@@ -237,6 +238,25 @@ if back:
     root.update()
     ok("返回成绩页", "考试结束" in app.head_label.cget("text"),
        app.head_label.cget("text"))
+
+# ---- 11b. 退出考试不计数 ----
+c1 = app.progress.get("_exam_count", 0)
+app.set_mode("考试")
+app._exam_start()
+root.update()
+ok("退出前计数不变", app.progress.get("_exam_count", 0) == c1)
+app._exam_quit()
+root.update()
+ok("退出考试不计数", app.progress.get("_exam_count", 0) == c1)
+
+# ---- 11c. 40字符折行 ----
+app.set_mode("顺序")
+long_opt = "这是" + "很长很长的选项文字" * 8
+ok("wrap_cn折行", app._wrap_cn(long_opt).split("\n")[0] != long_opt
+   and len(app._wrap_cn("abcdefghijklmnopqrstuvwxyz1234567890ABCDEF").split("\n")[0]) <= 40,
+   repr(app._wrap_cn(long_opt)[:30]))
+ok("wrap_cn中文2宽度", app._wrap_cn("中文" * 21).split("\n")[0] == "中文" * 10,
+   repr(app._wrap_cn("中文" * 21)[:24]))
 
 # ---- 12. 伪随机覆盖性：连续 5 次考试收集题目 ----
 seen_c, seen_j = set(), set()

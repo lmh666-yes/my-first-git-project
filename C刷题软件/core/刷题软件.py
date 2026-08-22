@@ -4,7 +4,7 @@
 功能：顺序/错题/考试；判分+解析+统计+错题本+笔记+重置进度。
 考试：20 分钟 / 20 题 / 每题 5 分；右上角开始考试；可暂停/退出；中断自动保存、下次打开恢复；
       出成绩后可点击错题号回顾；考试中禁止切换板块；关闭程序有提醒。
-版本：1.2.4"""
+版本：1.2.5"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -154,6 +154,9 @@ class App:
         self.exam_nav = tk.Frame(body, bg="#f8f9fa", bd=1, relief=tk.GROOVE)
         self.exam_nav.grid(row=0, column=1, sticky="nsew", padx=(6, 0))
         self.exam_nav.grid_remove()          # 默认隐藏，仅考试时显示
+        self._nav_last_w = 0
+        self._nav_after = None
+        self.root.bind("<Configure>", lambda e: self._root_on_configure())
 
         self.head_label = tk.Label(left, text="", bg="#eaf2f8", fg=COLOR_BLUE,
                                    font=("Microsoft YaHei", 12, "bold"),
@@ -352,10 +355,9 @@ class App:
         return ids
 
     def _exam_start(self):
-        """开始 / 重新开始考试：伪随机抽 20 单选 + 10 判断，考试计数 +1"""
+        """开始 / 重新开始考试：伪随机抽 20 单选 + 10 判断（完成交卷才计入考试次数）"""
         self._stop_exam_timer()
         self.mode = "考试"
-        self.progress["_exam_count"] = self.progress.get("_exam_count", 0) + 1
         ids = self._exam_pick_ids()
         self.exam = {"active": True, "finished": False, "paused": False,
                      "ids": ids, "idx": 0, "left": EXAM_MIN * 60, "answers": {}}
@@ -430,15 +432,42 @@ class App:
         self._exam_render_nav()
         self._update_stat()
 
+    def _root_on_configure(self):
+        """主窗口尺寸变化时，防抖重排考试导航（避免子控件销毁触发递归）"""
+        if self.mode != "考试" or not self._exam_active():
+            return
+        w = self.exam_nav.winfo_width()
+        if w <= 0:
+            return
+        if abs(w - getattr(self, "_nav_last_w", 0)) < 30:
+            return
+        self._nav_last_w = w
+        if self._nav_after:
+            try:
+                self.root.after_cancel(self._nav_after)
+            except Exception:
+                pass
+        self._nav_after = self.root.after(120, self._exam_render_nav)
+
     def _exam_render_nav(self):
-        """渲染考试题号导航：未答白色 / 答对绿色 / 答错蓝色，点击跳转"""
+        """渲染考试题号导航：未答白色 / 答对绿色 / 答错红色，点击跳转；按钮按宽度自动换行。
+        仅当答案状态或导航宽度变化时才重建（避免切题时无谓重建导致性能问题）。"""
+        qs = self._exam_qlist()
+        answers = self.exam.get("answers", {}) if self.exam else {}
+        try:
+            nav_w = self.exam_nav.winfo_width()
+        except Exception:
+            nav_w = 0
+        sig = (len(qs), json.dumps(answers, ensure_ascii=False, sort_keys=True),
+               nav_w // 42)
+        if getattr(self, "_nav_sig", None) == sig:
+            return
+        self._nav_sig = sig
         for w in self.exam_nav.winfo_children():
             w.destroy()
         tk.Label(self.exam_nav, text="📋 题目导航", bg="#f8f9fa", fg=COLOR_BLUE,
                  font=("Microsoft YaHei", 11, "bold"), anchor="w",
                  padx=10, pady=8).pack(fill=tk.X)
-        qs = self._exam_qlist()
-        answers = self.exam.get("answers", {}) if self.exam else {}
         legend = tk.Frame(self.exam_nav, bg="#f8f9fa")
         legend.pack(fill=tk.X, padx=8)
         for txt, c in (("未做", "#ffffff"), ("答对", "#27ae60"), ("答错", "#c62828")):
@@ -448,10 +477,12 @@ class App:
                      relief=tk.SOLID).pack(side=tk.LEFT, padx=2, pady=2)
         if not qs:
             return
+        # 根据导航区当前宽度自适应每行按钮数（窗口放大/缩小自动调整排序）
+        cols = 6 if nav_w <= 0 else max(3, min(10, nav_w // 42))
         row = tk.Frame(self.exam_nav, bg="#f8f9fa")
         row.pack(fill=tk.X, padx=6, pady=4)
         for k, it in enumerate(qs):
-            if k % 6 == 0 and k > 0:
+            if k % cols == 0 and k > 0:
                 row = tk.Frame(self.exam_nav, bg="#f8f9fa")
                 row.pack(fill=tk.X, padx=6, pady=4)
             ans = answers.get(it.get("id"))
@@ -464,7 +495,7 @@ class App:
             b = tk.Button(row, text=str(k + 1), width=3, bg=bg, fg=fg,
                           command=lambda q=k: self._exam_jump(q),
                           relief=tk.FLAT, cursor="hand2", font=("Microsoft YaHei", 9))
-            b.grid(row=0, column=k % 6, padx=2, pady=3)
+            b.grid(row=0, column=k % cols, padx=2, pady=3)
 
     def _exam_jump(self, k):
         """点击题号跳转：考试中跳到对应题作答；交卷后跳到该题回顾"""
@@ -535,6 +566,8 @@ class App:
         self.exam["finished"] = True
         self.exam["paused"] = False
         self.exam["left"] = self.exam_left
+        # 完成交卷才计入考试次数（退出/放弃不计入）
+        self.progress["_exam_count"] = self.progress.get("_exam_count", 0) + 1
         self._save_exam()
         self._exam_show_result_page()
 
@@ -659,10 +692,31 @@ class App:
         self._refresh_note_win()
         self._update_stat()
 
+    def _wrap_cn(self, text, limit=40):
+        """按每行最多 limit 个字符折行（中文/全角按 2 个字符宽度计）"""
+        out = []
+        for raw in str(text).split("\n"):
+            if not raw:
+                out.append("")
+                continue
+            cur, w = "", 0
+            for ch in raw:
+                cw = 2 if ord(ch) > 127 else 1
+                if w + cw > limit and cur:
+                    out.append(cur)
+                    cur, w = ch, cw
+                else:
+                    cur += ch
+                    w += cw
+            out.append(cur)
+        return "\n".join(out)
+
     def _set_stem(self, text):
         self.stem.config(state=tk.NORMAL)
         self.stem.delete("1.0", "end")
         self.stem.insert("1.0", text)
+        lines = max(4, min(16, text.count("\n") + 1))
+        self.stem.config(height=lines)
         self.stem.config(state=tk.DISABLED)
 
     def _render_options(self, it, exam_answered=None):
@@ -692,9 +746,10 @@ class App:
                     row = tk.Frame(self.opt_frame, bg="#ffffff", cursor="hand2",
                                    highlightthickness=1, highlightbackground="#d5dbdb")
                     row.pack(fill=tk.X, pady=3)
-                    lbl = tk.Label(row, text=f"{k}. {o.get('text', '')}",
+                    lbl = tk.Label(row, text=self._wrap_cn(f"{k}. {o.get('text', '')}"),
                                    font=("Microsoft YaHei", 11), bg="#ffffff",
-                                   anchor="w", padx=8, pady=4)
+                                   anchor="w", justify="left", wraplength=440,
+                                   padx=8, pady=4)
                     lbl.pack(fill=tk.X)
                     def row_enter(_e, row=row, lbl=lbl, k=k):
                         if not self._is_row_selected(k):
@@ -765,8 +820,9 @@ class App:
             self.opt_widgets += [b2, b3]
 
     def _add_btn(self, text, color, disabled):
-        lbl = tk.Label(self.opt_frame, text=text, font=("Microsoft YaHei", 11, "bold"),
-                       fg=color, anchor="w")
+        lbl = tk.Label(self.opt_frame, text=self._wrap_cn(text),
+                       font=("Microsoft YaHei", 11, "bold"),
+                       fg=color, anchor="w", justify="left", wraplength=440)
         lbl.pack(fill=tk.X, pady=(6, 2))
         self.opt_widgets.append(lbl)
 

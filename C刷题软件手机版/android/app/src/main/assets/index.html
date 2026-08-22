@@ -164,7 +164,6 @@ function startExam(){
   const pickedJ=(judges.slice(j0).concat(judges.slice(0,j0))).slice(0,EXAM_JUDGE_NUM);
   const ids=shuffle(pickedC).map(x=>x.id).concat(shuffle(pickedJ).map(x=>x.id));
   const qs=shuffle(ids);
-  progress._exam_count=(progress._exam_count||0)+1;
   exam={active:true,finished:false,paused:false,ids:qs,idx:0,left:EXAM_MIN*60,answers:{}};
   progress.exam=exam; save();
   queue=qs.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
@@ -264,7 +263,7 @@ function renderOpts(it,examSel){
       it.options.forEach(op=>{
         const d=document.createElement("div");
         d.className="opt";
-        d.textContent=`${op.key}. ${op.text}`;
+        d.textContent=wrapCn(`${op.key}. ${op.text}`);
         if(op.key===ans)d.classList.add("right");
         else if(op.key===examSel)d.classList.add("wrong");
         o.appendChild(d);
@@ -273,7 +272,7 @@ function renderOpts(it,examSel){
     }
     it.options.forEach(op=>{
       const d=document.createElement("div");
-      d.className="opt"; d.textContent=`${op.key}. ${op.text}`;
+      d.className="opt"; d.textContent=wrapCn(`${op.key}. ${op.text}`);
       d.onclick=()=>{ document.querySelectorAll(".opt").forEach(x=>x.classList.remove("selected"));
         d.classList.add("selected"); d.style.animation=""; sel=op.key; };
       o.appendChild(d);
@@ -350,7 +349,9 @@ function nav(d){
 function finishExam(){
   stopExamTimer();
   if(!exam||!exam.active||exam.finished)return;
-  exam.finished=true; exam.paused=false; exam.left=examLeft; progress.exam=exam; save(); examBarHide();
+  exam.finished=true; exam.paused=false; exam.left=examLeft;
+  progress._exam_count=(progress._exam_count||0)+1;   // 完成交卷才计入考试次数
+  progress.exam=exam; save(); examBarHide();
   renderResult();
 }
 function renderResult(){
@@ -387,7 +388,7 @@ function reviewWrong(qid){
   const o=$("#opts"); o.innerHTML="";
   const ans=(it.answer||"").toUpperCase().trim(), your=exam.answers[qid];
   if(it.kind==="choice"){
-    it.options.forEach(op=>{ const d=document.createElement("div"); d.className="opt"; d.textContent=`${op.key}. ${op.text}`;
+    it.options.forEach(op=>{ const d=document.createElement("div"); d.className="opt"; d.textContent=wrapCn(`${op.key}. ${op.text}`);
       if(op.key===ans)d.classList.add("right"); else if(op.key===your)d.classList.add("wrong"); o.appendChild(d); });
   }else{
     const d1=document.createElement("div"); d1.className="opt"; d1.textContent=`正确答案：${it.answer}`; d1.classList.add("right"); o.appendChild(d1);
@@ -424,6 +425,19 @@ $("#nnote").addEventListener("input",()=>{
 /* ---------- 工具 ---------- */
 function $(s){return document.querySelector(s)}
 function fmt(sec){ return String(Math.floor(sec/60)).padStart(2,"0")+":"+String(sec%60).padStart(2,"0"); }
+function wrapCn(s, lim){
+  // 按每行最多 lim 个字符折行（中文/全角按 2 字符宽度计），默认 40
+  lim = lim || 40;
+  return String(s||"").split("\n").map(line=>{
+    let out="", w=0;
+    for(const ch of line){
+      const cw = ch.charCodeAt(0)>127?2:1;
+      if(w+cw>lim && out){ out+="\n"+ch; w=cw; }
+      else { out+=ch; w+=cw; }
+    }
+    return out;
+  }).join("\n");
+}
 function shuffle(a){ const r=a.slice(); for(let i=r.length-1;i>0;i--){const j=Math.floor(Math.random()*(i+1));[r[i],r[j]]=[r[j],r[i]];} return r; }
 function showFb(html){ const f=$("#fb"); f.style.display="block"; f.innerHTML=html; }
 function hideFb(){ $("#fb").style.display="none"; }
