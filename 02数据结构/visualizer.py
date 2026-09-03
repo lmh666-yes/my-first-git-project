@@ -550,16 +550,20 @@ class Drawer:
 
     def _next_target(self, blk):
         """返回该块 next 字段的目标地址(优先名为 next 的字段，适配双向链表；
-        0=无/NULL, 非0=地址)"""
+        0=无/NULL, 非0=地址, None=函数指针等非指针目标(链结束,不画箭头))"""
         if "next" in blk["fields"]:
             fv = blk["fields"]["next"]
             if fv[0] == "ptr":
                 return fv[1]
             if fv[0] == "null":
                 return 0
+            if fv[0] == "fn":
+                return None   # 函数指针成员：以文本显示函数名，不画指向箭头
         for fn, fv in blk["fields"].items():
             if fv[0] == "ptr":
                 return fv[1]
+            if fv[0] == "fn":
+                return None
         return 0
 
     def draw_chains(self, heads, heap_by_addr, x0, y0, H):
@@ -634,6 +638,9 @@ class Drawer:
                     cur = tgt
                     x = rx + self.gap
                     steps += 1
+                elif tgt is None:
+                    # 函数指针等非指针目标：链结束，字段行已显示函数名，不画箭头
+                    break
                 else:
                     # next 为 NULL 或野指针 → 画带箭头的指向标记（与 next 字段行对齐）
                     self._draw_next_target(rx, y, self._next_field_idx(blk), tgt, z)
@@ -732,15 +739,18 @@ class Drawer:
         z = self.zoom
         x = x0
         y = y0
+        row_bottom = y0          # 当前行所有块的最大底部(避免高低块混排换行后重叠)
         vis_w = int(self.c.cget("width")) / z
         for addr in sorted(heap_by_addr.keys()):
             blk = heap_by_addr[addr]
             rx, by = self.draw_node(x, y, addr, blk, heap_by_addr)
+            row_bottom = max(row_bottom, by)
             x = rx + self.gap
             if x > x0 + vis_w - 60:
                 x = x0
-                y = by + max(30, round(40 * z))
-        return y + max(30, round(40 * z))
+                y = row_bottom + max(30, round(40 * z))
+                row_bottom = y
+        return row_bottom + max(30, round(40 * z))
 
     def _draw_ptr_boxes(self, frames, heap_by_addr, x0, top, H):
         """为独立定义的指针变量（结构体/联合体字段指针除外）画淡绿色小框。
@@ -1841,7 +1851,8 @@ class App:
         if outputs:
             self.log("程序输出:")
             for o in outputs:
-                self.log("  " + o.replace("\\n", "").replace("\\t", "    "))
+                # 引擎已把 \n 解码为真实换行；每个 printf 一行，内嵌换行原样显示
+                self.log("  " + o)
         if inputs:
             parts = []
             for i, v in enumerate(inputs):

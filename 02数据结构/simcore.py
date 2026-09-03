@@ -63,6 +63,37 @@ class Token:
         return f"Token({self.kind},{self.text!r},L{self.line})"
 
 
+def _decode_c_string(raw):
+    # 解码 C 字符串字面量内容中的转义序列：\\n \\t \\\\ \\" \\xHH \\ooo 等
+    # raw 为已去掉首尾引号的字符串
+    out = []
+    i = 0
+    n = len(raw)
+    esc = {"n": "\n", "t": "\t", "r": "\r", "0": "\0", "a": "\a",
+           "b": "\b", "f": "\f", "v": "\v", "\\": "\\",
+           "\"": "\"", "'": "'"}
+    while i < n:
+        c = raw[i]
+        if c == "\\" and i + 1 < n:
+            nxt = raw[i + 1]
+            if nxt in esc:
+                out.append(esc[nxt]); i += 2; continue
+            if nxt == "x":
+                j = i + 2; h = ""
+                while j < n and len(h) < 2 and raw[j] in "0123456789abcdefABCDEF":
+                    h += raw[j]; j += 1
+                if h:
+                    out.append(chr(int(h, 16))); i = j; continue
+            if nxt.isdigit():
+                j = i + 1; o = ""
+                while j < n and len(o) < 3 and raw[j] in "01234567":
+                    o += raw[j]; j += 1
+                out.append(chr(int(o, 8))); i = j; continue
+            out.append(c); i += 1; continue
+        out.append(c); i += 1
+    return "".join(out)
+
+
 def tokenize(code, start_line=1):
     """把代码切为 token 列表；start_line 用于拼接多文件片段。"""
     toks = []
@@ -101,6 +132,8 @@ def tokenize(code, start_line=1):
             continue
         if kind in ("ws", "comment"):
             continue
+        if kind == "str":
+            text = '"' + _decode_c_string(text[1:-1]) + '"'
         toks.append(Token(kind, text, line))
     return toks
 
@@ -144,7 +177,7 @@ class SeqStmt(Stmt):
 
 
 class DeclStmt(Stmt):
-    def __init__(self, line, vtype, name, init_expr, is_ptr, is_array, arr_size, dims=None):
+    def __init__(self, line, vtype, name, init_expr, is_ptr, is_array, arr_size, dims=None, fnptr=False):
         super().__init__(line, "decl")
         self.vtype = vtype
         self.name = name
@@ -153,6 +186,7 @@ class DeclStmt(Stmt):
         self.is_array = is_array
         self.arr_size = arr_size
         self.dims = dims or []
+        self.fnptr = fnptr   # 是否为 typedef 函数指针类型变量(如 state_func f = state_off)
 
 
 class AssignStmt(Stmt):
@@ -179,6 +213,13 @@ class IfStmt(Stmt):
 class WhileStmt(Stmt):
     def __init__(self, line, cond, body):
         super().__init__(line, "while")
+        self.cond = cond
+        self.body = body
+
+
+class DoWhileStmt(Stmt):
+    def __init__(self, line, cond, body):
+        super().__init__(line, "dowhile")
         self.cond = cond
         self.body = body
 
@@ -242,8 +283,10 @@ class Parser:
         self.pos = 0
         self.structs = {}    # name -> StructDef
         self.aliases = set() # 非结构体 typedef 别名（typedef int myint;）
+        self.fnptr_aliases = set()  # 函数指针类型别名（typedef struct S (*FP)(void);）
         self.macros = macros or {}  # #define 常量宏
         self.globals = []    # 全局变量声明：(line, vtype, name, init, ptr, is_array, arr_size)
+        self.parse_notes = []  # 解析容错记录(不改变行为, 供诊断/提示)
 
     def peek(self, off=0):
         i = self.pos + off
@@ -281,7 +324,7 @@ class Parser:
                 continue
             # 顶层 struct / union 定义（可能带变量列表 / 匿名）
             if self.at("struct") or self.at("union"):
-                self.parse_top_struct()
+                self.parse_top_struct(funcs)
                 continue
             if self.at_id():
                 # 判断是函数定义还是全局变量声明
@@ -300,11 +343,13 @@ class Parser:
                 else:
                     try:
                         self.parse_global_decl()
-                    except (SimError, IndexError):
+                    except (SimError, IndexError) as ex:
                         self.pos = save
                         try:
                             self.parse_function(funcs)
-                        except (SimError, IndexError):
+                        except (SimError, IndexError) as ex2:
+                            self.parse_notes.append(
+                                (getattr(ex2, "line", 0), f"顶层 '{self.toks[save].text if save < len(self.toks) else '?'}' 解析失败: {ex2}"))
                             while self.peek() is not None:
                                 self.next()
             else:
@@ -313,9 +358,10 @@ class Parser:
                 continue
         return funcs
 
-    def parse_top_struct(self):
+    def parse_top_struct(self, funcs=None):
         """顶层结构体/联合体定义：struct Name { ... }v1, *p; 或 struct { ... }v1;
-        或 struct Name 变量;（结构体类型全局变量）"""
+        或 struct Name 变量;（结构体类型全局变量）
+        或 struct Name fname(...) （返回结构体的函数定义/原型）"""
         save = self.pos
         kw = self.next()   # struct 或 union
         t = self.next()
@@ -345,6 +391,12 @@ class Parser:
                         self.globals.append((t.line, t.text, tk.text, None, 0, False, None))
             self.expect(";")
             return
+        # struct Name fname(...)  → 返回结构体的函数定义/原型（如 struct state state_off(void)）
+        if self.peek() is not None and self.peek().kind == "id" \
+                and self.peek(1) is not None and self.peek(1).text == "(":
+            self.pos = save
+            self.parse_function(funcs if funcs is not None else {})
+            return
         # struct Name 变量;  —— 结构体类型的全局变量声明
         self.pos = save
         self.parse_global_decl()
@@ -355,6 +407,9 @@ class Parser:
         vtype, ptr = self.parse_type()
         nt = self.next()
         if nt.kind != "id":
+            if nt.text == ";":
+                # struct Name;  前向声明（分号已被消费），直接结束，避免吞掉后续声明
+                return
             # 函数指针等复杂声明（如 void (*pf[10])(void)）：跳过该声明，避免中断
             while self.peek() is not None and not self.at(";"):
                 self.next()
@@ -428,9 +483,10 @@ class Parser:
                 anon = aliases[0] if aliases else f"anon{len(self.structs) + 1}"
                 for al in (aliases or [anon]):
                     self.structs[al] = StructDef(anon, fields, is_union=is_union)
-            else:
+            elif self.at("{"):
+                # typedef struct Name { ... } Alias, *pAlias;
                 name = name_t.text
-                fields = self.parse_struct_fields()   # 内部会消费 '{'
+                fields = self.parse_struct_fields()
                 aliases = []
                 while not self.at(";"):
                     tk = self.next()
@@ -442,16 +498,107 @@ class Parser:
                 self.structs[name] = StructDef(name, fields, is_union=is_union)
                 for al in aliases:
                     self.structs[al] = StructDef(name, fields, is_union=is_union)
+            elif self.at("("):
+                # typedef struct S (*FP)(params); —— 函数指针类型别名
+                name = name_t.text
+                if name not in self.structs:
+                    # 结构体可能尚未完整定义：先注册为空，避免后续无法识别
+                    self.structs[name] = StructDef(name, [], is_union=is_union)
+                self.expect("(")
+                if self.at("*"):
+                    self.next()
+                    al = self.next()
+                    if al.kind == "id":
+                        self.fnptr_aliases.add(al.text)
+                        self.aliases.add(al.text)
+                    else:
+                        self.pos -= 1
+                self.expect(")")
+                # 跳过参数列表 (void) / (int, ...)
+                if self.at("("):
+                    d2 = 0
+                    while True:
+                        tk = self.next()
+                        if tk is None:
+                            break
+                        if tk.text == "(":
+                            d2 += 1
+                        elif tk.text == ")":
+                            d2 -= 1
+                            if d2 == 0:
+                                break
+                self.expect(";")
+            else:
+                # typedef struct Name Alias;  /  typedef struct Name *pAlias;
+                name = name_t.text
+                if name not in self.structs:
+                    self.structs[name] = StructDef(name, [], is_union=is_union)
+                while not self.at(";"):
+                    tk = self.next()
+                    if tk is None:
+                        break
+                    if tk.kind == "id":
+                        self.aliases.add(tk.text)
+                        # 非指针别名也注册成同义结构体，便于 Node 等用法
+                        if name in self.structs and tk.text not in self.structs:
+                            sd = self.structs[name]
+                            self.structs[tk.text] = StructDef(sd.name, list(sd.fields),
+                                                              is_union=sd.is_union)
+                if self.at(";"):
+                    self.next()
             return
         # 非结构体 typedef：typedef int myint; / typedef unsigned long size_t; 等
+        # typedef 函数指针别名：typedef int (*FP)(int); / typedef generic_fp (*state_func)(void);
+        # typedef 数组别名：typedef int ARR[5];
         try:
-            self.parse_type()          # 消费类型（含复合与指针）
-            while not self.at(";"):
-                if self.peek() is None:
-                    break
-                tk = self.next()
-                if tk.kind == "id":
-                    self.aliases.add(tk.text)   # 记录别名（用于识别声明）
+            self.parse_type()          # 消费基础类型（含复合与指针）
+            # 函数指针 typedef:  (*名字)(参数)
+            if self.at("("):
+                save2 = self.pos
+                self.next()
+                if self.at("*"):
+                    self.next()
+                    nt = self.next()
+                    if nt.kind == "id":
+                        self.fnptr_aliases.add(nt.text)
+                        self.aliases.add(nt.text)
+                        if self.at(")"):
+                            self.next()
+                        # 跳过参数列表 ( ... )
+                        if self.at("("):
+                            d2 = 0
+                            while True:
+                                tk = self.next()
+                                if tk is None:
+                                    break
+                                if tk.text == "(":
+                                    d2 += 1
+                                elif tk.text == ")":
+                                    d2 -= 1
+                                    if d2 == 0:
+                                        break
+                    else:
+                        # 无法识别：回退容错跳过
+                        self.pos = save2
+                        while self.peek() is not None and not self.at(";"):
+                            self.next()
+                else:
+                    # 非函数指针的复杂声明，容错跳过
+                    self.pos = save2
+                    while self.peek() is not None and not self.at(";"):
+                        self.next()
+            else:
+                # 普通别名列表：typedef A B, *C;  或 typedef A B[10];
+                while not self.at(";") and self.peek() is not None:
+                    tk = self.next()
+                    if tk.kind == "id":
+                        self.aliases.add(tk.text)
+                    elif tk.text == "[":
+                        while self.peek() is not None and not self.at(";"):
+                            if self.at("]"):
+                                self.next()
+                                break
+                            self.next()
         except (SimError, IndexError):
             while self.peek() is not None and not self.at(";"):
                 self.next()
@@ -492,6 +639,9 @@ class Parser:
                     fields.append((ft.text, ("array", ftype, arr_size)))
                 elif ptr > 0:
                     fields.append((ft.text, ("ptr", ftype)))
+                elif ftype in self.fnptr_aliases:
+                    # 函数指针类型成员（如 state_func next;）
+                    fields.append((ft.text, "<fn>"))
                 else:
                     fields.append((ft.text, ftype))
                 # 字段后的 __attribute__((...))
@@ -647,8 +797,9 @@ class Parser:
             return
         try:
             body = self.parse_block()
-        except (SimError, IndexError):
+        except (SimError, IndexError) as ex:
             # 函数体无法解析（未完成/不支持的语法）：跳过该函数其余内容
+            self.parse_notes.append((getattr(ex, "line", 0), f"函数 {name_t.text} 函数体解析失败: {ex}"))
             while self.peek() is not None:
                 self.next()
             return
@@ -766,6 +917,18 @@ class Parser:
             self.expect(")")
             body = self.parse_stmt()
             return WhileStmt(t.line, cond, body)
+        if self.at("do"):
+            self.next()
+            body = self.parse_stmt()
+            cond = ("lit", 0)
+            if self.at("while"):
+                self.next()
+                self.expect("(")
+                cond = self.parse_expr()
+                self.expect(")")
+            if self.at(";"):
+                self.next()
+            return DoWhileStmt(t.line, cond, body)
         if self.at("for"):
             self.next()
             self.expect("(")
@@ -883,9 +1046,10 @@ class Parser:
         t = self.peek()
         if t is None or t.kind != "id":
             return False
-        if t.text in ("int", "char", "void", "unsigned", "signed", "short", "long", "double", "float", "struct", "union", "enum", "const", "static", "extern", "register", "volatile"):
+        if t.text in ("int", "char", "void", "unsigned", "signed", "short", "long", "double", "float", "struct", "union", "enum", "const", "static", "extern", "register", "volatile",
+                       "bool", "size_t", "longlong", "uint8_t", "uint16_t", "uint32_t", "int8_t", "int16_t", "int32_t", "size_type"):
             return True
-        if t.text in self.structs:
+        if t.text in self.structs or t.text in self.fnptr_aliases:
             i = 1
             while True:
                 nxt = self.peek(i)
@@ -900,6 +1064,7 @@ class Parser:
     def parse_decl(self, semi=True):
         line = self.peek().line
         vtype, ptr = self.parse_type()
+        fnptr_flag = vtype in self.fnptr_aliases
         is_array = False
         arr_size = None
         # 支持 int a[5]; 与 int (*q)[5]; / int (*p)(int);
@@ -965,7 +1130,11 @@ class Parser:
         if self.at("="):
             self.next()
             if self.at("{"):
-                init = ("arrinit", self.parse_array_init())
+                if vtype in self.structs and not is_array:
+                    # 结构体变量初始化：struct P s = { ... };（成员按定义顺序）
+                    init = ("structinit", self.parse_struct_init_list())
+                else:
+                    init = ("arrinit", self.parse_array_init())
             else:
                 init = self.parse_expr()
         # 无大小数组 int a[] = {1,2,3}: 用初始化长度推断
@@ -979,7 +1148,7 @@ class Parser:
                 dims[0] = 10
         if semi:
             self.expect(";")
-        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims)
+        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims, fnptr=fnptr_flag)
 
     def parse_decl_same(self, proto, semi=True):
         """多变量声明：int a, b; 中 b 复用 a 的类型；支持 int *a, *b;"""
@@ -1004,7 +1173,10 @@ class Parser:
         if self.at("="):
             self.next()
             if self.at("{"):
-                init = ("arrinit", self.parse_array_init())
+                if proto.vtype in self.structs and not is_array:
+                    init = ("structinit", self.parse_struct_init_list())
+                else:
+                    init = ("arrinit", self.parse_array_init())
             else:
                 init = self.parse_expr()
         if semi:
@@ -1048,6 +1220,40 @@ class Parser:
                 self.next()
         self.expect("}")
         return vals
+
+    def parse_struct_init_list(self):
+        """解析结构体初始化列表 { expr, expr, ... }（按成员顺序）或 { .field = expr, ... }。
+        返回元素列表：位置初始化 = 表达式；命名初始化 = ("setfield", 字段名, 表达式)"""
+        self.expect("{")
+        items = []
+        while not self.at("}"):
+            tk = self.peek()
+            if tk is None:
+                break
+            if self.at("."):
+                # .field = expr 命名初始化
+                self.next()
+                fname = self.next()
+                if fname.kind != "id":
+                    raise SimError(fname.line, f"初始化字段名错误 '{fname.text}'")
+                self.expect("=")
+                items.append(("setfield", fname.text, self.parse_expr()))
+            elif self.at("}"):
+                break
+            else:
+                items.append(self.parse_expr())
+            if self.at(","):
+                self.next()
+            elif self.at("}"):
+                break
+            else:
+                # 容错：缺逗号时跳到下一个可识别元素或结束
+                while not (self.at(",") or self.at("}")):
+                    if self.peek() is None:
+                        break
+                    self.next()
+        self.expect("}")
+        return items
 
     # ---------- 表达式（优先级爬升） ----------
     def parse_expr(self):
@@ -1178,14 +1384,15 @@ class Parser:
         return e
 
     def at_type_ahead(self):
-        """判断 '(' 后是否为类型转换（如 (Node*) 或 (shop)）——调用时 '(' 已被消费"""
+        """判断 '(' 后是否为类型转换（如 (Node*) 或 (shop) 或 (FP)）——调用时 '(' 已被消费"""
         t0 = self.peek(0)
         if t0 is None:
             return False
         if t0.text in ("int", "char", "void", "unsigned", "signed", "short",
                        "long", "double", "float", "bool", "struct", "union", "enum"):
             return True
-        if t0.kind == "id" and t0.text in self.structs:
+        if t0.kind == "id" and (t0.text in self.structs or t0.text in self.aliases
+                                or t0.text in self.fnptr_aliases):
             t1 = self.peek(1)
             if t1 and (t1.text == "*" or t1.text == ")"):
                 return True
@@ -1207,6 +1414,10 @@ class Parser:
                 _base, ptr = self.parse_type()    # 消费类型（含指针）
                 self.expect(")")
                 if self.at("{"):
+                    if _base in self.structs and ptr == 0:
+                        # 结构体复合字面量 (struct S){ 成员... }：构造结构体值
+                        inits = self.parse_struct_init_list()
+                        return ("structlit", _base, inits)
                     self.parse_array_init()
                     return ("lit", 0)
                 e = self.parse_expr()
@@ -1320,9 +1531,10 @@ class HeapBlock:
 
 
 class SimEngine:
-    def __init__(self, structs, funcs):
+    def __init__(self, structs, funcs, fnptr_aliases=None):
         self.structs = structs
         self.funcs = funcs
+        self.fnptr_aliases = fnptr_aliases or set()   # typedef 函数指针类型别名(state_func 等)
         self.next_addr = 0x1000
         self.heap = {}          # addr -> HeapBlock
         self.frames = []
@@ -1517,7 +1729,13 @@ class SimEngine:
         if k == "ptrcast":
             v = self.eval_expr(e[1])
             return Value("addr", self.to_int(v))
+        if k == "structlit":
+            # (struct S){ ... } 结构体复合字面量：构造结构体块，返回其地址
+            return self.make_struct_value(e[1], e[2])
         if k == "var":
+            # 函数名作为值（函数指针赋值 / 结构体成员初始化 / 回调传参）
+            if e[1] in self.funcs:
+                return Value("fn", e[1])
             vi = self.lookup(e[1])
             if vi.is_array and vi.value is not None:
                 # 数组名作为值：返回数组基址（支持 a+2 / &a[i] 指针算术）
@@ -1665,6 +1883,8 @@ class SimEngine:
     def truthy(self, v):
         if v.kind == "int":
             return v.val != 0
+        if v.kind == "fn":
+            return v.val is not None   # 已赋值的函数指针为真
         return v.kind == "addr"
 
     def to_int(self, v):
@@ -1674,6 +1894,8 @@ class SimEngine:
             return v.val
         if v.kind == "null":
             return 0
+        if v.kind == "fn":
+            return 1
         return v.val
 
     def binop(self, op, l, r):
@@ -1895,6 +2117,14 @@ class SimEngine:
         k = target[0]
         if k == "var":
             vi = self.lookup(target[1])
+            if vi.vtype in self.fnptr_aliases:
+                # typedef 函数指针类型变量赋值：f = ...
+                if getattr(value, "kind", None) == "fn":
+                    vi.fnptr_name = value.val
+                    vi.value = value
+                else:
+                    vi.value = value
+                return
             vi.value = self.coerce(vi, value)
             return
         if k == "member":
@@ -2000,6 +2230,13 @@ class SimEngine:
 
     def coerce(self, vi, value):
         """赋值时做类型规整：整数给指针当 NULL；指针给 int 报错"""
+        if vi.vtype in self.fnptr_aliases:
+            # typedef 函数指针类型：接受函数指针值
+            if getattr(value, "kind", None) == "fn":
+                return value
+            if value.kind in ("int", "null") and value.val == 0:
+                return Value("null")
+            return value
         if vi.is_ptr or (vi.vtype in self.structs):
             if value.kind in ("addr", "null"):
                 return value
@@ -2011,7 +2248,57 @@ class SimEngine:
             return value
         if value.kind == "null":
             return Value("int", 0)
+        if value.kind == "fn":
+            # 函数指针赋给 int 变量（宽容处理）
+            return Value("int", 0)
         raise SimError(self.cur_line, f"不能把指针赋给 int 变量")
+
+    # ---- 结构体复合字面量 / 结构体值 ----
+    def make_struct_value(self, typename, items):
+        """(struct S){ ... } 求值：分配一块结构体内存并填好成员，返回其地址"""
+        if typename not in self.structs:
+            return Value("int", 0)
+        blk = self.alloc(typename, 1)
+        if blk is None:
+            return Value("null")
+        self.apply_struct_init(blk, typename, items)
+        return Value("addr", blk.addr)
+
+    def apply_struct_init(self, blk, typename, items):
+        """把结构体初始化列表 items 应用到已分配的块 blk 上。
+        items: 位置表达式 或 ("setfield", 字段名, 表达式)"""
+        if typename not in self.structs:
+            return
+        sd = self.structs[typename]
+        named = {}
+        positional = []
+        for it in items:
+            if isinstance(it, tuple) and len(it) >= 3 and it[0] == "setfield":
+                named[it[1]] = it[2]
+            else:
+                positional.append(it)
+        if blk.union_scalar is not None:
+            # 联合体共享一块内存：取最后给出的初值
+            if named:
+                blk.union_scalar = self.eval_expr(next(iter(named.values())))
+            elif positional:
+                blk.union_scalar = self.eval_expr(positional[-1])
+            return
+        for idx, (fname, ftype) in enumerate(sd.fields):
+            if fname in named:
+                val = self.eval_expr(named[fname])
+            elif idx < len(positional):
+                val = self.eval_expr(positional[idx])
+            else:
+                continue
+            # 数组/位域等复杂字段保持默认初始化
+            if isinstance(ftype, tuple) and ftype[0] == "array":
+                continue
+            if not isinstance(val, Value):
+                continue
+            if ftype == "<fn>" and val.kind == "int" and val.val == 0:
+                val = Value("null")   # 未初始化函数指针
+            blk.fields[fname] = val
 
     # ---- 调用 ----
     def call_expr(self, e):
@@ -2019,8 +2306,30 @@ class SimEngine:
         args = e[2]
         if callee[0] == "var":
             name = callee[1]
+        elif callee[0] == "member":
+            # 函数指针成员调用：s.next() —— 读取成员里保存的函数指针并调用
+            name = None
+            try:
+                base = self.eval_expr(callee[1])
+                if base.kind == "addr" and base.val in self.heap:
+                    blk = self.heap[base.val]
+                    if blk.union_scalar is not None:
+                        fval = blk.union_scalar
+                    else:
+                        fval = blk.fields.get(callee[2])
+                    if fval is not None and fval.kind == "fn":
+                        return self.call_user(fval.val, args)
+                    if fval is not None and fval.kind == "int" and fval.val == 0:
+                        self.warnings.append(
+                            (self.cur_line,
+                             f"成员 '{callee[2]}' 是函数指针但尚未赋值，本次未调用任何函数"))
+            except SimError:
+                pass
+            except Exception:
+                pass
+            return Value("int", 0)
         else:
-            # 函数指针成员调用（c.padd(3,6)）：本版本忽略
+            # 其它形式（(*fp)(...) 等）：本版本忽略
             return Value("int", 0)
         if name == "malloc" or name == "calloc":
             # malloc(sizeof(T)) / malloc(n*sizeof(T)) / calloc(n, sizeof(T))
@@ -2355,6 +2664,21 @@ class SimEngine:
                 if r is not None:
                     return r
             return None
+        if k == "dowhile":
+            # do{...}while(cond);  先执行一次再判断
+            guard = 0
+            while True:
+                guard += 1
+                if guard > 100000:
+                    raise SimError(st.line, "do-while 循环次数超限（疑似死循环）")
+                r = self.exec_stmt(st.body)
+                if r == "break":
+                    break
+                if r is not None:
+                    return r
+                if not self.truthy(self.eval_expr(st.cond)):
+                    break
+            return None
         if k == "for":
             # for 语句自身一个作用域（C99：多个 for 可各自声明同名变量）
             self.frames[-1].scopes.append({})
@@ -2512,9 +2836,24 @@ class SimEngine:
             vi = VarInfo(st.vtype, is_ptr=True, value=val)
             frame.declare(st.name, vi)
             return None
+        if st.fnptr:
+            # typedef 函数指针类型变量：state_func f = state_off;
+            vi = VarInfo(st.vtype, is_ptr=False, value=Value("int", 0))
+            if st.init:
+                v = self.eval_expr(st.init)
+                if getattr(v, "kind", None) == "fn":
+                    vi.fnptr_name = v.val
+                    vi.value = v
+                else:
+                    vi.value = self.coerce(vi, v)
+            frame.declare(st.name, vi)
+            return None
         if st.vtype in self.structs:
             # 结构体变量（栈上）：分配一块“栈内存”，变量指向它
             blk = self.alloc(st.vtype, 1, is_stack=True)
+            if blk and st.init and st.init[0] == "structinit":
+                # struct P s = { ... }; 成员按初始化列表填充
+                self.apply_struct_init(blk, st.vtype, st.init[1])
             vi = VarInfo(st.vtype, is_ptr=False,
                          value=Value("addr", blk.addr) if blk else Value("null"))
             frame.declare(st.name, vi)
@@ -2580,6 +2919,8 @@ class SimEngine:
             return ("int", v.val)
         if v.kind == "addr":
             return ("ptr", v.val)
+        if v.kind == "fn":
+            return ("fn", v.val)
         return ("null", None)
 
 
@@ -2677,7 +3018,7 @@ class Simulator:
             frame.declare(gname, VarInfo(vtype, is_ptr=(ptr > 0), value=val))
 
     def _make_engine(self, stop_line=None):
-        eng = SimEngine(self.structs, self.funcs)
+        eng = SimEngine(self.structs, self.funcs, self.parser.fnptr_aliases)
         eng.stop_line = stop_line
         eng.inputs = list(self.pending_inputs)
         self.engine = eng
