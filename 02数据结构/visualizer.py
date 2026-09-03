@@ -21,7 +21,15 @@ import tkinter.font as tkfont
 from tkinter import filedialog, messagebox, ttk
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
-from simcore import Simulator, SimError
+from simcore import Simulator, SimError, is_cpp_code
+from cppsim import CppSimulator
+
+
+def make_simulator(code):
+    """按代码内容分流：C++ 用 CppSimulator(独立引擎)，纯 C 用原 Simulator(零影响)"""
+    if is_cpp_code(code):
+        return CppSimulator(code)
+    return Simulator(code)
 
 EXAMPLES = {
     "链表-头插法": r"""#include <stdio.h>
@@ -1440,7 +1448,7 @@ class App:
         if not code.strip():
             return
         try:
-            sim = Simulator(code)
+            sim = make_simulator(code)
             snaps = sim.run_to_line(line)
             self.snapshots = snaps
             err = sim.engine.error if sim.engine else None
@@ -1608,7 +1616,7 @@ class App:
             self._request_inputs()
             self._input_requested = True
         try:
-            sim = Simulator(code)
+            sim = make_simulator(code)
             sim.pending_inputs = list(self._pending_inputs)
             snaps = sim.run()
             err = sim.engine.error if sim.engine else None
@@ -1900,7 +1908,7 @@ class App:
         m = None
         first = None
         try:
-            sim = Simulator(code)
+            sim = make_simulator(code)
             m = sim.main_name()
             if m is None:
                 self._set_run_status("❌ 未找到 main", "red")
@@ -1908,7 +1916,9 @@ class App:
                 return
             self.sim = sim
             fd = sim.funcs[m]
-            first = fd.body[0].line if fd.body else None
+            # C++ 引擎 funcs 存 (rtype, ptr, params, body)；C 引擎存 FuncDef
+            body = fd[3] if isinstance(fd, tuple) else fd.body
+            first = body[0].line if body else None
         except Exception:
             pass
         # 重新构建逐步序列，从第一步开始（关键：不能被载入时的快速运行状态污染）
@@ -1949,7 +1959,7 @@ class App:
         if not code.strip():
             return
         try:
-            sim = Simulator(code)
+            sim = make_simulator(code)
         except Exception:
             self._set_run_status("❌ 程序未能正常跑通!!!", "red")
             return
@@ -1965,6 +1975,7 @@ class App:
         self.step_idx = len(self.step_list) - 1 if self.step_list else -1
         if need_line is not None:
             # 输入级联格式化：重新进入某输入点 → 清空该输入点及之后的所有输入
+            pass
             if need_line in self._input_slots:
                 for k in list(self._input_slots.keys()):
                     if k >= need_line:
@@ -2421,7 +2432,7 @@ class App:
         # C++ 特性提示
         hint = self.detect_cpp_hint(code)
         try:
-            sim = Simulator(code)
+            sim = make_simulator(code)
             if sim.main_name() is None:
                 self.draw_empty()
                 msg = "没有找到 int main() 或任何函数定义，无法执行。\n请粘贴包含函数定义的完整代码片段。"
