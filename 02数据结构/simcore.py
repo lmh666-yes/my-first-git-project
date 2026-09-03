@@ -1469,10 +1469,76 @@ class Parser:
 
 
 # ---------------------------------------------------------------
+# C++ 识别与分流（独立于 C 解析器，保证 C 不受影响）
+# ---------------------------------------------------------------
+# 去注释/字符串后扫描的 C++ 专属特征。全部是 C 语言没有的写法
+# （class/::/cout/namespace/template/iostream/运算符重载/异常/this 等），
+# 不会命中合法 C 代码；C 里可作为标识符的词(如 delete/new/class 变量名)不入表。
+_CPP_STRONG = [
+    "class ", "namespace", "using namespace", "::", "#include <iostream>",
+    "#include <string>", "#include <vector>", "template<", "template <",
+    "public:", "private:", "protected:", "virtual ", "operator ",
+    "cout", "cin", "endl", "catch (", "throw ", "std::", "this->",
+    ".push_back", ".begin()", "friend ",
+]
+
+
+def _strip_comments_strings(code):
+    """去掉 // 与 /* */ 注释和字符串字面量(保留引号内为空格)，避免误报"""
+    out = []
+    i, n = 0, len(code)
+    while i < n:
+        c = code[i]
+        if c == "/" and i + 1 < n and code[i + 1] == "/":
+            j = code.find("\n", i)
+            i = n if j == -1 else j
+        elif c == "/" and i + 1 < n and code[i + 1] == "*":
+            j = code.find("*/", i + 2)
+            i = n if j == -1 else j + 2
+        elif c == '"':
+            j = i + 1
+            while j < n and code[j] != '"':
+                if code[j] == "\\":
+                    j += 1
+                j += 1
+            out.append(" " * (j - i + 1))
+            i = j + 1
+        elif c == "'":
+            j = i + 1
+            while j < n and code[j] != "'":
+                if code[j] == "\\":
+                    j += 1
+                j += 1
+            out.append(" " * (j - i + 1))
+            i = j + 1
+        else:
+            out.append(c)
+            i += 1
+    return "".join(out)
+
+
+def is_cpp_code(code):
+    """识别代码是否为 C++（在词法解析之前调用）。
+    只查 C++ 专属强特征，C 教学代码不含这些写法，不会误判。"""
+    clean = _strip_comments_strings(code)
+    return any(h in clean for h in _CPP_STRONG)
+
+
+def cpp_first_hint(code):
+    """返回第一个命中的 C++ 特征文本(用于 GUI 提示定位)，无则 None"""
+    clean = _strip_comments_strings(code)
+    for h in _CPP_STRONG:
+        idx = clean.find(h)
+        if idx != -1:
+            return h, clean[:idx].count("\n") + 1
+    return None
+
+
+# ---------------------------------------------------------------
 # 求值器 / 执行器
 # ---------------------------------------------------------------
 class Value:
-    """kind: 'int' | 'addr' | 'null'"""
+    """kind: 'int' | 'addr' | 'null' | 'fn'"""
     __slots__ = ("kind", "val")
 
     def __init__(self, kind, val=None):
@@ -2960,14 +3026,31 @@ def extract_macros(code):
 class Simulator:
     def __init__(self, code):
         self.code = code
+        self.cpp_detected = is_cpp_code(code)
+        self.cpp_hint = cpp_first_hint(code) if self.cpp_detected else None
         self.macros = extract_macros(code)
-        self.toks = tokenize(code)
-        self.parser = Parser(self.toks, macros=self.macros)
-        self.funcs = self.parser.parse_program()
-        self.structs = self.parser.structs
+        if self.cpp_detected:
+            # C++ 文件：不进入 C 解析器(避免误吞 main / 误报语法)，统一走 C++ 识别提示
+            self.toks = []
+            self.parser = Parser([], macros=self.macros)
+            self.funcs = {}
+            self.structs = {}
+        else:
+            self.toks = tokenize(code)
+            self.parser = Parser(self.toks, macros=self.macros)
+            self.funcs = self.parser.parse_program()
+            self.structs = self.parser.structs
         self.engine = None
         self.snapshots = {}   # line -> snapshot
         self.pending_inputs = []   # GUI 模拟输入（scanf 用）
+
+    def _cpp_error(self):
+        """构造一个定位到首个 C++ 特征行的识别错误(不解析、不运行)"""
+        hint, ln = (self.cpp_hint or ("C++", 1))
+        line = ln if isinstance(ln, int) else 1
+        return SimError(line,
+                        "已识别为 C++ 代码（第 %d 行含特征 '%s'）。本引擎当前主支持 C 语言子集；"
+                        "C++ 解析支持正在开发中，暂不能逐步运行（不会按 C 误解析）。" % (line, str(hint).strip()))
 
     def main_name(self):
         if "main" in self.funcs:
@@ -3045,6 +3128,11 @@ class Simulator:
 
     def run(self):
         """全量执行；返回 {line: snapshot}（该行执行后的状态）"""
+        if self.cpp_detected:
+            self.snapshots = {}
+            self.engine = SimEngine(self.structs, self.funcs)
+            self.engine.error = self._cpp_error()
+            return {}
         fd = self._make_engine(None)
         if fd is None:
             self.snapshots = {}
@@ -3061,6 +3149,11 @@ class Simulator:
     def run_to_line(self, target_line):
         """重新从头执行，在 target_line 首次执行后停止。
         返回 {line: snapshot}，点击代码行即用此结果。"""
+        if self.cpp_detected:
+            self.snapshots = {}
+            self.engine = SimEngine(self.structs, self.funcs)
+            self.engine.error = self._cpp_error()
+            return {}
         fd = self._make_engine(target_line)
         if fd is None:
             self.snapshots = {}
@@ -3081,6 +3174,10 @@ class Simulator:
         返回 (snapshots, need_input_line, error)：
           - need_input_line 非 None → 暂停在该行，等待 GUI 收集输入后恢复
           - need_input_line 为 None → 执行结束（error 可能为 None=跑通）"""
+        if self.cpp_detected:
+            self.snapshots = {}
+            self.engine = SimEngine(self.structs, self.funcs)
+            return {}, None, self._cpp_error()
         fd = self._make_engine(None)
         if fd is None:
             self.snapshots = {}

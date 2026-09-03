@@ -2375,6 +2375,16 @@ class App:
         self._pending_inputs = []      # 恢复：用户可自行设置输入
         self._input_requested = False
         if err or not snaps:
+            # C++ 文件识别：给出明确提示(不影响纯 C 的正常流程)
+            if getattr(self, "sim", None) is not None and getattr(self.sim, "cpp_detected", False):
+                hl, hln = (self.sim.cpp_hint or ("C++", 1))
+                self.highlight_error(hln if isinstance(hln, int) else 1)
+                self._set_run_status("📌 已识别为 C++ 文件", "red")
+                self.set_status(f"已识别为 C++ 代码（第 {hln} 行含特征 '{str(hl).strip()}'）。"
+                                "本工具当前主支持 C 语言子集，C++ 解析支持开发中；"
+                                "纯 C 文件不受影响，可正常逐步运行。", True)
+                self.log(f"已识别为 C++ 代码（特征 '{str(hl).strip()}'），不按 C 解析（避免误报）。")
+                return
             self._set_run_status("❌ 程序未能正常跑通!!!" if err else "● 就绪",
                                  "red" if err else "gray")
             if not snaps:
