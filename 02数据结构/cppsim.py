@@ -1730,6 +1730,7 @@ class CppEngine:
             blk.arr = vals
             self.heap[blk.addr] = blk
             fr.vars[st.name] = Cv("addr", blk.addr)
+            fr.vtypes[st.name] = st.vtype + "[]"
             if is_static:
                 self._static_vars[skey] = {"obj": blk.addr}
             return
@@ -1737,7 +1738,7 @@ class CppEngine:
             # 指针(含类指针 A* p = ...)
             val = self.eval(st.init) if st.init is not None else Cv("null")
             fr.vars[st.name] = val
-            fr.vtypes[st.name] = st.vtype
+            fr.vtypes[st.name] = st.vtype + "*"
             if is_static:
                 self._static_vars[skey] = {"cv": val}
             return
@@ -1795,6 +1796,8 @@ class CppEngine:
             return ("null", None)
         if v.kind == "str":
             return ("strlit", v.val)
+        if v.kind == "fn":
+            return ("fn", v.val)
         return ("null", None)
 
     def _snapshot(self):
@@ -1803,7 +1806,9 @@ class CppEngine:
             vs = []
             for name, cv in fr.vars.items():
                 t = self._vtype(name)
-                vs.append((name, {"type": t, "loc": "栈", "value": self._desc(cv)}))
+                is_obj = t in self.classes and not t.endswith("*")
+                vs.append((name, {"type": t, "loc": "栈", "value": self._desc(cv),
+                                  "obj": is_obj, "is_arr": t.endswith("[]")}))
             if fr.objaddr is not None and "this" not in fr.vars:
                 vs.insert(0, ("this", {"type": "对象*", "loc": "栈",
                                        "value": ("ptr", fr.objaddr)}))
@@ -1815,19 +1820,37 @@ class CppEngine:
             for fn_, fv in blk.fields.items():
                 fields[fn_] = self._desc(fv)
             hb.append({"addr": addr, "typename": blk.typename, "fields": fields,
-                       "loc": blk.loc, "scalar": None, "freed": blk.freed,
-                       "array": None})
+                       "loc": blk.loc,
+                       "scalar": self._desc(blk.scalar) if blk.scalar is not None else None,
+                       "freed": blk.freed,
+                       "array": [self._desc(x) for x in blk.arr[:30]] if blk.arr else None})
         return {"frames": frames, "heap": hb, "heap_total": len(self.heap)}
 
     def _vtype(self, name):
-        # 用字段类型尽力显示(简略) —— 仅当前帧
+        # 变量显示类型 —— 仅当前帧; 指针/对象/数组/基本类型尽量精确
         fr = self.frames[-1] if self.frames else None
-        if fr is not None and name in fr.vars:
-            cv = fr.vars[name]
-            if cv.kind == "float":
-                return "float"
-            if cv.kind == "addr":
-                return "ptr"
+        if fr is None or name not in fr.vars:
+            return "int"
+        cv = fr.vars[name]
+        if cv.kind == "float":
+            return "float"
+        if cv.kind == "char":
+            return "char"
+        if cv.kind == "fn":
+            return "函数指针"
+        if cv.kind == "null":
+            return "NULL"
+        if cv.kind == "addr":
+            vt = fr.vtypes.get(name, "")
+            if vt.endswith("*") or vt.endswith("[]"):
+                return vt
+            if vt in self.classes:
+                return vt                       # 栈对象
+            if vt in ("int", "float", "double", "bool", "long", "short", "unsigned"):
+                return "int*"
+            if vt == "char":
+                return "char*"
+            return "ptr"
         return "int"
 
     # ================= 本批新增: 构造/析构/继承/new-delete/作用域 =================

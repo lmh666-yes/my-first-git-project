@@ -261,6 +261,25 @@ class Drawer:
         self.wrap_arrows = {}
 
     def draw(self, snap, msg="", diff_text=None, changed_vars=None):
+        """安全入口：任何绘图异常都不允许留下空白画布(显示错误提示, 便于排查)"""
+        try:
+            self._draw_body(snap, msg, diff_text, changed_vars)
+        except Exception as ex:
+            import sys as _sys, traceback as _tb
+            _tb.print_exc()
+            try:
+                self.clear()
+            except Exception:
+                pass
+            try:
+                self.c.create_text(12, 12, anchor="nw",
+                                   text=f"绘图遇到问题(点击/重绘不受影响): {type(ex).__name__}: {ex}",
+                                   fill="#c62828", font=self.FM(12, True))
+                self.c.configure(scrollregion="0 0 700 400")
+            except Exception:
+                pass
+
+    def _draw_body(self, snap, msg="", diff_text=None, changed_vars=None):
         """布局：上方「调用栈/变量」，下方「内存/链表结构」；支持缩放 zoom。
         changed_vars: 本步发生变化的变量名集合（高亮显示）"""
         self.clear()
@@ -268,6 +287,13 @@ class Drawer:
         W = int(self.c.cget("width"))
         H = int(self.c.cget("height"))
         if W < 50 or H < 50:
+            # 画布尚未布局/过小: 画提示而不是留白
+            try:
+                self.c.create_text(10, 10, anchor="nw",
+                                   text="（画布正在初始化，稍候自动显示图形）",
+                                   fill="#999999", font=self.FM(10))
+            except Exception:
+                pass
             self.fit()
             return
         self.frames = snap.get("frames", [])
@@ -385,14 +411,24 @@ class Drawer:
         loc = v.get("loc", "栈")
         locs = "[栈] " if loc == "栈" else "[堆] "
         if val[0] == "ptr":
-            s = f"{locs}{name} : {t} -> 0x{val[1]:x}"
+            if v.get("obj"):
+                # C++ 栈对象：不是指针, 是对象块
+                s = f"{locs}{name} : {t} (对象 @0x{val[1]:x})"
+            elif v.get("arr"):
+                s = f"{locs}{name} : {t} -> 数组 @0x{val[1]:x}"
+            else:
+                s = f"{locs}{name} : {t} -> 0x{val[1]:x}"
         elif val[0] == "null":
             s = f"{locs}{name} : {t} -> NULL"
+        elif val[0] == "fn":
+            s = f"{locs}{name} : {t} = &{val[1]} (函数)"
         else:
             s = f"{locs}{name} : {t} = {val[1]}"
         if "arr" in v:
             arr = v["arr"]
-            s += "  [" + ", ".join(str(x[1]) if x[0] == "int" else "?" for x in arr) + "]"
+            s += "  [" + ", ".join(
+                (str(x[1]) if x[0] == "int" else
+                 (f"&{x[1]}" if x[0] == "fn" else "?")) for x in arr) + "]"
         return s
 
     def find_chains(self, frames, heap_by_addr):
@@ -428,6 +464,24 @@ class Drawer:
     def field_rows(self, blk):
         """返回 [(fieldname, value_display, target_addr_or_None)]"""
         rows = []
+        # 堆数组块(new int[10] / malloc(n*sizeof(T)))：显示前若干元素
+        if blk.get("array") is not None:
+            arr = blk["array"]
+            n = len(arr)
+            shown = []
+            for x in arr[:16]:
+                if x[0] == "int":
+                    shown.append(str(x[1]))
+                elif x[0] == "ptr":
+                    shown.append(f"0x{x[1]:x}")
+                elif x[0] == "null":
+                    shown.append("NULL")
+                else:
+                    shown.append("?")
+            disp = ", ".join(shown)
+            if n > 16:
+                disp += ", ..."
+            rows.append((f"数组[{n}]", f"[{disp}]", None))
         # 标量堆块（malloc(sizeof(T)) 后 *p = x）：显示其值
         if not blk["fields"] and blk.get("scalar") is not None:
             sv = blk["scalar"]
@@ -442,6 +496,9 @@ class Drawer:
                 rows.append((fn, f"0x{fv[1]:x}", fv[1]))
             elif fv[0] == "null":
                 rows.append((fn, "NULL", None))
+            elif fv[0] == "fn":
+                # 函数指针成员：显示指向的函数名(不画内存箭头)
+                rows.append((fn, f"&{fv[1]} (函数)", None))
             elif fv[0] == "arr":
                 # 数组字段：date[0]=3, date[1]=7, ...
                 vals = fv[1]
@@ -768,7 +825,8 @@ class Drawer:
         for fr in frames:
             for name, v in fr["vars"]:
                 val = v.get("value")
-                if val and val[0] in ("ptr", "null"):
+                # 只把真正的指针/NULL 变量画绿框; C++ 栈对象与数组变量不画(另有显示方式)
+                if val and val[0] in ("ptr", "null") and not v.get("obj") and not v.get("arr"):
                     ptrs.append((name, v))
         if not ptrs:
             return top
@@ -1001,7 +1059,16 @@ class Drawer:
 
     def _draw_info_panels(self):
         for p in list(self.panels):
-            self._draw_panel(p)
+            try:
+                self._draw_panel(p)
+            except Exception:
+                import traceback as _tb
+                _tb.print_exc()
+                try:
+                    if p in self.panels:
+                        self.panels.remove(p)
+                except ValueError:
+                    pass
 
     def _draw_panel(self, p):
         if p["kind"] == "ptr":
@@ -2159,11 +2226,26 @@ class App:
         self.drawer.fit()
 
     def redraw(self):
-        if self.current_line and self.snapshots:
-            snap = self.snapshots.get(self.current_line) or self.nearest_snap(
-                self.snapshots, self.current_line)
-            if snap:
-                self.drawer.draw(snap, f"执行到第 {self.current_line} 行（该行执行后）")
+        try:
+            if self.current_line and self.snapshots:
+                snap = self.snapshots.get(self.current_line) or self.nearest_snap(
+                    self.snapshots, self.current_line)
+                if snap:
+                    self.drawer.draw(snap, f"执行到第 {self.current_line} 行（该行执行后）")
+        except Exception:
+            import traceback as _tb
+            _tb.print_exc()
+            try:
+                self.drawer.clear()
+            except Exception:
+                pass
+            try:
+                self.canvas.delete("all")
+                self.canvas.create_text(12, 12, anchor="nw",
+                                        text="重绘遇到问题，请点击「重置」或「下一步」恢复",
+                                        fill="#c62828", font=("Microsoft YaHei", 11))
+            except Exception:
+                pass
 
     # ---------- 右侧画布交互：滚轮(点哪滚哪) / 拖拽平移 / 缩放 / 点击看详情 ----------
     def _cv_yview(self, *a):
@@ -2276,7 +2358,24 @@ class App:
         self._dragging = False
 
     def _cv_click(self, ev):
-        """单击：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板"""
+        """单击：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板。
+        安全包装：任何异常都不留白屏，并尝试兜底重绘。"""
+        try:
+            self._cv_click_impl(ev)
+        except Exception as ex:
+            import traceback as _tb
+            _tb.print_exc()
+            try:
+                self.redraw()
+            except Exception:
+                pass
+            try:
+                self.set_status(f"点击处理出错(已恢复): {type(ex).__name__}: {ex}", True)
+            except Exception:
+                pass
+
+    def _cv_click_impl(self, ev):
+        """单击原实现：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板"""
         cx = self.canvas.canvasx(ev.x)
         cy = self.canvas.canvasy(ev.y)
         d = self.drawer
