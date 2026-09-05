@@ -214,6 +214,7 @@ class Drawer:
         self.heap_by_addr = {}
         self._font_cache = {}
         self._fo_cache = {}
+        self._panel_seq = 0        # 信息卡片自增编号(tag 用)
         # 缩放布局尺寸（draw 时按 zoom 计算；带下限，保证缩小后文字不挤压、清晰）
         self.lh = 20      # 变量区行高
         self.fh = 22      # 字段行高
@@ -393,6 +394,9 @@ class Drawer:
             for it in self.c.find_all():
                 if self.c.type(it) == "window":
                     continue
+                tags = self.c.gettags(it)
+                if tags and any(str(tg).startswith("pnl") for tg in tags):
+                    continue   # 信息卡片不参与 scrollregion(始终贴在视口附近)
                 b = self.c.bbox(it)
                 if b:
                     coords.append(b)
@@ -1009,25 +1013,20 @@ class Drawer:
         ch = max(240, self.c.winfo_height())
         dx = cw - 20
         dy = 20 if is_first else ch - 20
+        self._panel_seq += 1
         self.panels.append({"kind": "blk", "addr": addr, "color": color,
                             "dx": dx, "dy": dy,
                             "anchor": "ne" if is_first else "se",
-                            "win_id": None, "line_id": None, "frame": None})
+                            "pid": self._panel_seq, "rect": None,
+                            "close": None})
 
     def _remove_panel(self, addr):
         for p in self.panels:
             if p["kind"] == "blk" and p["addr"] == addr:
-                if p.get("win_id"):
-                    try:
-                        self.c.delete(p["win_id"])
-                    except Exception:
-                        pass
-                if p.get("line_id"):
-                    try:
-                        self.c.delete(p["line_id"])
-                    except Exception:
-                        pass
-                self.c.delete(f"hl_{addr}")
+                try:
+                    self.c.delete(f"pnl{p.get('pid', 0)}")
+                except Exception:
+                    pass
                 self.panels.remove(p)
                 break
         # 移除后重新分配：始终第1个=红·右上，第2个=蓝·右下（只影响块面板）
@@ -1048,25 +1047,19 @@ class Drawer:
             self._remove_ptr_panel(p["name"])
         cw = max(240, self.c.winfo_width())
         ch = max(240, self.c.winfo_height())
+        self._panel_seq += 1
         self.panels.append({"kind": "ptr", "name": name, "addr": None,
                             "color": "#43a047", "dx": cw - 340, "dy": 20,
-                            "anchor": "nw", "win_id": None, "line_id": None,
-                            "frame": None})
+                            "anchor": "nw", "pid": self._panel_seq,
+                            "rect": None, "close": None})
 
     def _remove_ptr_panel(self, name):
         for p in self.panels:
             if p["kind"] == "ptr" and p["name"] == name:
-                if p.get("win_id"):
-                    try:
-                        self.c.delete(p["win_id"])
-                    except Exception:
-                        pass
-                if p.get("line_id"):
-                    try:
-                        self.c.delete(p["line_id"])
-                    except Exception:
-                        pass
-                self.c.delete(f"hp_{name}")
+                try:
+                    self.c.delete(f"pnl{p.get('pid', 0)}")
+                except Exception:
+                    pass
                 self.panels.remove(p)
                 break
 
@@ -1084,32 +1077,189 @@ class Drawer:
                     pass
 
     def _draw_panel(self, p):
+        """canvas 原生信息卡片(不再使用 tk window 浮窗——旧式浮窗反复创建/销毁
+        是“点击后整屏空白/残影”的根源)。卡片: 纯画布元素, 可拖动/关闭/随内容滚动。"""
+        tag = f"pnl{p.get('pid', 0)}"
+        try:
+            self.c.delete(tag)
+        except Exception:
+            pass
+        p["rect"] = None
+        p["close"] = None
         if p["kind"] == "ptr":
-            self._draw_ptr_panel(p)
-            return
-        addr = p["addr"]
-        blk = self.heap_by_addr.get(addr)
-        if blk is None:
-            return
-        # 选中节点描边（红/蓝，外扩 3px）
-        rect = self.node_rects.get(addr)
-        if rect:
-            x, y, w, h = rect
-            self.c.delete(f"hl_{addr}")
-            self.round_rect(x - 3, y - 3, x + w + 3, y + h + 3,
-                            max(5, round(8 * self.zoom)),
-                            outline=p["color"], fill="", width=3,
-                            tags=(f"hl_{addr}",))
-        # 面板
-        frame = self._make_panel_frame(blk, addr, p["color"])
-        p["frame"] = frame
-        x0 = self.c.canvasx(0) + p["dx"]
-        y0 = self.c.canvasy(0) + p["dy"]
-        p["win_id"] = self.c.create_window(x0, y0, anchor=p["anchor"], window=frame)
-        self._bind_panel_drag(frame, p)
-        self._draw_panel_link(p)
+            v = self.ptr_vars.get(p["name"])
+            if v is None:
+                return
+            title, lines = self._ptr_panel_lines(p["name"], v, p["color"])
+        else:
+            blk = self.heap_by_addr.get(p["addr"])
+            if blk is None:
+                return
+            title, lines = self._blk_panel_lines(blk, p["addr"], p["color"])
+        self._draw_card(p, tag, title, lines)
 
-    def _make_panel_frame(self, blk, addr, color):
+    def _draw_card(self, p, tag, title, lines):
+        """画卡片本体 + 连线; lines=[(text,font,fill)]"""
+        z = self.zoom
+        pad = max(6, round(8 * z))
+        bar_h = max(22, round(22 * z))
+        brow = max(16, round(18 * z))
+        tf = self.FM(10, True)
+        rows = [(title, tf, "#ffffff")]
+        rows.extend(lines)
+        maxw = max(self.mw(t, f) for t, f, _c in rows)
+        w = min(max(150 * z, maxw + 2 * pad), 380 * z)
+
+        def fit(t, f):
+            while len(t) > 1 and self.mw(t + "…", f) > w - 2 * pad:
+                t = t[:-1]
+            return t
+
+        rows = [(fit(t, f), f, c) for t, f, c in rows]
+        h = bar_h + pad + len(lines) * brow + max(6, round(6 * z))
+        x0 = self.c.canvasx(0)
+        y0 = self.c.canvasy(0)
+        dx = p.get("dx", 20)
+        dy = p.get("dy", 20)
+        an = p.get("anchor", "ne")
+        if an == "ne":
+            lx, ly = x0 + dx - w, y0 + dy
+        elif an == "se":
+            lx, ly = x0 + dx - w, y0 + dy - h
+        else:
+            lx, ly = x0 + dx, y0 + dy
+        # 卡片背景 + 边框
+        self.round_rect(lx, ly, lx + w, ly + h, max(5, round(8 * z)),
+                        outline=p["color"], fill="#ffffff", width=2, tags=(tag,))
+        # 标题色条
+        self.c.create_rectangle(lx + 2, ly + 2, lx + w - 2, ly + bar_h,
+                                outline="", fill=p["color"], tags=(tag,))
+        self.c.create_text(lx + pad, ly + 1, anchor="nw", text=rows[0][0],
+                           font=rows[0][1], fill=rows[0][2], tags=(tag,))
+        # 内容行
+        yy = ly + bar_h + 1
+        for txt, f, col in rows[1:]:
+            self.c.create_text(lx + pad, yy, anchor="nw", text=txt, font=f,
+                               fill=col, tags=(tag,))
+            yy += brow
+        # 关闭按钮 ✕(标题条右侧, 记录点击区)
+        cw_x = lx + w - 26 * z
+        cw_y = ly + 1
+        self.c.create_text(lx + w - pad - 2, ly + 1, anchor="ne", text="✕",
+                           fill="#ffffff", font=self.FM(11, True), tags=(tag,))
+        p["rect"] = (lx, ly, w, h)
+        p["close"] = (cw_x, cw_y, 26 * z, max(20, bar_h))
+        # 连线: 目标块/指针框中心 → 卡片外边缘(朝目标方向)
+        if p["kind"] == "ptr":
+            rb = self.ptr_boxes.get(p["name"])
+        else:
+            rb = self.node_rects.get(p["addr"])
+        if rb:
+            nx, ny = rb[0] + rb[2] / 2, rb[1] + rb[3] / 2
+            if nx < lx:
+                ax, ay = lx, min(max(ny, ly), ly + h)
+            elif nx > lx + w:
+                ax, ay = lx + w, min(max(ny, ly), ly + h)
+            elif ny < ly:
+                ax, ay = min(max(nx, lx), lx + w), ly
+            else:
+                ax, ay = min(max(nx, lx), lx + w), ly + h
+            self.c.create_line(nx, ny, ax, ay, fill=p["color"], width=1,
+                               dash=(4, 3), tags=(tag,))
+
+    def _panel_at(self, cx, cy):
+        """返回 (part,p) part in 'close'|'body'; 无则 None"""
+        for p in reversed(self.panels):
+            cl = p.get("close")
+            if cl and cl[0] <= cx <= cl[0] + cl[2] and cl[1] <= cy <= cl[1] + cl[3]:
+                return ("close", p)
+            r = p.get("rect")
+            if r and r[0] <= cx <= r[0] + r[2] and r[1] <= cy <= r[1] + r[3]:
+                return ("body", p)
+        return None
+
+    def _panel_hit_body(self, cx, cy):
+        h = self._panel_at(cx, cy)
+        return h[1] if h and h[0] == "body" else None
+
+    def _blk_panel_lines(self, blk, addr, color):
+        loc = blk.get("loc", "堆")
+        loc_cn = "栈" if loc == "栈" else ("堆(new/malloc)" if loc == "堆" else "静态")
+        if blk.get("freed"):
+            loc_cn += " · 已释放"
+        title = f"◆ {blk['typename']} @0x{addr:x} [{loc_cn}]"
+        lines = []
+        owners = []
+        for fr in self.frames:
+            for nm, v in fr["vars"]:
+                val = v.get("value")
+                if val and val[0] == "ptr" and val[1] == addr and not v.get("obj"):
+                    owners.append(nm)
+        lines.append(("被引用: " + (", ".join(owners) if owners else "无变量直接引用"),
+                      self.F(9), color))
+        rows = self.field_rows(blk)
+        extra = 0
+        if len(rows) > 14:
+            rows, extra = rows[:14], len(rows) - 14
+        for fn, disp, tgt in rows:
+            txt = (f"{fn} → 0x{tgt:x}" if tgt is not None else f"{fn} = {disp}")
+            lines.append((txt, self.F(10), "#1565c0" if tgt is not None else "#333333"))
+        if extra:
+            lines.append((f"… 等 {extra} 个字段", self.F(9), "#888888"))
+        st = "已释放(free)" if blk.get("freed") else "有效内存"
+        lines.append((f"状态: {st}", self.F(9), "#888888"))
+        return title, lines
+
+    def _ptr_panel_lines(self, name, v, color):
+        title = f"◆ 指针变量 {name}"
+        lines = []
+        t = v.get("type", "指针")
+        val = v.get("value")
+        lines.append((f"类型: {t}", self.F(10), "#333333"))
+        if val and val[0] == "ptr":
+            addr = val[1]
+            lines.append((f"指向地址: 0x{addr:x}", self.F(10, True), color))
+            blk = self.heap_by_addr.get(addr)
+            if blk is None:
+                lines.append(("目标: ⚠ 指向未分配内存(野指针)", self.F(10), "#c62828"))
+            elif blk.get("freed"):
+                lines.append((f"目标: ⚠ 指向已释放内存 @0x{addr:x}", self.F(10), "#c62828"))
+            else:
+                lc = "栈(对象)" if blk.get("loc") == "栈" else \
+                    ("堆(malloc)" if blk.get("loc") == "堆" else "静态")
+                lines.append((f"目标: {blk['typename']} @0x{addr:x} [{lc}]",
+                              self.F(10, True), "#2e7d32"))
+                if not blk.get("fields") and blk.get("scalar") is not None:
+                    sv = blk["scalar"]
+                    lines.append(("内容: 值 = " + self._sv_text(sv), self.F(10), "#333333"))
+                elif blk.get("array") is not None:
+                    lines.append((f"内容: 数组[{len(blk['array'])}] 个元素",
+                                  self.F(10), "#333333"))
+                else:
+                    for fn, fv in list(blk.get("fields", {}).items())[:3]:
+                        lines.append(("内容: " + self._fv_text(fn, fv), self.F(10), "#333333"))
+        elif val and val[0] == "null":
+            lines.append(("指向: NULL(未指向任何内存)", self.F(10), "#8a8a8a"))
+        lines.append(("拖动移动此框 · 点 ✕ 关闭", self.F(9), "#bbbbbb"))
+        return title, lines
+
+    def _sv_text(self, sv):
+        if sv[0] == "int":
+            return str(sv[1])
+        if sv[0] == "ptr":
+            return f"0x{sv[1]:x}"
+        return "NULL"
+
+    def _fv_text(self, fn, fv):
+        if fv[0] == "ptr":
+            return f"{fn} = 0x{fv[1]:x}"
+        if fv[0] == "null":
+            return f"{fn} = NULL"
+        if fv[0] == "fn":
+            return f"{fn} = &{fv[1]}(函数)"
+        return f"{fn} = {fv[1]}"
+
+    def _dead_make_panel_frame(self, blk, addr, color):
         frame = tk.Frame(self.c, bg="#ffffff", highlightbackground=color,
                          highlightthickness=2)
         # 标题栏（含关闭叉叉）
@@ -1168,7 +1318,7 @@ class Drawer:
                  padx=8, pady=2).pack(fill=tk.X)
         return frame
 
-    def _draw_ptr_panel(self, p):
+    def _dead_draw_ptr_panel(self, p):
         """指针绿框 → 绿色解释面板"""
         name = p["name"]
         v = self.ptr_vars.get(name)
@@ -1182,15 +1332,15 @@ class Drawer:
                             max(5, round(8 * self.zoom)),
                             outline=p["color"], fill="", width=3,
                             tags=(f"hp_{name}",))
-        frame = self._make_ptr_panel_frame(name, v, p["color"])
+        frame = self._dead_make_ptr_panel_frame(name, v, p["color"])
         p["frame"] = frame
         x0 = self.c.canvasx(0) + p["dx"]
         y0 = self.c.canvasy(0) + p["dy"]
         p["win_id"] = self.c.create_window(x0, y0, anchor=p["anchor"], window=frame)
-        self._bind_panel_drag(frame, p)
-        self._draw_panel_link(p)
+        self._dead_bind_panel_drag(frame, p)
+        self._dead_draw_panel_link(p)
 
-    def _make_ptr_panel_frame(self, name, v, color):
+    def _dead_make_ptr_panel_frame(self, name, v, color):
         """绿色解释面板：说明指针指向的目标、地址是什么"""
         frame = tk.Frame(self.c, bg="#ffffff", highlightbackground=color,
                          highlightthickness=2)
@@ -1258,7 +1408,7 @@ class Drawer:
                  anchor="w", padx=8, pady=2).pack(fill=tk.X)
         return frame
 
-    def _draw_panel_link(self, p):
+    def _dead_draw_panel_link(self, p):
         """节点中心/指针框中心 → 面板 的细虚线连接线（不显眼）"""
         if p.get("line_id"):
             try:
@@ -1281,7 +1431,7 @@ class Drawer:
         p["line_id"] = self.c.create_line(nx, ny, wx, wy, fill=p["color"],
                                           width=1, dash=(4, 3))
 
-    def _bind_panel_drag(self, frame, p):
+    def _dead_bind_panel_drag(self, frame, p):
         """面板可拖动（递归绑定子控件），拖动时同步连线"""
         def start(ev):
             p["_ds"] = (ev.x_root, ev.y_root, p["dx"], p["dy"])
@@ -1296,7 +1446,7 @@ class Drawer:
                 x0 = self.c.canvasx(0)
                 y0 = self.c.canvasy(0)
                 self.c.coords(p["win_id"], x0 + p["dx"], y0 + p["dy"])
-                self._draw_panel_link(p)
+                self._dead_draw_panel_link(p)
             except Exception:
                 pass
         def rec(w):
@@ -2292,17 +2442,13 @@ class App:
         self._keep_panel()
 
     def _keep_panel(self):
-        """滚动/拖动画布时，让所有信息面板跟随可视区并同步连线"""
+        """滚动/拖动画布时，把信息卡片重新贴到视口(按 dx/dy)并重画连线"""
         d = self.drawer
-        for p in d.panels:
-            if p.get("win_id"):
-                try:
-                    x0 = self.canvas.canvasx(0)
-                    y0 = self.canvas.canvasy(0)
-                    self.canvas.coords(p["win_id"], x0 + p["dx"], y0 + p["dy"])
-                    d._draw_panel_link(p)
-                except Exception:
-                    pass
+        for p in list(d.panels):
+            try:
+                d._draw_panel(p)
+            except Exception:
+                pass
 
     def _cv_wheel(self, ev):
         """画布滚轮：Ctrl → 缩放；Shift → 水平滚；否则垂直滚"""
@@ -2373,11 +2519,32 @@ class App:
         self._canvas_mouse_down = True
         self._press_x, self._press_y = ev.x, ev.y
         self._dragging = False
+        self._drag_panel = None
+        cx = self.canvas.canvasx(ev.x)
+        cy = self.canvas.canvasy(ev.y)
+        # 按下在信息卡片主体上 → 进入拖动卡片模式(不触发画布平移)
+        hp = self.drawer._panel_hit_body(cx, cy)
+        if hp is not None:
+            self._drag_panel = hp
+            self.canvas.config(cursor="fleur")
+            return "break"
         self.canvas.scan_mark(ev.x, ev.y)
         self.canvas.config(cursor="fleur")
 
     def _cv_drag(self, ev):
-        """按住左键拖动画布平移（像查看图片）"""
+        """拖动: 信息卡片移动 or 画布平移(像查看图片)"""
+        if self._drag_panel is not None:
+            p = self._drag_panel
+            if abs(ev.x - self._press_x) > 2 or abs(ev.y - self._press_y) > 2:
+                p["dx"] = p.get("dx", 20) + (ev.x - self._press_x)
+                p["dy"] = p.get("dy", 20) + (ev.y - self._press_y)
+                self._press_x, self._press_y = ev.x, ev.y
+                try:
+                    self.drawer._draw_panel(p)
+                except Exception:
+                    pass
+                self._dragging = True
+            return "break"
         if abs(ev.x - self._press_x) > 4 or abs(ev.y - self._press_y) > 4:
             self._dragging = True
         if self._dragging:
@@ -2388,9 +2555,10 @@ class App:
     def _cv_release(self, ev):
         self._canvas_mouse_down = False
         self.canvas.config(cursor="hand2")
-        if not self._dragging:
+        if not self._dragging and self._drag_panel is None:
             self._cv_click(ev)
         self._dragging = False
+        self._drag_panel = None
 
     def _cv_click(self, ev):
         """单击：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板。
@@ -2416,6 +2584,17 @@ class App:
         cx = self.canvas.canvasx(ev.x)
         cy = self.canvas.canvasy(ev.y)
         d = self.drawer
+        # 0. 点信息卡片: ✕ → 关闭; 卡片主体 → 忽略(拖动用)
+        hit_panel = d._panel_at(cx, cy)
+        if hit_panel:
+            part, p = hit_panel
+            if part == "close":
+                if p["kind"] == "blk":
+                    d._remove_panel(p["addr"])
+                else:
+                    d._remove_ptr_panel(p["name"])
+                self.redraw()
+            return "break"
         # 1. 续接标记 → 显示/隐藏紫色垂直箭头
         for mid, info in list(d.wrap_marks.items()):
             x1, y1, x2, y2 = info["rect"]
