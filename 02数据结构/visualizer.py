@@ -410,6 +410,8 @@ class Drawer:
         val = v.get("value")
         loc = v.get("loc", "栈")
         locs = "[栈] " if loc == "栈" else "[堆] "
+        if val is None:
+            return f"{locs}{name} : {t} = ?"
         if val[0] == "ptr":
             if v.get("obj"):
                 # C++ 栈对象：不是指针, 是对象块
@@ -422,6 +424,17 @@ class Drawer:
             s = f"{locs}{name} : {t} -> NULL"
         elif val[0] == "fn":
             s = f"{locs}{name} : {t} = &{val[1]} (函数)"
+        elif isinstance(val, str):
+            # 数组变量(simcore/cppsim describe 值为 "数组" 标记): 用 arr 内容展示
+            if v.get("arr") is not None:
+                arr = v["arr"]
+                inner = ", ".join(
+                    (str(x[1]) if x[0] == "int" else
+                     (f"0x{x[1]:x}" if x[0] == "ptr" else
+                      (f"&{x[1]}" if x[0] == "fn" else "NULL"))) for x in arr)
+                s = f"{locs}{name} : {t} = [{inner}][{v.get('arr_total', len(arr))}项]"
+            else:
+                s = f"{locs}{name} : {t} = {val}"
         else:
             s = f"{locs}{name} : {t} = {val[1]}"
         if "arr" in v:
@@ -2225,6 +2238,26 @@ class App:
                                 fill="#999999", font=("Microsoft YaHei", 12))
         self.drawer.fit()
 
+    def _ensure_content_visible(self):
+        """重绘后若视口停在空白区(内容被滚出可视范围), 自动回到内容区,
+        彻底避免'点一下图就整屏空白'的观感。"""
+        try:
+            bb = self.canvas.bbox("all")
+            if not bb:
+                return
+            vw = self.canvas.winfo_width()
+            vh = self.canvas.winfo_height()
+            x0 = self.canvas.canvasx(0)
+            y0 = self.canvas.canvasy(0)
+            x1, y1 = x0 + vw, y0 + vh
+            # 视口与内容完全不相交 → 回到内容起点
+            if bb[2] <= x0 + 4 or bb[0] >= x1 - 4 or bb[3] <= y0 + 4 or bb[1] >= y1 - 4:
+                self.canvas.xview_moveto(0)
+                self.canvas.yview_moveto(0)
+                self._keep_panel()
+        except Exception:
+            pass
+
     def redraw(self):
         try:
             if self.current_line and self.snapshots:
@@ -2232,6 +2265,7 @@ class App:
                     self.snapshots, self.current_line)
                 if snap:
                     self.drawer.draw(snap, f"执行到第 {self.current_line} 行（该行执行后）")
+            self._ensure_content_visible()
         except Exception:
             import traceback as _tb
             _tb.print_exc()
@@ -2246,6 +2280,7 @@ class App:
                                         fill="#c62828", font=("Microsoft YaHei", 11))
             except Exception:
                 pass
+            self._ensure_content_visible()
 
     # ---------- 右侧画布交互：滚轮(点哪滚哪) / 拖拽平移 / 缩放 / 点击看详情 ----------
     def _cv_yview(self, *a):
@@ -2359,7 +2394,7 @@ class App:
 
     def _cv_click(self, ev):
         """单击：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板。
-        安全包装：任何异常都不留白屏，并尝试兜底重绘。"""
+        安全包装：任何异常都不留白屏，并尝试兜底重绘；结束后确保内容可见。"""
         try:
             self._cv_click_impl(ev)
         except Exception as ex:
@@ -2373,6 +2408,8 @@ class App:
                 self.set_status(f"点击处理出错(已恢复): {type(ex).__name__}: {ex}", True)
             except Exception:
                 pass
+        finally:
+            self._ensure_content_visible()
 
     def _cv_click_impl(self, ev):
         """单击原实现：续接标记→紫箭头；指针绿框→绿色面板；内存块→红/蓝面板"""
