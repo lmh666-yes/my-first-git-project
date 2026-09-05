@@ -863,6 +863,7 @@ class CppFrame:
         self.vars = {}        # name -> Cv  (局部 int/float/char/指针)
         self.vtypes = {}      # name -> 基础类型名(int/float/char/类名)
         self.objaddr = None   # 方法帧: this 对象地址
+        self.owner = None     # 当前所属类(构造/方法/析构/限定调用), 自由函数=None
 
 
 class CppBlk:
@@ -924,6 +925,45 @@ class CppEngine:
                 return cls
         return None
 
+    def _key_of(self, cls, name):
+        """字段在对象块中的存储键: 若基类链已定义同名则加 '类名::' 前缀(遮蔽)。
+        无冲突时返回原名, 不改变无遮蔽的可视化。"""
+        anc = self.classes[cls].base if cls in self.classes else None
+        while anc and anc in self.classes:
+            if any(f[0] == name for f in self.classes[anc].fields):
+                return f"{cls}::{name}"
+            anc = self.classes[anc].base
+        return name
+
+    def _def_cls_for(self, typename, name):
+        """沿 typename→祖先 找最近(派生优先)定义了 name 的类; 无返回 None"""
+        c = typename
+        while c and c in self.classes:
+            if any(f[0] == name for f in self.classes[c].fields):
+                return c
+            c = self.classes[c].base
+        return None
+
+    def _this_member_key(self, name):
+        """当前帧(方法/构造/析构/限定调用)裸成员名 → this 对象块存储键"""
+        fr = self.frames[-1] if self.frames else None
+        owner = fr.owner if fr is not None else None
+        if owner:
+            dc = self._def_cls_for(owner, name)
+            if dc:
+                return self._key_of(dc, name)
+        return name
+
+    def _obj_member_key(self, blk, name):
+        """成员访问 对象.成员: 按对象实际类型链(派生优先遮蔽)取存储键"""
+        dc = self._def_cls_for(blk.typename, name)
+        return self._key_of(dc, name) if dc else name
+
+    def _qual_member_key(self, qual, name):
+        """限定访问 对象.类名::成员: 在 qual 类域(含其基类)中解析"""
+        dc = self._def_cls_for(qual, name)
+        return self._key_of(dc, name) if dc else name
+
     # ---- 内存 ----
     def _alloc(self, typename, loc="堆"):
         blk = CppBlk(self.next_addr, typename, loc)
@@ -934,19 +974,20 @@ class CppEngine:
             for cls in self._lineage(typename):
                 cdef = self.classes[cls]
                 for fname, ftype, ptr in cdef.fields:
-                    if fname in blk.fields:
+                    key = self._key_of(cls, fname)
+                    if key in blk.fields:
                         continue
                     if ptr > 0:
-                        blk.fields[fname] = Cv("null")
+                        blk.fields[key] = Cv("null")
                     elif ftype in self.classes:
                         sub = self._alloc(ftype, "栈")
-                        blk.fields[fname] = Cv("addr", sub.addr)
+                        blk.fields[key] = Cv("addr", sub.addr)
                     elif ftype == "float" or ftype == "double":
-                        blk.fields[fname] = Cv("float", 0.0)
+                        blk.fields[key] = Cv("float", 0.0)
                     elif ftype == "char":
-                        blk.fields[fname] = Cv("char", 0)
+                        blk.fields[key] = Cv("char", 0)
                     else:
-                        blk.fields[fname] = Cv("int", 0)
+                        blk.fields[key] = Cv("int", 0)
         self.heap[blk.addr] = blk
         return blk
 
@@ -965,12 +1006,16 @@ class CppEngine:
         return fr.objaddr if fr is not None else None
 
     def _read_member_of_this(self, name):
-        """方法体内裸成员名 -> 读取 this 对象的字段(仅当前方法帧)"""
+        """方法/构造/析构体内裸成员名 -> 读取 this 对象的字段(按 owner 类解析遮蔽)"""
         fr = self.frames[-1] if self.frames else None
         if fr is not None and fr.objaddr is not None:
             blk = self.heap.get(fr.objaddr)
-            if blk is not None and name in blk.fields:
-                return blk.fields[name], fr.objaddr
+            if blk is not None:
+                key = self._this_member_key(name)
+                if key in blk.fields:
+                    return blk.fields[key], fr.objaddr
+                if name in blk.fields:
+                    return blk.fields[name], fr.objaddr
         return None, None
 
     # ---- 求值 ----
@@ -1050,9 +1095,10 @@ class CppEngine:
             if base.kind == "addr":
                 blk = self.heap.get(base.val)
                 if blk is not None:
-                    if e[2] not in blk.fields:
-                        blk.fields[e[2]] = Cv("int", 0)
-                    return blk.fields[e[2]]
+                    key = self._obj_member_key(blk, e[2])
+                    if key not in blk.fields:
+                        blk.fields[key] = Cv("int", 0)
+                    return blk.fields[key]
             raise SimError(self.cur_line, f"对象成员访问失败: {e[1]}")
         if k == "index":
             arr = self.eval(e[1])
@@ -1093,7 +1139,9 @@ class CppEngine:
             if base.kind == "addr":
                 blk = self.heap.get(base.val)
                 if blk is not None:
-                    return blk.fields.get(e[3], Cv("int", 0))
+                    key = self._qual_member_key(e[2], e[3])
+                    if key in blk.fields:
+                        return blk.fields[key]
             return Cv("int", 0)
         if k == "qmcall":
             base = self.eval(e[1])
@@ -1199,13 +1247,18 @@ class CppEngine:
             self._cur().vars[name] = self._coerce_var(name, value)
             return
         if target[0] in ("member", "qmember"):
-            # member: 对象.成员   qmember: 对象.类名::成员
+            # member: 对象.成员(按对象实际类型遮蔽)  qmember: 对象.类名::成员(限定)
+            qual = target[2] if target[0] == "qmember" else None
             fld = target[3] if target[0] == "qmember" else target[2]
             base = self.eval(target[1])
             if base.kind == "addr":
                 blk = self.heap.get(base.val)
                 if blk is not None:
-                    self._set_field(blk, fld, value)
+                    if qual:
+                        key = self._qual_member_key(qual, fld)
+                    else:
+                        key = self._obj_member_key(blk, fld)
+                    self._set_field(blk, key, value)
                     return
             raise SimError(self.cur_line, "成员赋值目标无效")
         if target[0] == "index":
@@ -1263,9 +1316,14 @@ class CppEngine:
         fr = self.frames[-1] if self.frames else None
         if fr is not None and fr.objaddr is not None:
             blk = self.heap.get(fr.objaddr)
-            if blk is not None and name in blk.fields:
-                self._set_field(blk, name, value)
-                return
+            if blk is not None:
+                key = self._this_member_key(name)
+                if key in blk.fields:
+                    self._set_field(blk, key, value)
+                    return
+                if name in blk.fields:
+                    self._set_field(blk, name, value)
+                    return
         raise SimError(self.cur_line, f"成员 '{name}' 写入失败")
 
     def _coerce_field(self, blk, name, value):
@@ -1517,8 +1575,9 @@ class CppEngine:
             if base.kind == "addr":
                 blk = self.heap.get(base.val)
                 if blk is not None:
-                    cur = blk.fields.get(target[2])
-                    blk.fields[target[2]] = self._mk_val_for(cur if cur is not None else Cv("int", 0), val)
+                    key = self._obj_member_key(blk, target[2])
+                    cur = blk.fields.get(key)
+                    blk.fields[key] = self._mk_val_for(cur if cur is not None else Cv("int", 0), val)
             return
 
     def _mk_val_for(self, cur, val):
@@ -1749,6 +1808,7 @@ class CppEngine:
         params, initlist, body = m
         fr = CppFrame(f"{cls} 构造函数")
         fr.objaddr = blk.addr
+        fr.owner = cls
         self.frames.append(fr)
         try:
             # 绑定形参(缺省用默认参数; 均在构造帧内求值)
@@ -1771,7 +1831,8 @@ class CppEngine:
             # 2) 本类对象成员构造(声明序, 取 initlist 参数或默认构造)
             for fname, ftype, ptr in cd.fields:
                 if ftype in self.classes and ptr == 0:
-                    cv = blk.fields.get(fname)
+                    key = self._key_of(cls, fname)
+                    cv = blk.fields.get(key)
                     sub = self.heap.get(cv.val) if cv is not None and cv.kind == "addr" else None
                     if sub is not None:
                         margs = [self.eval(a) for a in inits[fname]] if fname in inits else []
@@ -1781,7 +1842,8 @@ class CppEngine:
                 if fname in inits and not (ftype in self.classes and ptr == 0):
                     vs = [self.eval(a) for a in inits[fname]]
                     if vs:
-                        self._set_field(blk, fname, vs[0])
+                        key = self._key_of(cls, fname)
+                        self._set_field(blk, key, vs[0])
             self._run_body(body)
         finally:
             self.frames.pop()
@@ -1795,6 +1857,7 @@ class CppEngine:
             params, body = cd.dtor
             fr = CppFrame(f"~{cls}")
             fr.objaddr = blk.addr
+            fr.owner = cls
             self.frames.append(fr)
             try:
                 self._run_body(body)
@@ -1802,7 +1865,8 @@ class CppEngine:
                 self.frames.pop()
         for fname, ftype, ptr in reversed(cd.fields):
             if ftype in self.classes and ptr == 0:
-                cv = blk.fields.get(fname)
+                key = self._key_of(cls, fname)
+                cv = blk.fields.get(key)
                 sub = self.heap.get(cv.val) if cv is not None and cv.kind == "addr" else None
                 if sub is not None:
                     self._destruct(ftype, sub)
@@ -1900,6 +1964,7 @@ class CppEngine:
     def _invoke_method(self, owner, name, params, body, thisaddr, argvals):
         fr = CppFrame(f"{owner}::{name}")
         fr.objaddr = thisaddr
+        fr.owner = owner
         self.frames.append(fr)
         ret = Cv("int", 0)
         try:
@@ -1959,6 +2024,11 @@ class CppSimulator:
             self.engine.error = ex
         except RecursionError:
             self.engine.error = SimError(0, "递归过深")
+        # 运行全部: main 顶层对象已在 _run_body 结束析构 —— 把最后一行快照
+        # 刷新为"程序结束(析构后)"终态, 便于 GUI 展示对象已释放
+        if self.engine.error is None and self.engine.snapshots:
+            last_line = max(self.engine.snapshots.keys())
+            self.engine.snapshots[last_line] = self.engine._snapshot()
         self.snapshots = self.engine.snapshots
         return self.snapshots
 

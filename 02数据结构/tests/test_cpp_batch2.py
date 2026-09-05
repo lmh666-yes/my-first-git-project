@@ -12,7 +12,8 @@ FILES = [("03类继承中的构造和析构.cpp", b"", []),
          ("12类对象成员.cpp", b"", []),
          ("01类外堆内存.cpp", b"", []),
          ("02cppdemo.cpp", b"5\n6.5\n", [5, 6.5]),
-         ("01类定义.cpp", b"", [])]
+         ("01类定义.cpp", b"", []),
+         ("01类继承语法.cpp", b"", [])]
 
 def real_out(path, stdin=b""):
     exe = os.path.join(tempfile.gettempdir(), "cpp2_t.exe")

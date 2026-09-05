@@ -46,7 +46,8 @@ def run_file(fn):
         print(f"  [FAIL] {fn}: 异常 {ex}")
         fails += 1
 
-for f in ["03类继承中的构造和析构.cpp", "12类对象成员.cpp", "01类外堆内存.cpp"]:
+for f in ["03类继承中的构造和析构.cpp", "12类对象成员.cpp", "01类外堆内存.cpp",
+          "01类继承语法.cpp"]:
     run_file(f)
 
 root.destroy()
