@@ -16,7 +16,7 @@ cppsim.py — 教学 C++ 子集解释器（独立模块，不影响 C 引擎 sim
 """
 import re
 
-from simcore import (SimError, tokenize, StopExec,
+from simcore import (SimError, tokenize, StopExec, Token,
                      Stmt, BlockStmt, DeclStmt, AssignStmt, ExprStmt,
                      IfStmt, WhileStmt, ForStmt, ReturnStmt, BreakStmt,
                      PrintfStmt)
@@ -25,11 +25,18 @@ from simcore import (SimError, tokenize, StopExec,
 # 额外的 C++ 语句类型（数据成员/方法表等统一放类定义）
 # ---------------------------------------------------------------
 class ClassDef:
-    """class 定义：字段 + 方法"""
+    """class 定义：字段 + 方法 + 继承 + 构造/析构"""
     def __init__(self, name):
         self.name = name
-        self.fields = []     # [(name, vtype)]  vtype 可为 float/int/char/类名
-        self.methods = {}    # name -> (params, body_stmts)
+        self.base = None            # 单继承基类名(第一版)
+        self.fields = []            # [(name, vtype, ptr)]
+        self.methods = {}           # name -> (params, body, is_const)
+        self.ctors = []             # [(params(含默认值), initlist, body)]
+        self.dtor = None            # (params, body) 或 None
+
+    def lineage(self):
+        """继承链(含自身, 自顶向下基类→派生) 按需惰性查询由 engine 处理"""
+        return [self]
 
 
 class CoutStmt(Stmt):
@@ -111,16 +118,18 @@ class CppParser:
     @staticmethod
     def _fold_tokens(toks):
         """C++ 专用 token 预处理(不影响 C)：
-         1) 限定访问 `A::x` / `b.A::x` → 丢弃 `类名 ::`，后续名按普通成员/变量处理
+         1) 两个连续 ':'(来自 :: ) 合并为单个 op token '::'，供限定访问解析
          2) 数字字面量后缀 567L / 3.14f / 100u → 丢弃后缀标记
-         (双连 ':' 只可能来自 ::，三元 ?: 是单冒号不会相邻)"""
+         (三元 ?: 是单冒号不会相邻；default:/case x: 单冒号不受影响)"""
         out = []
         i, n = 0, len(toks)
         suf = {"L", "l", "u", "U", "f", "F", "ul", "UL", "lu", "LU"}
         while i < n:
             t = toks[i]
-            if t.kind == "id" and i + 2 < n and toks[i + 1].text == ":" and toks[i + 2].text == ":":
-                i += 3
+            if t.kind == "op" and t.text == ":" and i + 1 < n and toks[i + 1].text == ":":
+                # 合并为 '::' 单 token
+                out.append(Token("op", "::", t.line))
+                i += 2
                 continue
             if t.kind == "num" and i + 1 < n and toks[i + 1].kind == "id" and toks[i + 1].text in suf:
                 out.append(t)
@@ -180,9 +189,15 @@ class CppParser:
             raise SimError(name_t.line, "class 后需要类名")
         cname = name_t.text
         cd = ClassDef(cname)
-        self.t.expect_brace = None
+        # 继承：class B : public A { ... }
+        if self.t.at(":"):
+            self.t.next()
+            while not self.t.at("{") and self.t.peek() is not None:
+                tk = self.t.next()
+                if tk.kind == "id" and tk.text not in ("public", "private", "protected") \
+                        and cd.base is None:
+                    cd.base = tk.text
         self.t.expect("{")
-        public_ok = True
         while not self.t.at("}"):
             if self.t.peek() is None:
                 raise SimError(0, "类定义缺少 '}'")
@@ -192,9 +207,38 @@ class CppParser:
                 self.t.next()
                 if self.t.at(":"):
                     self.t.next()
-                public_ok = True   # 第一版不校验权限(教学宽容)
                 continue
-            # 成员函数 or 数据成员？
+            # 析构函数 ~A(){...}
+            if self.t.at("~"):
+                self.t.next()
+                self.t.next()          # 类名
+                self.t.expect("(")
+                params = self._parse_params()
+                body = []
+                if self.t.at("{"):
+                    body = self._parse_block()
+                elif self.t.at(";"):
+                    self.t.next()
+                cd.dtor = (params, body)
+                continue
+            # 构造函数：类名( … )[: 初始化列表] {…}
+            if self.t.at_id() and self.t.peek().text == cname \
+                    and self.t.peek(1) is not None and self.t.peek(1).text == "(":
+                self.t.next()
+                self.t.expect("(")
+                params = self._parse_params()
+                initlist = []
+                if self.t.at(":"):
+                    self.t.next()
+                    initlist = self._parse_init_list(cd)
+                body = []
+                if self.t.at("{"):
+                    body = self._parse_block()
+                elif self.t.at(";"):
+                    self.t.next()
+                cd.ctors.append((params, initlist, body))
+                continue
+            # 成员函数 / 数据成员？
             save = self.t.pos
             try:
                 vtype, ptr = self._parse_type()
@@ -204,32 +248,63 @@ class CppParser:
                     if self.t.at("("):
                         self.t.next()
                         params = self._parse_params()
+                        is_const = False
+                        if self.t.at("const"):
+                            self.t.next(); is_const = True
+                        body = []
                         if self.t.at("{"):
                             body = self._parse_block()
-                            cd.methods[mname] = (params, body)
-                        else:
-                            # 方法原型/空实现
-                            cd.methods[mname] = (params, [])
-                            if self.t.at(";"):
-                                self.t.next()
+                        elif self.t.at(";"):
+                            self.t.next()
+                        cd.methods[mname] = (params, body, is_const)
                         continue
                     # 数据成员
                     cd.fields.append((mname, vtype, ptr))
-                    if self.t.at("="):
-                        # 类内初始值: 吞掉
-                        self._skip_to_semi()
+                    # 类内初始化/数组：吞到 ;
+                    if self.t.at("=") or self.t.at("["):
+                        while self.t.peek() is not None and not self.t.at(";"):
+                            self.t.next()
                     if self.t.at(";"):
                         self.t.next()
                     continue
             except (SimError, IndexError):
                 pass
             self.t.pos = save
-            # 未知类内内容: 跳到 ;
             self._skip_to_semi()
         self.t.expect("}")
         if self.t.at(";"):
             self.t.next()
         self.classes[cname] = cd
+
+    def _parse_init_list(self, cd):
+        """构造函数初始化列表 `: base(args), m(args)…`
+        返回 [("base", 基类名, argExprs) | ("member", 成员名, argExprs)]"""
+        items = []
+        while True:
+            if self.t.peek() is None or self.t.at("{"):
+                break
+            nm = self.t.next()
+            if nm.kind != "id":
+                continue
+            if not self.t.at("("):
+                continue
+            self.t.next()
+            args = []
+            if not self.t.at(")"):
+                args.append(self._parse_expr())
+                while self.t.at(","):
+                    self.t.next()
+                    args.append(self._parse_expr())
+            self.t.expect(")")
+            if cd.base and nm.text == cd.base:
+                items.append(("base", nm.text, args))
+            else:
+                items.append(("member", nm.text, args))
+            if self.t.at(","):
+                self.t.next()
+                continue
+            break
+        return items
 
     # ---------- 类型 ----------
     def _parse_type(self):
@@ -291,7 +366,7 @@ class CppParser:
             vtype, ptr = self._parse_type()
             if self.t.at("&"):
                 self.t.next()
-                # 引用形参: 教学简化按指针处理? 暂按值(先只记录)
+                # 引用形参：第一版按值传递近似(对象成员场景仍共享块)
             nm = self.t.next()
             if nm.kind != "id":
                 self.t.pos -= 1
@@ -301,7 +376,11 @@ class CppParser:
                 if not self.t.at("]"):
                     self._skip_until("]")
                 self.t.expect("]")
-            params.append((nm.text, vtype, ptr))
+            default = None
+            if self.t.at("="):
+                self.t.next()
+                default = self._parse_expr()     # 默认参数(如 Mammal(float h=0,...))
+            params.append((nm.text, vtype, ptr, default))
             if self.t.at(","):
                 self.t.next()
                 continue
@@ -327,6 +406,17 @@ class CppParser:
         # 块
         if self.t.at("{"):
             return BlockStmt(t.line, self._parse_block())
+        if self.t.at("delete"):
+            # delete p;  /  delete [] p;
+            self.t.next()
+            isarr = False
+            if self.t.at("["):
+                self.t.next()
+                self.t.expect("]")
+                isarr = True
+            tg = self._parse_lvalue()
+            self.t.expect(";")
+            return ExprStmt(t.line, ("delete", tg, isarr))
         if self.t.at("if"):
             self.t.next(); self.t.expect("(")
             cond = self._parse_expr(); self.t.expect(")")
@@ -512,7 +602,18 @@ class CppParser:
             self.t.expect("]")
             is_array = True
         init = None
-        if self.t.at("="):
+        if self.t.at("("):
+            # 对象/标量括号初始化：A a(1,2);  int x(5);
+            self.t.next()
+            args = []
+            if not self.t.at(")"):
+                args.append(self._parse_expr())
+                while self.t.at(","):
+                    self.t.next()
+                    args.append(self._parse_expr())
+            self.t.expect(")")
+            init = ("objinit", args)
+        elif self.t.at("="):
             self.t.next()
             init = self._parse_expr()
         if semi:
@@ -606,6 +707,28 @@ class CppParser:
 
     def _parse_unary(self):
         t = self.t.peek()
+        if t and t.text == "new":
+            # new int / new int[10] / new B / new B(args) / new char[1000]
+            self.t.next()
+            vtype, ptr = self._parse_type()
+            if self.t.at("("):
+                self.t.next()
+                args = []
+                if not self.t.at(")"):
+                    args.append(self._parse_expr())
+                    while self.t.at(","):
+                        self.t.next()
+                        args.append(self._parse_expr())
+                self.t.expect(")")
+                return ("new", vtype, ("obj", args))
+            if self.t.at("["):
+                self.t.next()
+                ne = self._parse_expr()
+                self.t.expect("]")
+                return ("new", vtype, ("array", ne))
+            if vtype in self.classes:
+                return ("new", vtype, ("obj", []))
+            return ("new", vtype, ("scalar",))
         if t and t.text in ("-", "!", "~"):
             self.t.next()
             return ("unary", t.text, self._parse_unary())
@@ -626,17 +749,35 @@ class CppParser:
                         self.t.next()
                         args.append(self._parse_expr())
                 self.t.expect(")")
-                e = ("call", e, args)
+                if isinstance(e, tuple) and e and e[0] == "qfield":
+                    e = ("qcall", e[1], e[2], args)          # A::showInfo(...)
+                elif isinstance(e, tuple) and e and e[0] == "qmember":
+                    e = ("qmcall", e[1], e[2], e[3], args)   # d.Mammal::showInfo(...)
+                else:
+                    e = ("call", e, args)
             elif self.t.at("->") or self.t.at("."):
                 op = self.t.next().text
                 f = self.t.next()
                 if f.kind != "id":
                     raise SimError(f.line, "成员名错误")
+                if self.t.at("::"):
+                    # 对象限定成员/方法：d.Mammal::showInfo / d.A::x
+                    self.t.next()            # ::
+                    qm = self.t.next()
+                    if qm.kind != "id":
+                        raise SimError(qm.line, "限定成员名错误")
+                    e = ("qmember", e, f.text, qm.text)
+                    continue
                 e = ("member", e, f.text)
             elif self.t.at("::"):
-                # A::x —— 限定：忽略类名前缀(类作用域内字段名)
-                # 前一个 token 应是类名(A)，跳过它继续
-                pass
+                # 裸限定：A::x / A::showInfo(...)（A 通常为类名/命名空间）
+                self.t.next()
+                if isinstance(e, tuple) and e and e[0] == "var":
+                    nm = self.t.next()
+                    if nm.kind != "id":
+                        raise SimError(nm.line, "限定名错误")
+                    e = ("qfield", e[1], nm.text)
+                    continue
             elif self.t.at("["):
                 self.t.next()
                 idx = self._parse_expr()
@@ -725,13 +866,15 @@ class CppFrame:
 
 
 class CppBlk:
-    __slots__ = ("addr", "typename", "fields", "loc", "freed")
+    __slots__ = ("addr", "typename", "fields", "loc", "freed", "scalar", "arr")
     def __init__(self, addr, typename, loc="堆"):
         self.addr = addr
         self.typename = typename
         self.fields = {}      # 成员名 -> Cv (数字/字符/对象地址/指针)
         self.loc = loc
         self.freed = False
+        self.scalar = None    # 标量块(new int 等)
+        self.arr = None       # 数组块(new char[n] / new int[n])
 
 
 class CppEngine:
@@ -751,10 +894,35 @@ class CppEngine:
         self.stop_line = None
         self.inputs = list(inputs or [])
         self.input_pos = 0
-        self.methods = {}   # (类名, 方法名) -> (params, body)
+        # 对象作用域栈(块级对象析构用): 每个元素为 [objaddr,...]
+        self.scope_obj = []
+        # 最外层(main 体 / 方法体)声明的栈对象, 结束析构
+        self._root_objs = []
+        # 方法注册: (类名, 方法名) -> (owner类名, params, body)
+        self.methods = {}
+        self.ctor_idx = {}    # 类名 -> 各构造函数 params 数/默认标记列表
         for cn, cd in classes.items():
-            for mn, (params, body) in cd.methods.items():
-                self.methods[(cn, mn)] = (params, body)
+            for mn, (params, body, _c) in cd.methods.items():
+                self.methods[(cn, mn)] = (cn, params, body)
+
+    def _lineage(self, typename, topdown=True):
+        """类继承链(含自身)。topdown=True 基类→派生(用于字段顺序)；False 派生→基类(用于方法查找)。"""
+        chain = []
+        seen = set()
+        cur = typename
+        while cur and cur in self.classes and cur not in seen:
+            seen.add(cur)
+            chain.append(cur)
+            cur = self.classes[cur].base
+        # chain = 派生→…→基
+        return list(reversed(chain)) if topdown else chain
+
+    def _resolve_method(self, typename, mname):
+        """沿继承链(派生→基类)找 mname 的 owner 类名; 无则 None"""
+        for cls in self._lineage(typename, topdown=False):
+            if (cls, mname) in self.methods:
+                return cls
+        return None
 
     # ---- 内存 ----
     def _alloc(self, typename, loc="堆"):
@@ -762,19 +930,23 @@ class CppEngine:
         self.next_addr += 0x10
         cd = self.classes.get(typename)
         if cd is not None:
-            for fname, ftype, ptr in cd.fields:
-                if ptr > 0:
-                    blk.fields[fname] = Cv("null")
-                elif ftype in self.classes:
-                    # 对象成员: 递归子块(地址)
-                    sub = self._alloc(ftype, "栈")
-                    blk.fields[fname] = Cv("addr", sub.addr)
-                elif ftype == "float" or ftype == "double":
-                    blk.fields[fname] = Cv("float", 0.0)
-                elif ftype == "char":
-                    blk.fields[fname] = Cv("char", 0)
-                else:
-                    blk.fields[fname] = Cv("int", 0)
+            # 基类字段在前, 自身在后(便于可视化与继承)
+            for cls in self._lineage(typename):
+                cdef = self.classes[cls]
+                for fname, ftype, ptr in cdef.fields:
+                    if fname in blk.fields:
+                        continue
+                    if ptr > 0:
+                        blk.fields[fname] = Cv("null")
+                    elif ftype in self.classes:
+                        sub = self._alloc(ftype, "栈")
+                        blk.fields[fname] = Cv("addr", sub.addr)
+                    elif ftype == "float" or ftype == "double":
+                        blk.fields[fname] = Cv("float", 0.0)
+                    elif ftype == "char":
+                        blk.fields[fname] = Cv("char", 0)
+                    else:
+                        blk.fields[fname] = Cv("int", 0)
         self.heap[blk.addr] = blk
         return blk
 
@@ -783,24 +955,22 @@ class CppEngine:
         return self.frames[-1]
 
     def _lookup_var(self, name):
-        for fr in reversed(self.frames):
-            if name in fr.vars:
-                return fr.vars[name]
-        return None
+        # 变量查找仅在当前函数/方法帧(块作用域由帧.vars 承担) ——
+        # 绝不穿透到调用者帧(否则方法内与调用者同名变量会误读)
+        fr = self.frames[-1] if self.frames else None
+        return fr.vars.get(name) if fr is not None else None
 
     def _this(self):
-        for fr in reversed(self.frames):
-            if fr.objaddr is not None:
-                return fr.heap if False else fr.objaddr
-        return None
+        fr = self.frames[-1] if self.frames else None
+        return fr.objaddr if fr is not None else None
 
     def _read_member_of_this(self, name):
-        """方法体内裸成员名 -> 读取 this 对象的字段"""
-        for fr in reversed(self.frames):
-            if fr.objaddr is not None:
-                blk = self.heap.get(fr.objaddr)
-                if blk is not None and name in blk.fields:
-                    return blk.fields[name], fr.objaddr
+        """方法体内裸成员名 -> 读取 this 对象的字段(仅当前方法帧)"""
+        fr = self.frames[-1] if self.frames else None
+        if fr is not None and fr.objaddr is not None:
+            blk = self.heap.get(fr.objaddr)
+            if blk is not None and name in blk.fields:
+                return blk.fields[name], fr.objaddr
         return None, None
 
     # ---- 求值 ----
@@ -905,7 +1075,49 @@ class CppEngine:
             new = self._bump(cur, e[1] == "++")
             self._assign(e[2], new)
             return new
+        if k == "new":
+            return self._eval_new(e)
+        if k == "delete":
+            # ("delete", lvalue, isarr) —— 副作用语句
+            _, tgt, isarr = e
+            v = self.eval(tgt)
+            self._do_delete(v, isarr)
+            return Cv("int", 0)
+        if k == "qfield":
+            # 裸限定 A::x —— 静态/基类成员: 本版返回 0(不校验)
+            return Cv("int", 0)
+        if k == "qcall":
+            return self._call_qualified(e[1], e[2], e[3])
+        if k == "qmember":
+            base = self.eval(e[1])
+            if base.kind == "addr":
+                blk = self.heap.get(base.val)
+                if blk is not None:
+                    return blk.fields.get(e[3], Cv("int", 0))
+            return Cv("int", 0)
+        if k == "qmcall":
+            base = self.eval(e[1])
+            thisaddr = base.val if base.kind == "addr" else None
+            qual, name = e[2], e[3]
+            key = (qual, name)
+            if key in self.methods:
+                owner, params, body = self.methods[key]
+                argvals = [self.eval(a) for a in e[4]]
+                return self._invoke_method(owner, name, params, body, thisaddr, argvals)
+            return Cv("int", 0)
         raise SimError(self.cur_line, f"未知表达式 {e}")
+
+    def _do_delete(self, v, isarr):
+        if v.kind != "addr" or v.val not in self.heap:
+            return
+        blk = self.heap[v.val]
+        if isarr or blk.typename not in self.classes or blk.arr is not None:
+            # 数组 / 标量：直接释放(标量无析构)
+            self._mark_freed(blk)
+            return
+        if not blk.freed:
+            self._destruct(blk.typename, blk)
+            self._mark_freed(blk)
 
     def _bump(self, v, up):
         if v.kind == "float":
@@ -986,12 +1198,14 @@ class CppEngine:
                 return
             self._cur().vars[name] = self._coerce_var(name, value)
             return
-        if target[0] == "member":
+        if target[0] in ("member", "qmember"):
+            # member: 对象.成员   qmember: 对象.类名::成员
+            fld = target[3] if target[0] == "qmember" else target[2]
             base = self.eval(target[1])
             if base.kind == "addr":
                 blk = self.heap.get(base.val)
                 if blk is not None:
-                    blk.fields[target[2]] = value
+                    self._set_field(blk, fld, value)
                     return
             raise SimError(self.cur_line, "成员赋值目标无效")
         if target[0] == "index":
@@ -1000,7 +1214,9 @@ class CppEngine:
             if arr.kind == "addr":
                 blk = self.heap.get(arr.val)
                 if blk is not None and getattr(blk, "arr", None) is not None:
-                    blk.arr[idx] = value
+                    if idx < 0 or idx >= len(blk.arr):
+                        raise SimError(self.cur_line, "下标越界")
+                    blk.arr[idx] = self._coerce_arr(blk, value)
                     return
             raise SimError(self.cur_line, "下标赋值目标无效")
         if target[0] == "deref" or (target[0] == "unary" and target[1] == "*"):
@@ -1008,39 +1224,48 @@ class CppEngine:
             if addr.kind == "addr" and addr.val in self.heap:
                 blk = self.heap[addr.val]
                 if blk.scalar is not None:
-                    blk.scalar = value
+                    blk.scalar = self._coerce_arr(blk, value)
                     return
             raise SimError(self.cur_line, "解引用赋值目标无效")
         raise SimError(self.cur_line, f"暂不支持该赋值形式 {target}")
 
+    def _coerce_arr(self, blk, value):
+        cur = blk.scalar if blk.scalar is not None else (blk.arr[0] if blk.arr else None)
+        if cur is not None and cur.kind == "float" and value.kind in ("int", "char"):
+            return Cv("float", self.to_num(value))
+        if cur is not None and cur.kind == "char" and value.kind in ("int", "float"):
+            return Cv("char", int(self.to_num(value)))
+        if cur is not None and cur.kind == "int" and value.kind in ("float", "char"):
+            return Cv("int", int(self.to_num(value)))
+        return value
+
     def _cur_vars_set(self, name, value):
-        for fr in reversed(self.frames):
-            if name in fr.vars:
-                fr.vars[name] = value
-                return
-        self._cur().vars[name] = value
+        fr = self.frames[-1] if self.frames else None
+        if fr is not None:
+            fr.vars[name] = value
+            return
+        raise SimError(self.cur_line, "无活动帧")
 
     def _coerce_var(self, name, value):
-        # 按已声明变量类型规整(char/float 保持自身类型)
-        for fr in reversed(self.frames):
-            if name in fr.vars:
-                vi = fr.vars[name]
-                if vi.kind == "float" and value.kind in ("int", "char"):
-                    return Cv("float", self.to_num(value))
-                if vi.kind == "char" and value.kind in ("int", "float"):
-                    return Cv("char", int(self.to_num(value)))
-                if vi.kind == "int" and value.kind in ("float", "char"):
-                    return Cv("int", int(self.to_num(value)))
-                return value
+        # 按当前帧已声明变量类型规整(char/float 保持自身类型)
+        fr = self.frames[-1] if self.frames else None
+        if fr is not None and name in fr.vars:
+            vi = fr.vars[name]
+            if vi.kind == "float" and value.kind in ("int", "char"):
+                return Cv("float", self.to_num(value))
+            if vi.kind == "char" and value.kind in ("int", "float"):
+                return Cv("char", int(self.to_num(value)))
+            if vi.kind == "int" and value.kind in ("float", "char"):
+                return Cv("int", int(self.to_num(value)))
         return value
 
     def _write_member_of_this(self, name, value):
-        for fr in reversed(self.frames):
-            if fr.objaddr is not None:
-                blk = self.heap.get(fr.objaddr)
-                if blk is not None and name in blk.fields:
-                    blk.fields[name] = self._coerce_field(blk, name, value)
-                    return
+        fr = self.frames[-1] if self.frames else None
+        if fr is not None and fr.objaddr is not None:
+            blk = self.heap.get(fr.objaddr)
+            if blk is not None and name in blk.fields:
+                self._set_field(blk, name, value)
+                return
         raise SimError(self.cur_line, f"成员 '{name}' 写入失败")
 
     def _coerce_field(self, blk, name, value):
@@ -1053,68 +1278,52 @@ class CppEngine:
             return Cv("int", int(self.to_num(value)))
         return value
 
-    # ---- 调用 ----
+    # ---- 调用(含继承链解析) ----
     def _call(self, callee, args):
-        # 成员函数 a.showInfo(...) / (*p).m()
         if callee[0] == "member":
             base = self.eval(callee[1])
             if base.kind == "addr" and base.val in self.heap:
                 blk = self.heap[base.val]
                 mname = callee[2]
-                key = (blk.typename, mname)
-                if key in self.methods:
-                    return self._call_method(key, base.val, args)
-                if blk.typename in self.classes and mname in self.classes[blk.typename].methods:
-                    pass
-                # 自由函数也以成员形式调用(少见)
+                owner = self._resolve_method(blk.typename, mname)
+                if owner is not None:
+                    _o, params, body = self.methods[(owner, mname)]
+                    argvals = [self.eval(a) for a in args]
+                    return self._invoke_method(owner, mname, params, body, base.val, argvals)
             raise SimError(self.cur_line, f"对象方法调用失败: {callee[2]}")
         if callee[0] == "var":
             fname = callee[1]
             if fname in self.funcs:
                 return self._call_func(fname, args)
-            # 方法内部 this->m() / m()(方法内裸调方法)
-            if self._this() is not None:
-                blk = self.heap.get(self._this())
-                if blk is not None and (blk.typename, fname) in self.methods:
-                    return self._call_method((blk.typename, fname), self._this(), args)
-            # 系统函数(printf 已单独; malloc/new 等)
-            if fname in ("sqrt", "pow", "abs"):
-                if args:
-                    v = self.eval(args[0])
-                    return Cv("float", abs(self.to_num(v))) if fname == "abs" and False else v
-            # 未定义 → 0
+            # 方法内部裸调方法 this->m()：沿 this 实际类继承链解析
+            thisaddr = self._this_obj()
+            if thisaddr is not None:
+                blk = self.heap.get(thisaddr)
+                if blk is not None:
+                    owner = self._resolve_method(blk.typename, fname)
+                    if owner is not None:
+                        _o, params, body = self.methods[(owner, fname)]
+                        argvals = [self.eval(a) for a in args]
+                        return self._invoke_method(owner, fname, params, body, thisaddr, argvals)
+            # 未定义函数/系统库 → 0
             return Cv("int", 0)
         return Cv("int", 0)
-
-    def _call_method(self, key, this_addr, args):
-        params, body = self.methods[key]
-        cn, mn = key
-        argvals = [self.eval(a) for a in args]
-        fr = CppFrame(f"{cn}::{mn}")
-        fr.objaddr = this_addr
-        for (pname, ptype, pptr), av in zip(params, argvals[:len(params)]):
-            fr.vars[pname] = self._coerce_param(ptype, pptr, av)
-        self.frames.append(fr)
-        ret = Cv("int", 0)
-        try:
-            r = self._exec(body)
-            if isinstance(r, tuple) and r[0] == "ret":
-                ret = r[1]
-        finally:
-            self.frames.pop()
-        return ret
 
     def _call_func(self, fname, args):
         rtype, ptr, params, body = self.funcs[fname]
         argvals = [self.eval(a) for a in args]
         fr = CppFrame(fname)
-        for (pname, ptype, pptr), av in zip(params, argvals[:len(params)]):
-            fr.vars[pname] = self._coerce_param(ptype, pptr, av)
         self.frames.append(fr)
         ret = Cv("int", 0)
         try:
-            r = self._exec(body)
-            if isinstance(r, tuple) and r[0] == "ret":
+            for i, (pn, pt, pp, default) in enumerate(params):
+                if i < len(argvals):
+                    av = argvals[i]
+                else:
+                    av = self.eval(default) if default is not None else Cv("int", 0)
+                fr.vars[pn] = self._coerce_param(pt, pp, av)
+            r = self._run_body(body)
+            if isinstance(r, tuple) and r and r[0] == "ret":
                 ret = r[1]
         finally:
             self.frames.pop()
@@ -1150,7 +1359,14 @@ class CppEngine:
     def _exec_stmt(self, st):
         k = st.kind
         if k == "block":
-            return self._exec(st.stmts)
+            # 块级作用域：块内声明的栈对象在块结束时按逆序析构
+            self.scope_obj.append([])
+            try:
+                return self._exec(st.stmts)
+            finally:
+                objs = self.scope_obj.pop()
+                if self.stop_line is None:
+                    self._dtor_list(objs)
         if k == "seq":
             for s in st.stmts:
                 r = self._exec_stmt(s)
@@ -1413,28 +1629,38 @@ class CppEngine:
             self.heap[blk.addr] = blk
             fr.vars[st.name] = Cv("addr", blk.addr)
             return
-        if st.vtype in self.classes:
-            # 对象(栈): 分配栈块
-            blk = self._alloc(st.vtype, "栈")
-            fr.vars[st.name] = Cv("addr", blk.addr)
-            fr.vtypes[st.name] = st.vtype
-            if st.init is not None:
-                # 对象拷贝/构造参数: 第一版只支持 `A a;` 或 `A a = ...`拷贝
-                if isinstance(st.init, tuple) and st.init[0] == "var":
-                    src = self.eval(st.init)
-                    if src.kind == "addr" and src.val in self.heap:
-                        sb = self.heap[src.val]
-                        for fn_, fv in sb.fields.items():
-                            blk.fields[fn_] = Cv(fv.kind, fv.val)
-            return
-        if st.is_ptr or (isinstance(st.init, tuple) and st.init and st.init[0] in ("addr", "null") ):
+        if st.is_ptr:
+            # 指针(含类指针 A* p = ...)
             val = self.eval(st.init) if st.init is not None else Cv("null")
             fr.vars[st.name] = val
             fr.vtypes[st.name] = st.vtype
             return
-        # 基本类型
+        if st.vtype in self.classes:
+            # 对象(栈): 分配块并调用匹配构造
+            blk = self._alloc(st.vtype, "栈")
+            fr.vars[st.name] = Cv("addr", blk.addr)
+            fr.vtypes[st.name] = st.vtype
+            if isinstance(st.init, tuple) and st.init and st.init[0] == "objinit":
+                argvals = [self.eval(a) for a in st.init[1]]
+                self._construct(st.vtype, blk, argvals)
+            elif isinstance(st.init, tuple) and st.init and st.init[0] == "var":
+                # A b = a; 简化拷贝(逐字段)
+                src = self.eval(st.init)
+                if src.kind == "addr" and src.val in self.heap:
+                    sb = self.heap[src.val]
+                    for fn_, fv in sb.fields.items():
+                        blk.fields[fn_] = Cv(fv.kind, fv.val)
+            else:
+                # 默认/无参构造(若无匹配构造则字段保持默认)
+                self._construct(st.vtype, blk, [])
+            self._record_stack_obj(blk.addr)
+            return
+        # 基本类型(含 objinit 简化取第一参数)
         if st.init is not None:
-            v = self.eval(st.init)
+            if isinstance(st.init, tuple) and st.init and st.init[0] == "objinit":
+                v = self.eval(st.init[1][0]) if st.init[1] else Cv("int", 0)
+            else:
+                v = self.eval(st.init)
         else:
             v = Cv("int", 0)
         if st.vtype in ("float", "double"):
@@ -1483,15 +1709,212 @@ class CppEngine:
         return {"frames": frames, "heap": hb, "heap_total": len(self.heap)}
 
     def _vtype(self, name):
-        # 用字段类型尽力显示(简略)
-        for fr in reversed(self.frames):
-            if name in fr.vars:
-                cv = fr.vars[name]
-                if cv.kind == "float":
-                    return "float"
-                if cv.kind == "addr":
-                    return "ptr"
+        # 用字段类型尽力显示(简略) —— 仅当前帧
+        fr = self.frames[-1] if self.frames else None
+        if fr is not None and name in fr.vars:
+            cv = fr.vars[name]
+            if cv.kind == "float":
+                return "float"
+            if cv.kind == "addr":
+                return "ptr"
         return "int"
+
+    # ================= 本批新增: 构造/析构/继承/new-delete/作用域 =================
+
+    def _set_field(self, blk, name, value):
+        cur = blk.fields.get(name)
+        blk.fields[name] = self._coerce_field(blk, name, value) if cur is not None else value
+
+    def _match_ctor(self, cls, nargs):
+        """选择能接收 nargs 实参的构造函数(含默认参数); 返回 (params, initlist, body) 或 None"""
+        cd = self.classes.get(cls)
+        if cd is None:
+            return None
+        for params, initlist, body in cd.ctors:
+            np = len(params)
+            ndef = sum(1 for p in params if p[3] is not None)
+            if np - ndef <= nargs <= np:
+                return (params, initlist, body)
+        return None
+
+    def _construct(self, cls, blk, argvals):
+        """对已 alloc 的对象块执行完整构造：基类→对象成员→初始化/自身语句体。
+        顺序保证与 g++ 一致(base body → 成员 ctor(声明序) → 自身 body)。"""
+        cd = self.classes.get(cls)
+        if cd is None or blk is None:
+            return
+        m = self._match_ctor(cls, len(argvals))
+        if m is None:
+            return      # 类无匹配构造函数 → 保持默认字段
+        params, initlist, body = m
+        fr = CppFrame(f"{cls} 构造函数")
+        fr.objaddr = blk.addr
+        self.frames.append(fr)
+        try:
+            # 绑定形参(缺省用默认参数; 均在构造帧内求值)
+            for i, (pn, pt, pp, default) in enumerate(params):
+                if i < len(argvals):
+                    av = argvals[i]
+                else:
+                    av = self.eval(default) if default is not None else Cv("int", 0)
+                fr.vars[pn] = self._coerce_param(pt, pp, av)
+            inits = {}
+            for it in initlist:
+                if it[0] == "base":
+                    inits.setdefault("__base__", it[2])
+                else:
+                    inits[it[1]] = it[2]
+            # 1) 基类子对象构造(同一块)
+            if cd.base:
+                self._construct(cd.base, blk,
+                                [self.eval(a) for a in inits.get("__base__", [])])
+            # 2) 本类对象成员构造(声明序, 取 initlist 参数或默认构造)
+            for fname, ftype, ptr in cd.fields:
+                if ftype in self.classes and ptr == 0:
+                    cv = blk.fields.get(fname)
+                    sub = self.heap.get(cv.val) if cv is not None and cv.kind == "addr" else None
+                    if sub is not None:
+                        margs = [self.eval(a) for a in inits[fname]] if fname in inits else []
+                        self._construct(ftype, sub, margs)
+            # 3) 普通成员按 initlist 赋值 + 自身语句体
+            for fname, ftype, ptr in cd.fields:
+                if fname in inits and not (ftype in self.classes and ptr == 0):
+                    vs = [self.eval(a) for a in inits[fname]]
+                    if vs:
+                        self._set_field(blk, fname, vs[0])
+            self._run_body(body)
+        finally:
+            self.frames.pop()
+
+    def _destruct(self, cls, blk):
+        """析构: 自身析构体 → 自身对象成员(逆声明序) → 基类析构"""
+        cd = self.classes.get(cls)
+        if cd is None or blk is None or blk.freed:
+            return
+        if cd.dtor is not None:
+            params, body = cd.dtor
+            fr = CppFrame(f"~{cls}")
+            fr.objaddr = blk.addr
+            self.frames.append(fr)
+            try:
+                self._run_body(body)
+            finally:
+                self.frames.pop()
+        for fname, ftype, ptr in reversed(cd.fields):
+            if ftype in self.classes and ptr == 0:
+                cv = blk.fields.get(fname)
+                sub = self.heap.get(cv.val) if cv is not None and cv.kind == "addr" else None
+                if sub is not None:
+                    self._destruct(ftype, sub)
+        if cd.base:
+            self._destruct(cd.base, blk)
+
+    def _mark_freed(self, blk):
+        """整棵对象树标记释放(可视化红色), 不调析构"""
+        if blk is None:
+            return
+        blk.freed = True
+        for fv in blk.fields.values():
+            if fv.kind == "addr" and fv.val in self.heap:
+                self._mark_freed(self.heap[fv.val])
+
+    def _record_stack_obj(self, addr):
+        if self.scope_obj:
+            self.scope_obj[-1].append(addr)
+        else:
+            self._root_objs.append(addr)
+
+    def _run_body(self, body):
+        """作为"函数体/构造函数体"作用域执行(顶层对象结束析构)"""
+        self.scope_obj.append([])
+        try:
+            return self._exec(body)
+        finally:
+            objs = self.scope_obj.pop()
+            if self.stop_line is None:     # 点击查看某行时不析构(保留现场)
+                self._dtor_list(objs)
+
+    def _dtor_list(self, objs):
+        for addr in reversed(objs):
+            blk = self.heap.get(addr)
+            if blk is not None and not blk.freed:
+                self._destruct(blk.typename, blk)
+                self._mark_freed(blk)
+
+    def _eval_new(self, e):
+        """("new", vtype, spec)  spec=("scalar",)|("array",nExpr)|("obj",args)"""
+        vtype, ptr = e[1], 0
+        spec = e[2]
+        kind = spec[0]
+        if kind == "scalar":
+            blk = self._mk_scalar(vtype)
+            return Cv("addr", blk.addr)
+        if kind == "array":
+            n = max(1, int(self.to_num(self.eval(spec[1]))))
+            blk = self._mk_array(vtype, n)
+            return Cv("addr", blk.addr)
+        # 对象
+        argvals = [self.eval(a) for a in spec[1]]
+        blk = self._alloc(vtype, "堆")
+        self._construct(vtype, blk, argvals)
+        return Cv("addr", blk.addr)
+
+    def _mk_scalar(self, vtype):
+        blk = CppBlk(self.next_addr, vtype, "堆")
+        self.next_addr += 0x10
+        if vtype == "float" or vtype == "double":
+            blk.scalar = Cv("float", 0.0)
+        elif vtype == "char":
+            blk.scalar = Cv("char", 0)
+        else:
+            blk.scalar = Cv("int", 0)
+        self.heap[blk.addr] = blk
+        return blk
+
+    def _mk_array(self, vtype, n):
+        blk = CppBlk(self.next_addr, vtype, "堆")
+        self.next_addr += 0x10
+        if vtype == "float" or vtype == "double":
+            blk.arr = [Cv("float", 0.0)] * n
+        elif vtype == "char":
+            blk.arr = [Cv("char", 0)] * n
+        else:
+            blk.arr = [Cv("int", 0)] * n
+        self.heap[blk.addr] = blk
+        return blk
+
+    def _this_obj(self):
+        fr = self.frames[-1] if self.frames else None
+        return fr.objaddr if fr is not None else None
+
+    def _call_qualified(self, qual_cls, name, args):
+        """显式限定调用 A::m(...)（在方法体内，this 的实际类可为 A 的派生类）"""
+        thisaddr = self._this_obj()
+        key = (qual_cls, name)
+        if key not in self.methods:
+            return Cv("int", 0)
+        owner, params, body = self.methods[key]
+        argvals = [self.eval(a) for a in args]
+        return self._invoke_method(owner, name, params, body, thisaddr, argvals)
+
+    def _invoke_method(self, owner, name, params, body, thisaddr, argvals):
+        fr = CppFrame(f"{owner}::{name}")
+        fr.objaddr = thisaddr
+        self.frames.append(fr)
+        ret = Cv("int", 0)
+        try:
+            for i, (pn, pt, pp, default) in enumerate(params):
+                if i < len(argvals):
+                    av = argvals[i]
+                else:
+                    av = self.eval(default) if default is not None else Cv("int", 0)
+                fr.vars[pn] = self._coerce_param(pt, pp, av)
+            r = self._run_body(body)
+            if isinstance(r, tuple) and r and r[0] == "ret":
+                ret = r[1]
+        finally:
+            self.frames.pop()
+        return ret
 
 
 # ---------------------------------------------------------------
@@ -1531,7 +1954,7 @@ class CppSimulator:
             return {}
         _rtype, _ptr, _params, body = info
         try:
-            self.engine._exec(body)
+            self.engine._run_body(body)
         except SimError as ex:
             self.engine.error = ex
         except RecursionError:
@@ -1545,7 +1968,7 @@ class CppSimulator:
             return {}
         _rtype, _ptr, _params, body = info
         try:
-            self.engine._exec(body)
+            self.engine._run_body(body)
         except StopExec:
             pass
         except SimError as ex:
@@ -1561,7 +1984,7 @@ class CppSimulator:
             return {}, None, None
         _rtype, _ptr, _params, body = info
         try:
-            self.engine._exec(body)
+            self.engine._run_body(body)
         except SimError as ex:
             self.engine.error = ex
         except RecursionError:
