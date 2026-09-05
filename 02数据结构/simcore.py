@@ -177,7 +177,7 @@ class SeqStmt(Stmt):
 
 
 class DeclStmt(Stmt):
-    def __init__(self, line, vtype, name, init_expr, is_ptr, is_array, arr_size, dims=None, fnptr=False):
+    def __init__(self, line, vtype, name, init_expr, is_ptr, is_array, arr_size, dims=None, fnptr=False, static=False):
         super().__init__(line, "decl")
         self.vtype = vtype
         self.name = name
@@ -187,6 +187,7 @@ class DeclStmt(Stmt):
         self.arr_size = arr_size
         self.dims = dims or []
         self.fnptr = fnptr   # 是否为 typedef 函数指针类型变量(如 state_func f = state_off)
+        self.static = static  # static 局部变量：跨调用保留
 
 
 class AssignStmt(Stmt):
@@ -321,6 +322,24 @@ class Parser:
             # typedef struct
             if self.at("typedef"):
                 self.parse_typedef()
+                continue
+            # 顶层 enum：enum [Name] { A, B=3, ... } [var]; —— 注册枚举常量(整型宏)
+            if self.at("enum"):
+                self.next()
+                nm = None
+                if self.peek() is not None and self.peek().kind == "id" and not self.at("{"):
+                    nm = self.next().text
+                if self.at("{"):
+                    self.parse_enum_body()
+                    if nm:
+                        self.aliases.add(nm)
+                elif nm:
+                    self.aliases.add(nm)
+                # 可能跟枚举类型变量声明等：跳过到 ;
+                while not self.at(";") and self.peek() is not None:
+                    self.next()
+                if self.at(";"):
+                    self.next()
                 continue
             # 顶层 struct / union 定义（可能带变量列表 / 匿名）
             if self.at("struct") or self.at("union"):
@@ -461,6 +480,31 @@ class Parser:
 
     def parse_typedef(self):
         t = self.expect("typedef")
+        if self.at("enum"):
+            # typedef enum { A, B=3, ... } StateID;  /  typedef enum Name {...} Alias;
+            self.next()
+            nm = None
+            if self.peek() is not None and self.peek().kind == "id" and not self.at("{"):
+                nm = self.next().text
+            if self.at("{"):
+                self.parse_enum_body()
+                # 别名列表（类型名当作 int 等价类型）
+                while not self.at(";") and self.peek() is not None:
+                    tk = self.next()
+                    if tk.kind == "id":
+                        self.aliases.add(tk.text)
+                if self.at(";"):
+                    self.next()
+                if nm:
+                    self.aliases.add(nm)
+            else:
+                while not self.at(";") and self.peek() is not None:
+                    tk = self.next()
+                    if tk.kind == "id":
+                        self.aliases.add(tk.text)
+                if self.at(";"):
+                    self.next()
+            return
         if self.at("struct") or self.at("union"):
             is_union = self.at("union")
             if self.at("struct"):
@@ -604,6 +648,36 @@ class Parser:
                 self.next()
         if self.at(";"):
             self.next()
+
+    def parse_enum_body(self):
+        """enum { A, B, C=5, ... } —— 把枚举常量登记到 self.macros(整型常量表)"""
+        self.expect("{")
+        val = 0
+        while not self.at("}") and self.peek() is not None:
+            tk = self.peek()
+            if tk.kind == "id":
+                name = self.next().text
+                if self.at("="):
+                    self.next()
+                    neg = False
+                    if self.at("-"):
+                        self.next()
+                        neg = True
+                    nt = self.next()
+                    if nt is not None and nt.kind == "num":
+                        v = self._num_val(nt)
+                    elif nt is not None and nt.text in self.macros:
+                        v = self.macros[nt.text]
+                    else:
+                        v = val
+                    val = (-v) if neg else v
+                self.macros[name] = val
+                val += 1
+            else:
+                self.next()
+            if self.at(","):
+                self.next()
+        self.expect("}")
 
     def parse_struct_fields(self):
         self.expect("{")
@@ -998,7 +1072,8 @@ class Parser:
             return PrintfStmt(t.line, fmt, args)
         # 声明 vs 表达式
         if self.looks_like_decl():
-            first = self.parse_decl(semi=False)
+            is_static = self.peek().text == "static"
+            first = self.parse_decl(semi=False, static=is_static)
             stmts = [first]
             while self.at(","):        # 支持 int a, b; 多变量声明
                 self.next()
@@ -1028,7 +1103,8 @@ class Parser:
         """for 的 init 或 while 体里的单条语句（不以 {} 开头）"""
         line = self.peek().line
         if self.looks_like_decl():
-            return self.parse_decl(semi=False)
+            is_static = self.peek().text == "static"
+            return self.parse_decl(semi=False, static=is_static)
         expr = self.parse_expr()
         if self.at("=") or self.at("+=") or self.at("-=") or self.at("*=") \
                 or self.at("/=") or self.at("%="):
@@ -1049,7 +1125,7 @@ class Parser:
         if t.text in ("int", "char", "void", "unsigned", "signed", "short", "long", "double", "float", "struct", "union", "enum", "const", "static", "extern", "register", "volatile",
                        "bool", "size_t", "longlong", "uint8_t", "uint16_t", "uint32_t", "int8_t", "int16_t", "int32_t", "size_type"):
             return True
-        if t.text in self.structs or t.text in self.fnptr_aliases:
+        if t.text in self.structs or t.text in self.fnptr_aliases or t.text in self.aliases:
             i = 1
             while True:
                 nxt = self.peek(i)
@@ -1061,7 +1137,7 @@ class Parser:
                 return nxt.kind == "id"
         return False
 
-    def parse_decl(self, semi=True):
+    def parse_decl(self, semi=True, static=False):
         line = self.peek().line
         vtype, ptr = self.parse_type()
         fnptr_flag = vtype in self.fnptr_aliases
@@ -1148,7 +1224,7 @@ class Parser:
                 dims[0] = 10
         if semi:
             self.expect(";")
-        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims, fnptr=fnptr_flag)
+        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, dims, fnptr=fnptr_flag, static=static)
 
     def parse_decl_same(self, proto, semi=True):
         """多变量声明：int a, b; 中 b 复用 a 的类型；支持 int *a, *b;"""
@@ -1181,7 +1257,7 @@ class Parser:
                 init = self.parse_expr()
         if semi:
             self.expect(";")
-        return DeclStmt(line, proto.vtype, name, init, is_ptr, is_array, arr_size)
+        return DeclStmt(line, proto.vtype, name, init, is_ptr, is_array, arr_size, static=proto.static)
 
     def _num_val(self, tk):
         t = tk.text
@@ -1194,7 +1270,8 @@ class Parser:
         return int(float(t))
 
     def parse_array_init(self):
-        """解析 {1,2,3,...} 初始化列表（支持嵌套 {} 整体跳过），返回整数列表"""
+        """解析 {1,2,3,...} 初始化列表（支持嵌套 {} 整体跳过）。
+        返回混合列表：int 值 / ('arrfn', 函数名)（函数指针数组元素，运行时判定）/ ('null',) """
         self.expect("{")
         vals = []
         while not self.at("}"):
@@ -1212,6 +1289,16 @@ class Parser:
                 self.next()
                 n = self.next()
                 vals.append(-self._num_val(n))
+            elif tk.kind == "id":
+                nm = self.next().text
+                if nm == "NULL":
+                    vals.append(0)
+                elif nm in self.macros:      # 宏/枚举常量
+                    vals.append(self.macros[nm])
+                elif nm in ("true", "false"):
+                    vals.append(1 if nm == "true" else 0)
+                else:
+                    vals.append(("arrfn", nm))   # 函数名候选（运行时按 funcs 判定）
             elif tk.text == "}":
                 break
             else:
@@ -1624,6 +1711,8 @@ class SimEngine:
         self.stop_line = None   # 执行到该行后停止（GUI 点击）
         self.snap_enabled = True
         self.warnings = []      # 宽容模式提示（未定义函数等）
+        # static 局部变量存储（跨调用保留）: (函数名, 变量名) -> VarInfo
+        self._statics = {}
         # 逐步回放：每条语句执行后的 (行号, 快照) 序列
         self.step_snapshots = []
         # 模拟输入（scanf 用）
@@ -1794,6 +1883,8 @@ class SimEngine:
             return new
         if k == "ptrcast":
             v = self.eval_expr(e[1])
+            if v.kind == "fn":
+                return v          # 函数指针强转 (void*)f / (FP)f：保留函数指针
             return Value("addr", self.to_int(v))
         if k == "structlit":
             # (struct S){ ... } 结构体复合字面量：构造结构体块，返回其地址
@@ -2394,6 +2485,15 @@ class SimEngine:
             except Exception:
                 pass
             return Value("int", 0)
+        elif callee[0] == "index":
+            # 函数指针数组元素调用：state_table[current](ctx)
+            try:
+                fv = self.eval_expr(callee)
+                if fv is not None and fv.kind == "fn":
+                    return self.call_user(fv.val, args)
+            except SimError:
+                pass
+            return Value("int", 0)
         else:
             # 其它形式（(*fp)(...) 等）：本版本忽略
             return Value("int", 0)
@@ -2862,8 +2962,29 @@ class SimEngine:
         except Exception:
             return str(v)
 
+    def _arr_value(self, x):
+        """数组初始化元素值: 支持 ('arrfn', 函数名)/('null',)/数值"""
+        if isinstance(x, tuple) and x and x[0] == "arrfn":
+            return Value("fn", x[1]) if x[1] in self.funcs else Value("int", 0)
+        if isinstance(x, tuple) and x and x[0] == "null":
+            return Value("null")
+        return Value("int", x)
+
+    def _static_store(self, st, frame, vi):
+        """static 局部变量首次初始化后登记(跨调用保留)"""
+        if getattr(st, "static", False):
+            skey = (frame.fname, st.name)
+            if skey not in self._statics:
+                self._statics[skey] = vi
+
     def exec_decl(self, st):
         frame = self.frames[-1]
+        # static 局部变量：跨调用保留；第二次及以后调用直接复用(不再初始化)
+        if getattr(st, "static", False):
+            skey = (frame.fname, st.name)
+            if skey in self._statics:
+                frame.declare(st.name, self._statics[skey])
+                return None
         if frame.lookup(st.name) is not None and st.name in frame.scopes[-1]:
             raise SimError(st.line, f"变量 '{st.name}' 重复声明")
         if st.is_array:
@@ -2879,11 +3000,11 @@ class SimEngine:
                 if st.dims and len(st.dims) >= 2:
                     cols = st.dims[1]
                     for k, v in enumerate(flat):
-                        vals[k // cols][k % cols] = Value("int", v)
+                        vals[k // cols][k % cols] = self._arr_value(v)
                 else:
                     for i, v in enumerate(flat):
                         if i < size:
-                            vals[i] = Value("int", v)
+                            vals[i] = self._arr_value(v)
             elif st.init and st.init[0] == "strlit":
                 # char arr[] = "hello"; 字符串初始化字符数组
                 s = st.init[1]
@@ -2894,6 +3015,7 @@ class SimEngine:
                     vals[len(s)] = Value("int", 0)   # 末尾隐含 '\0'
             vi = VarInfo(st.vtype, is_array=True, arr_size=size, value=vals)
             frame.declare(st.name, vi)
+            self._static_store(st, frame, vi)
             return None
         if st.is_ptr:
             val = Value("null")
@@ -2901,6 +3023,7 @@ class SimEngine:
                 val = self.eval_expr(st.init)
             vi = VarInfo(st.vtype, is_ptr=True, value=val)
             frame.declare(st.name, vi)
+            self._static_store(st, frame, vi)
             return None
         if st.fnptr:
             # typedef 函数指针类型变量：state_func f = state_off;
@@ -2913,6 +3036,7 @@ class SimEngine:
                 else:
                     vi.value = self.coerce(vi, v)
             frame.declare(st.name, vi)
+            self._static_store(st, frame, vi)
             return None
         if st.vtype in self.structs:
             # 结构体变量（栈上）：分配一块“栈内存”，变量指向它
@@ -2923,6 +3047,7 @@ class SimEngine:
             vi = VarInfo(st.vtype, is_ptr=False,
                          value=Value("addr", blk.addr) if blk else Value("null"))
             frame.declare(st.name, vi)
+            self._static_store(st, frame, vi)
             return None
         # 普通 int 变量
         val = Value("int", 0)
@@ -2931,6 +3056,7 @@ class SimEngine:
             val = self.coerce(VarInfo("int"), val)
         vi = VarInfo(st.vtype, is_ptr=False, value=val)
         frame.declare(st.name, vi)
+        self._static_store(st, frame, vi)
         return None
 
     # ---- 快照 ----
@@ -3088,7 +3214,7 @@ class Simulator:
             if is_array:
                 vals = []
                 if init and init[0] == "arrinit":
-                    vals = [Value("int", x) for x in init[1]]
+                    vals = [eng._arr_value(x) for x in init[1]]
                 n = arr_size or len(vals) or 1
                 while len(vals) < n:
                     vals.append(Value("int", 0))

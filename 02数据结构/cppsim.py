@@ -126,6 +126,15 @@ class CppParser:
         suf = {"L", "l", "u", "U", "f", "F", "ul", "UL", "lu", "LU"}
         while i < n:
             t = toks[i]
+            # std::cout / std::cin / std::endl / std::cerr → 折叠为 cout/cin/endl/cerr
+            # (此时 :: 还是两个连续 ':' token, 需在合并前检测)
+            if t.kind == "id" and t.text == "std" and i + 3 < n \
+                    and toks[i + 1].text == ":" and toks[i + 2].text == ":" \
+                    and toks[i + 3].kind == "id" \
+                    and toks[i + 3].text in ("cout", "cin", "endl", "cerr"):
+                out.append(Token("id", toks[i + 3].text, t.line))
+                i += 4
+                continue
             if t.kind == "op" and t.text == ":" and i + 1 < n and toks[i + 1].text == ":":
                 # 合并为 '::' 单 token
                 out.append(Token("op", "::", t.line))
@@ -189,6 +198,11 @@ class CppParser:
             raise SimError(name_t.line, "class 后需要类名")
         cname = name_t.text
         cd = ClassDef(cname)
+        # 前向声明 class X; —— 只登记空类定义(后续完整定义会覆盖)
+        if self.t.at(";"):
+            self.t.next()
+            self.classes[cname] = cd
+            return
         # 继承：class B : public A { ... }
         if self.t.at(":"):
             self.t.next()
@@ -207,6 +221,10 @@ class CppParser:
                 self.t.next()
                 if self.t.at(":"):
                     self.t.next()
+                continue
+            # explicit/virtual 等构造函数/析构前缀: 仅修饰后续的 ctor(~ 或 类名) —— 直接跳过继续识别
+            if self.t.at("explicit") or self.t.at("virtual"):
+                self.t.next()
                 continue
             # 析构函数 ~A(){...}
             if self.t.at("~"):
@@ -507,7 +525,8 @@ class CppParser:
         if self.t.at("puts"):
             return self._parse_puts()
         if self._looks_decl():
-            st = self._parse_decl(semi=False)
+            is_static = self.t.peek().text == "static"
+            st = self._parse_decl(semi=False, static=is_static)
             stmts = [st]
             while self.t.at(","):
                 self.t.next()
@@ -586,7 +605,7 @@ class CppParser:
                 return nx.kind == "id"
         return False
 
-    def _parse_decl(self, semi=True):
+    def _parse_decl(self, semi=True, static=False):
         line = self.t.peek().line
         vtype, ptr = self._parse_type()
         is_array = False
@@ -618,7 +637,7 @@ class CppParser:
             init = self._parse_expr()
         if semi:
             self.t.expect(";")
-        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size)
+        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, static=static)
 
     def _parse_decl_same(self, proto, semi=True):
         line = self.t.peek().line
@@ -645,7 +664,7 @@ class CppParser:
             init = self._parse_expr()
         if semi:
             self.t.expect(";")
-        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size)
+        return DeclStmt(line, vtype, name, init, ptr, is_array, arr_size, static=proto.static)
 
     # ---------- 表达式 ----------
     # 注意：赋值(=)只由语句层/for 处理，这里返回纯表达式；
@@ -729,7 +748,7 @@ class CppParser:
             if vtype in self.classes:
                 return ("new", vtype, ("obj", []))
             return ("new", vtype, ("scalar",))
-        if t and t.text in ("-", "!", "~"):
+        if t and t.text in ("-", "!", "~", "&"):
             self.t.next()
             return ("unary", t.text, self._parse_unary())
         if t and t.text in ("++", "--"):
@@ -905,6 +924,8 @@ class CppEngine:
         for cn, cd in classes.items():
             for mn, (params, body, _c) in cd.methods.items():
                 self.methods[(cn, mn)] = (cn, params, body)
+        # static 局部对象/变量缓存: (函数名, 变量名) -> (Cv 值 / objaddr)
+        self._static_vars = {}
 
     def _lineage(self, typename, topdown=True):
         """类继承链(含自身)。topdown=True 基类→派生(用于字段顺序)；False 派生→基类(用于方法查找)。"""
@@ -1218,7 +1239,13 @@ class CppEngine:
 
     # ---- 内存地址操作(指针教学, 第一版简略) ----
     def _take_addr(self, e):
-        # &对象成员/变量 —— 简化为分配一个槽地址
+        # &x / &obj —— 若目标本身是对象/指针(值为 addr)则返回其真实地址; 否则给占位槽
+        try:
+            v = self.eval(e)
+            if v.kind == "addr":
+                return v
+        except Exception:
+            pass
         a = self.next_addr
         self.next_addr += 0x10
         return Cv("addr", a)
@@ -1348,6 +1375,14 @@ class CppEngine:
                     _o, params, body = self.methods[(owner, mname)]
                     argvals = [self.eval(a) for a in args]
                     return self._invoke_method(owner, mname, params, body, base.val, argvals)
+                # 无同名方法: 若字段里存的是函数指针值(Cv fn) → 调用该自由函数
+                key = self._obj_member_key(blk, mname)
+                fv = blk.fields.get(key)
+                if fv is not None and fv.kind == "fn":
+                    argvals = [self.eval(a) for a in args]
+                    if fv.val in self.funcs:
+                        return self._call_func(fv.val, argvals)
+                    return Cv("int", 0)
             raise SimError(self.cur_line, f"对象方法调用失败: {callee[2]}")
         if callee[0] == "var":
             fname = callee[1]
@@ -1670,6 +1705,14 @@ class CppEngine:
     # ---- 声明 ----
     def _exec_decl(self, st):
         fr = self._cur()
+        is_static = getattr(st, "static", False)
+        skey = (fr.fname, st.name)
+        # static 局部：跨调用保留(首次初始化, 之后复用)
+        if is_static and skey in self._static_vars:
+            sv = self._static_vars[skey]
+            fr.vars[st.name] = Cv("addr", sv["obj"]) if "obj" in sv else sv["cv"]
+            fr.vtypes[st.name] = st.vtype
+            return
         if st.is_array:
             vals = []
             if isinstance(st.init, tuple) and st.init[0] == "strlit":
@@ -1687,12 +1730,16 @@ class CppEngine:
             blk.arr = vals
             self.heap[blk.addr] = blk
             fr.vars[st.name] = Cv("addr", blk.addr)
+            if is_static:
+                self._static_vars[skey] = {"obj": blk.addr}
             return
         if st.is_ptr:
             # 指针(含类指针 A* p = ...)
             val = self.eval(st.init) if st.init is not None else Cv("null")
             fr.vars[st.name] = val
             fr.vtypes[st.name] = st.vtype
+            if is_static:
+                self._static_vars[skey] = {"cv": val}
             return
         if st.vtype in self.classes:
             # 对象(栈): 分配块并调用匹配构造
@@ -1712,7 +1759,10 @@ class CppEngine:
             else:
                 # 默认/无参构造(若无匹配构造则字段保持默认)
                 self._construct(st.vtype, blk, [])
-            self._record_stack_obj(blk.addr)
+            if is_static:
+                self._static_vars[skey] = {"obj": blk.addr}   # static 对象不随作用域析构
+            else:
+                self._record_stack_obj(blk.addr)
             return
         # 基本类型(含 objinit 简化取第一参数)
         if st.init is not None:
@@ -1728,6 +1778,8 @@ class CppEngine:
             v = Cv("char", int(self.to_num(v)))
         fr.vars[st.name] = v
         fr.vtypes[st.name] = st.vtype
+        if is_static:
+            self._static_vars[skey] = {"cv": v}
 
     # ---- 快照 ----
     def _desc(self, v):

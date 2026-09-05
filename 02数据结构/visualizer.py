@@ -1305,9 +1305,19 @@ class App:
         # 日志面板（代码区左侧，终端样式）
         logf = tk.Frame(outer, bg="#0c0c0c")
         outer.add(logf, minsize=200, width=250)
-        tk.Label(logf, text="📜 运行日志", bg="#0c0c0c", fg="#cccccc",
+        loghdr = tk.Frame(logf, bg="#0c0c0c")
+        loghdr.pack(fill=tk.X)
+        tk.Label(loghdr, text="📜 运行日志", bg="#0c0c0c", fg="#cccccc",
                  font=("Microsoft YaHei", 10, "bold"), anchor="w",
-                 padx=6, pady=3).pack(fill=tk.X)
+                 padx=6, pady=3).pack(side=tk.LEFT, fill=tk.X, expand=True)
+        clr = tk.Button(loghdr, text="🧹 清理日志", command=self.clear_log,
+                        bg="#2b2b2b", fg="#b0b0b0", relief=tk.FLAT,
+                        cursor="hand2", activebackground="#3e3e3e",
+                        activeforeground="white",
+                        font=("Microsoft YaHei", 8))
+        clr.bind("<Enter>", lambda e: clr.config(bg="#3e5c76", fg="white"))
+        clr.bind("<Leave>", lambda e: clr.config(bg="#2b2b2b", fg="#b0b0b0"))
+        clr.pack(side=tk.RIGHT, padx=6, pady=2)
         self.logbox = tk.Text(logf, bg="#0c0c0c", fg="#e0e0e0", wrap="word",
                               font=("Consolas", 10), relief=tk.FLAT,
                               padx=6, pady=4, state=tk.DISABLED)
@@ -1844,6 +1854,16 @@ class App:
             self.free_test_start()
 
     # ---------- 运行日志（代码区左侧，终端样式） ----------
+    def clear_log(self):
+        """清空运行日志并重置执行计数"""
+        try:
+            self.logbox.config(state=tk.NORMAL)
+            self.logbox.delete("1.0", "end")
+            self.logbox.config(state=tk.DISABLED)
+        except Exception:
+            pass
+        self._run_count = 0
+
     def log(self, text=""):
         try:
             self.logbox.config(state=tk.NORMAL)
@@ -2351,6 +2371,8 @@ class App:
             self.load_example_text(EXAMPLES[name])
 
     def load_example_text(self, text):
+        # 载入新代码：日志从头开始（干净）
+        self.clear_log()
         self.code.delete("1.0", "end")
         self.code.insert("1.0", text)
         self.code.edit_reset()
