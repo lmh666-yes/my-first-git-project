@@ -5,7 +5,7 @@
 3) 标签换行宽度随窗口宽度自适应（缩放后同步）
 4) 短题干 → 不显示滚动条
 5) 配图渲染
-6) 超长解析反馈 → 封顶 8 行 + 滚动条
+6) 超长解析反馈 → 解析区出现滚动条 + 拖动分隔条可放大解析区
 7) 窗口缩放后选项区宽度/换行同步
 8) 考试全流程（含长内容渲染）无异常
 用法：python test_ui_long.py（窗口会短暂显示）
@@ -101,9 +101,19 @@ root.update()
 app.reveal_qa()
 root.update()
 root.update_idletasks()
-check(int(app.fb.cget("height")) == 8,
-      f"超长反馈区封顶 8 行（实际 {app.fb.cget('height')}）")
-check(app.fb_sb.winfo_manager() == "grid", "超长反馈区出现滚动条")
+check(app.fb_sb.winfo_manager() == "grid", "超长解析区出现滚动条（内容不丢）")
+h_before = app.fb.winfo_height()
+try:
+    app.split.sashpos(0, max(150, app.split.winfo_height() - 420))     # ttk 分栏
+except Exception:
+    try:
+        app.split.sash_place(0, 0, max(150, app.split.winfo_height() - 420))
+    except Exception:
+        pass
+root.update()
+root.update_idletasks()
+h_after = app.fb.winfo_height()
+check(h_after > h_before, f"拖动分隔条可放大解析区（{h_before} → {h_after}）")
 
 # 7. 窗口缩放同步
 root.geometry("920x640")

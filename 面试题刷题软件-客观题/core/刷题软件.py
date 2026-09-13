@@ -148,6 +148,7 @@ class App:
         self.exam_left = 0
         self._exam_timer = None
         self._note_save_job = None
+        self._closing = False          # 窗口销毁中：不再挂新的 after 定时器
         self.note_win = None          # 笔记独立窗口
         self.note_text = None
         self.note_title = None
@@ -159,21 +160,26 @@ class App:
             self.set_mode("顺序")
         self.show_question()
         self.root.protocol("WM_DELETE_WINDOW", self._on_close)
+        self.root.bind("<Destroy>", self._on_root_destroy, add="+")
         self._bind_keys()
 
     def _fit_window(self, base_h):
-        """窗口自适应屏幕大小并居中（小屏幕不超出可视区）"""
+        """窗口自适应屏幕大小并居中（默认给出较大的初始尺寸，之后可自由缩放）"""
         try:
             self.root.update_idletasks()
             sw = self.root.winfo_screenwidth()
             sh = self.root.winfo_screenheight()
-            w = max(900, min(1180, sw - 60))
-            h = max(560, min(base_h, sh - 120))
+            w = max(1020, min(1760, int(sw * 0.9), sw - 40))
+            h = max(680, min(base_h + 400, int(sh * 0.9), sh - 60))
             x = max(0, (sw - w) // 2)
-            y = max(0, (sh - h) // 2 - 24)
+            y = max(0, (sh - h) // 2 - 20)
             self.root.geometry(f"{w}x{h}+{x}+{y}")
         except Exception:
-            self.root.geometry(f"1180x{base_h}")
+            self.root.geometry(f"1280x{base_h}")
+        try:
+            self.root.minsize(960, 620)
+        except Exception:
+            pass
 
     def _nav_allowed(self):
         """快捷翻题/作答仅在顺序板块或考试进行中生效"""
@@ -315,9 +321,15 @@ class App:
         self._stem_after = None
         self.stem.bind("<Configure>", self._stem_on_configure)
 
-        # 选项区：放入可滚动 Canvas（选项/图片/解析再长也能滚动查看，不再被裁剪）
-        self.opt_wrap_frame = tk.Frame(left, bg="#f5f7fa")
-        self.opt_wrap_frame.pack(fill=tk.BOTH, expand=True, padx=10)
+        # 选项区 + 解析区：放进「可上下拖动的分栏」——拖动中间的分隔条即可放大解析区
+        self.split = ttk.Panedwindow(left, orient=tk.VERTICAL)
+        self.split.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 4))
+        self._sash_user = False
+        self.split.bind("<Configure>", self._on_split_configure)
+        self.split.bind("<B1-Motion>", self._on_sash_drag)
+
+        self.opt_wrap_frame = tk.Frame(self.split, bg="#f5f7fa")
+        self.split.add(self.opt_wrap_frame, weight=58)
         self.opt_wrap_frame.grid_rowconfigure(0, weight=1)
         self.opt_wrap_frame.grid_columnconfigure(0, weight=1)
         self.opt_canvas = tk.Canvas(self.opt_wrap_frame, bg="#f5f7fa",
@@ -334,17 +346,26 @@ class App:
         self._sync_job = None
         self.opt_widgets = []
 
-        # 反馈区：高度自适应（2~8 行），超长出现滚动条
-        self.fb_frame = tk.Frame(left, bg="#f5f7fa")
-        self.fb_frame.pack(fill=tk.X, padx=10, pady=(2, 6))
+        # 解析区：与选项区同处一个可上下拖动的分栏（默认高度约占 42%）
+        # 内容超出可视区时自动出现垂直滚动条；拖动分隔条可随时放大/缩小
+        self.fb_frame = tk.Frame(self.split, bg="#f5f7fa")
+        self.split.add(self.fb_frame, weight=42)
         self.fb_frame.grid_columnconfigure(0, weight=1)
+        self.fb_frame.grid_rowconfigure(1, weight=1)
+        self.fb_head = tk.Label(
+            self.fb_frame,
+            text="📖 答案 / 解析（拖动上方分隔条可放大此区域，内容可滚动）",
+            bg="#eaf2f8", fg=COLOR_BLUE, font=("Microsoft YaHei", 9, "bold"),
+            anchor="w", padx=8, pady=2)
+        self.fb_head.grid(row=0, column=0, columnspan=2, sticky="ew")
         self.fb_sb = tk.Scrollbar(self.fb_frame, orient="vertical")
         self.fb = tk.Text(self.fb_frame, font=("Microsoft YaHei", 11), wrap="char",
-                          height=7, relief=tk.GROOVE, bd=1, padx=10, pady=6,
-                          yscrollcommand=self.fb_sb.set)
+                          height=8, relief=tk.GROOVE, bd=1, padx=10, pady=6,
+                          yscrollcommand=self._fb_on_scroll)
         self.fb_sb.config(command=self.fb.yview)
-        self.fb.grid(row=0, column=0, sticky="ew")
+        self.fb.grid(row=1, column=0, sticky="nsew")
         self._fb_w = 0
+        self._fb_h = 0
         self._fb_after = None
         self.fb.bind("<Configure>", self._fb_on_configure)
 
@@ -923,37 +944,108 @@ class App:
         except Exception:
             pass
 
-    def _fb_on_configure(self, e):
-        """窗口缩放导致反馈区宽度变化时，重算高度（防抖）"""
-        if e.width == getattr(self, "_fb_w", 0):
+    def _on_root_destroy(self, e):
+        """窗口销毁时取消所有挂起的 after 定时器（避免 Tcl 'invalid command name' 报错）"""
+        try:
+            if e.widget is not self.root:
+                return
+        except Exception:
             return
-        self._fb_w = e.width
+        self._closing = True
+        for attr in ("_fb_after", "_stem_after", "_sync_job",
+                     "_note_save_job", "_exam_timer"):
+            job = getattr(self, attr, None)
+            if job:
+                try:
+                    self.root.after_cancel(job)
+                except Exception:
+                    pass
+                setattr(self, attr, None)
+
+    def _on_split_configure(self, e):
+        """分栏默认按 58% / 42% 分配（选项区 / 解析区）；用户拖动过分隔条后不再自动改比例"""
+        if getattr(self, "_sash_user", False) or e.height < 160:
+            return
+        try:
+            self.split.sashpos(0, max(150, int(e.height * 0.58)))
+        except Exception:
+            pass
+
+    def _on_sash_drag(self, _e):
+        """拖动分隔条 → 记住用户已手动调整比例（此后不再自动重置）"""
+        self._sash_user = True
+
+    def _fb_on_configure(self, e):
+        """解析区尺寸变化（含拖动分隔条）时，重算滚动条显隐（防抖）"""
+        if getattr(self, "_closing", False):
+            return
+        if e.width == getattr(self, "_fb_w", 0) and e.height == getattr(self, "_fb_h", 0):
+            return
+        self._fb_w, self._fb_h = e.width, e.height
         if self._fb_after:
             try:
                 self.root.after_cancel(self._fb_after)
             except Exception:
                 pass
-        self._fb_after = self.root.after(150, self._fit_fb)
+        self._fb_after = self.root.after(120, self._fit_fb)
 
-    def _fit_fb(self):
-        """反馈区高度 = 实际行数（2~8 行）；超出 8 行自动出现滚动条"""
-        self._fb_after = None
+    def _fb_on_scroll(self, first, last):
+        """文本可见比例变化（内容增减 / 滚动 / 缩放）→ 更新滚动条并稍后复核显隐"""
         try:
-            self.fb.update_idletasks()
-            raw = int(self.fb.count("1.0", "end-1c", "displaylines")[0])
+            self.fb_sb.set(first, last)
         except Exception:
-            raw = 2
-        if not isinstance(raw, int) or raw <= 0:
-            raw = 1
-        n = max(2, min(raw, 8))
+            pass
+        self._fit_fb_soon(60)
+
+    def _fit_fb_soon(self, delay=60):
+        """稍后再判定滚动条（等文本重新布局完成，避免时序抖动）"""
+        if getattr(self, "_closing", False):
+            return
+        if self._fb_after:
+            try:
+                self.root.after_cancel(self._fb_after)
+            except Exception:
+                pass
+        self._fb_after = self.root.after(delay, self._fit_fb)
+
+    def _fb_set_sb(self, need):
+        """显示/隐藏解析区滚动条"""
         try:
-            self.fb.config(height=n)
-            if raw > n and not self.fb_sb.winfo_ismapped():
-                self.fb_sb.grid(row=0, column=1, sticky="ns")
-            elif raw <= n and self.fb_sb.winfo_ismapped():
+            if need and not self.fb_sb.winfo_ismapped():
+                self.fb_sb.grid(row=1, column=1, sticky="ns")
+            elif not need and self.fb_sb.winfo_ismapped():
                 self.fb_sb.grid_remove()
         except Exception:
             pass
+
+    def _fit_fb(self):
+        """解析区滚动条判定：按“内容显示行数 vs 可视行数”（高度由可拖动分栏决定，不封顶行数）"""
+        self._fb_after = None
+        try:
+            raw = int(self.fb.count("1.0", "end-1c", "displaylines")[0])
+        except Exception:
+            raw = str(self.fb.get("1.0", "end-1c")).count("\n") + 1
+        if not isinstance(raw, int) or raw <= 0:
+            raw = 1
+        line_h = 0
+        try:
+            info = self.fb.dlineinfo("1.0")   # (x, y, w, h, baseline)
+            if info:
+                line_h = int(info[3])
+        except Exception:
+            line_h = 0
+        if line_h <= 0:
+            try:
+                from tkinter import font as tkfont
+                line_h = max(12, tkfont.Font(
+                    font=self.fb.cget("font")).metrics("linespace"))
+            except Exception:
+                line_h = 20
+        try:
+            visible = max(1, (self.fb.winfo_height() - 12) // line_h)
+        except Exception:
+            visible = 1
+        self._fb_set_sb(raw > visible)
 
     def _on_opt_canvas_configure(self, e):
         """Canvas 宽度变化 → 选项区 Frame 同步宽度（标签换行随之更新）"""
@@ -1288,8 +1380,14 @@ class App:
             return
         win = tk.Toplevel(self.root)
         win.title("📝 我的笔记")
-        win.geometry("400x460")
-        win.minsize(320, 280)
+        try:
+            sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+            w = max(480, min(680, int(sw * 0.34)))
+            h = max(560, min(880, int(sh * 0.72)))
+            win.geometry(f"{w}x{h}+{max(0, sw - w - 50)}+60")
+        except Exception:
+            win.geometry("580x720")
+        win.minsize(420, 380)
         win.grid_rowconfigure(1, weight=1)
         win.grid_columnconfigure(0, weight=1)
         self.note_title = tk.Label(win, text="", bg="#fdf6e3", fg="#7b5804",

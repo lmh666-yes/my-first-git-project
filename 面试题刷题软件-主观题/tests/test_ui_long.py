@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """主观版 UI 长内容专项测试：
 1) 超长题干 → 封顶 14 行 + 滚动条
-2) 超长参考答案/得分点 → fb 封顶 14 行 + 滚动条
+2) 超长参考答案/得分点 → 参考答案区出现滚动条 + 拖动分隔条可放大该区域
 3) 短内容 → 无滚动条
 4) 窗口缩放无异常
 5) 考试全流程无异常
@@ -58,9 +58,19 @@ app.fb.config(state=tk.DISABLED)
 app._fit_fb_view()
 root.update()
 root.update_idletasks()
-check(int(app.fb.cget("height")) == 14,
-      f"超长参考答案封顶 14 行（实际 {app.fb.cget('height')}）")
-check(app.fb_sb.winfo_manager() == "grid", "超长反馈区出现滚动条")
+check(app.fb_sb.winfo_manager() == "grid", "超长参考答案区出现滚动条（内容不丢）")
+h_before = app.fb.winfo_height()
+try:
+    app.split.sashpos(0, max(150, app.split.winfo_height() - 400))     # ttk 分栏
+except Exception:
+    try:
+        app.split.sash_place(0, 0, max(150, app.split.winfo_height() - 400))
+    except Exception:
+        pass
+root.update()
+root.update_idletasks()
+h_after = app.fb.winfo_height()
+check(h_after > h_before, f"拖动分隔条可放大参考答案区（{h_before} → {h_after}）")
 
 # 3. 短内容
 app._set_readonly(app.stem, "短题干", 4, 14)
@@ -69,7 +79,7 @@ root.update()
 root.update_idletasks()
 check(int(app.stem.cget("height")) == 4, f"短题干高度 4（实际 {app.stem.cget('height')}）")
 check(app.stem_sb.winfo_manager() != "grid", "短题干无滚动条")
-check(int(app.fb.cget("height")) <= 3 and app.fb_sb.winfo_manager() != "grid",
+check(app.fb_sb.winfo_manager() != "grid",
       "短反馈无滚动条")
 
 # 4. 窗口缩放
