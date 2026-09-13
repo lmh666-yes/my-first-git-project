@@ -1,0 +1,27 @@
+﻿���ͷֲ�: {'choice': 171, 'qa': 2, 'judge': 35, 'multi': 5}
+�ж����ȡֵ: ['��', '��']
+����ȱʧ 0 ��
+ѡ���� 176 �� �� �ж��� 35 ��
+600 ����ÿ����ִ��������� 63 �� ��� 183 �Σ��� 120��
+�������γ���������31 ����ƽ�� 7.01 ����
+�������� 9 ��ѡ�������ٸ��ǣ�121/176
+�����ִΣ�ѡ����ÿ 8.8 ��һ�֣��ж�ÿ 3.5 ��һ��
+ȫ����ϴ�ƺ���ȷ����λ�ֲܷ�: {'A': 2776, 'B': 2709, 'C': 2760, 'D': 2667, 'E': 8}
+
+==== ��� ====
+python.exe : Traceback (most recent call last):
+所在位置 行:1 字符: 35
++ ... 客观题\tests"; & C:/Users/Administrator/AppData/Local/Pyt
+hon/pythoncore- ...
++                 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+~~~~~~~~~~~~~~~
+    + CategoryInfo          : NotSpecified: (Traceback (mos 
+   t recent call last)::String) [], RemoteException
+    + FullyQualifiedErrorId : NativeCommandError
+ 
+  File "D:\github\������ˢ�����-�͹���\tests\test_exam_full.py
+", line 147, in <module>
+    print("\u2713", m)
+    ~~~~~^^^^^^^^
+UnicodeEncodeError: 'gbk' codec can't encode character '\u27
+13' in position 0: illegal multibyte sequence
