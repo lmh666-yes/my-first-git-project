@@ -15,6 +15,9 @@ C刷题软件/progress.json
 *.run.txt
 tests/题库.json.bak
 
+# 英语单词刷词：词库源 PDF（内容已提取成 词库/词库.csv + 词库.json 并入库）
+计算机专业英语词汇*.pdf
+
 # 本地打包产物
 *.rar
 
