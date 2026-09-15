@@ -9,6 +9,7 @@
 import sys, os
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import tkinter as tk
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 import 主观题软件 as bs
 
 fails = 0
@@ -24,10 +25,7 @@ bs.messagebox.showwarning = lambda t, m: None
 bs.messagebox.askyesno = lambda t, m: True
 
 bp = bs.PROG_PATH
-tmp = bp + ".bak"
-had = os.path.exists(bp)
-if had:
-    os.replace(bp, tmp)
+had = pg.backup(bp)
 
 root = tk.Tk()
 app = bs.App(root)
@@ -111,9 +109,8 @@ root.update()
 check(True, "成绩页渲染无异常")
 
 root.destroy()
-if had:
-    os.replace(tmp, bp)
-elif os.path.exists(bp):
+pg.restore()
+if not had and os.path.exists(bp):
     os.remove(bp)
 
 print()

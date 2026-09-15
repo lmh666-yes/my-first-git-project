@@ -7,14 +7,14 @@ import sys, io, os, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import 刷题软件 as bs
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 bs.messagebox.showinfo = lambda t, m: None
 bs.messagebox.showwarning = lambda t, m: None
 bs.messagebox.showerror = lambda t, m: None
 bs.messagebox.askyesno = lambda t, m: True
 
 # 保证独立环境: 清掉上次遗留的进度/考试状态(避免被前序测试污染)
-if os.path.exists(bs.PROG_PATH):
-    os.remove(bs.PROG_PATH)
+pg.backup(bs.PROG_PATH)     # 保护用户进度：测试结束时自动恢复
 
 P = 0
 F = 0

@@ -8,6 +8,7 @@ import sys, io, os, json
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import tkinter as tk
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 import 刷题软件 as bs
 
 fails = 0
@@ -19,10 +20,7 @@ def check(cond, msg):
 
 # 备份用户进度，测试结束恢复
 bp = bs.PROG_PATH
-tmp = bp + ".bak"
-had = os.path.exists(bp)
-if had:
-    os.replace(bp, tmp)
+had = pg.backup(bp)
 
 bs.messagebox.showinfo = lambda t, m: None
 bs.messagebox.showerror = lambda t, m: None
@@ -153,12 +151,48 @@ root.update()
 check(True, "新一轮考试正常启动")
 app.finish_exam()
 
+# 10. 进度记忆：跳到"连续完成题目的最后一题"（1、2、3、4 做了，跳过 5 做了 6、7、8 → 回到第 4 题）
+def simulate_reopen():
+    """模拟重新打开软件：尚无会话位置（作答记录来自 progress.json）"""
+    app._seq_saved_idx = None
+
+app.progress = {}
+for i in range(4):
+    app.progress[app.bank[i]["id"]] = {"ok": True, "wrong_count": 0, "notes": ""}
+for i in (5, 6, 7):
+    app.progress[app.bank[i]["id"]] = {"ok": False, "wrong_count": 1, "notes": ""}
+simulate_reopen()
+app.set_mode("顺序")
+root.update()
+check(app.idx == 3, f"记忆位置=连续完成的最后一题（做了 1~4 + 6,7,8 → 第 {app.idx + 1} 题，应为第 4 题）")
+check("已回到上次进度" in app.head_label.cget("text"), "题头提示已回到上次进度")
+# 答错的题也算做过
+app.progress = {}
+app.progress[app.bank[0]["id"]] = {"ok": False, "wrong_count": 1, "notes": ""}
+simulate_reopen()
+app.set_mode("顺序")
+root.update()
+check(app.idx == 0, "答错也算完成（回到第 1 题）")
+# 没做过任何题 → 回到第 1 题
+app.progress = {}
+simulate_reopen()
+app.set_mode("顺序")
+root.update()
+check(app.idx == 0, "无记录时回到第 1 题")
+# 切到错题/考试板块再回顺序板块 → 回到离开时的位置
+simulate_reopen()
+app.set_mode("顺序")
+app.idx = 15
+app.set_mode("考试")
+app.set_mode("顺序")
+root.update()
+check(app.idx == 15, f"切板块返回仍是离开时的位置（第 {app.idx + 1} 题）")
+
 root.destroy()
 
 # 恢复用户进度
-if had:
-    os.replace(tmp, bp)
-elif os.path.exists(bp):
+pg.restore()
+if not had and os.path.exists(bp):
     os.remove(bp)
 
 print()

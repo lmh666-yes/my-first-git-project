@@ -8,6 +8,7 @@ import sys, os, json
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import 主观题软件 as B
 
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 HERE = os.path.dirname(os.path.abspath(__file__))
 bank = json.load(open(os.path.join(HERE, "..", "题库.json"), encoding="utf-8"))
 ids = [it["id"] for it in bank]

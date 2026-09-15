@@ -94,6 +94,7 @@ ok("简答/多选被跳过", all(it["kind"] in ("choice", "judge") for it in ban
 
 # ---------- 2. 主流程：单文档自动选择 ----------
 import update_bank as ub
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 put_into_bank(TEST1)
 try:
     ub.main()

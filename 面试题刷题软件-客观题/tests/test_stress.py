@@ -29,8 +29,7 @@ bs.messagebox.askyesno = lambda t, m: True
 
 def main():
     # 自包含：清掉上次遗留的进度/考试状态，避免 App 自动进入考试板块、queue 为空
-    if os.path.exists(bs.PROG_PATH):
-        os.remove(bs.PROG_PATH)
+    pg.backup(bs.PROG_PATH)     # 保护用户进度：测试结束时自动恢复
     root = tk.Tk()
     root.geometry("1180x720")
     app = bs.App(root)

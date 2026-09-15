@@ -90,6 +90,9 @@ class App:
         self.mode = "顺序"
         self.queue = list(self.bank)
         self.idx = 0
+        self._seq_saved_idx = None      # 顺序板块本次会话中的位置（切板块返回时用）
+        self._resume_notice = False     # 恢复进度时在题头提示一次
+        self._cur_qid = None            # 作答框当前对应的题（未渲染时禁止回写）
         self._save_job = None
         self._exam_timer = None
         self._closing = False          # 窗口销毁中：不再挂新的 after 定时器
@@ -126,6 +129,25 @@ class App:
     def _nav_allowed(self):
         """快捷翻题仅在顺序板块或考试进行中生效"""
         return self.mode == "顺序" or self._exam_running()
+
+    # ---------- 进度记忆 ----------
+    def _q_done(self, it):
+        """该题是否已完成：有作答内容 或 已查看参考答案（两种都算做过）"""
+        pr = self.progress.get(it.get("id", ""))
+        if not isinstance(pr, dict):
+            return False
+        return bool(str(pr.get("wrote", "") or "").strip()) or bool(pr.get("revealed"))
+
+    def _resume_index(self):
+        """记忆位置 = 连续完成题目的最后一题。
+        例：做了 1、2、3、4，跳过 5 又做了 6、7、8 → 回到第 4 题。"""
+        last = -1
+        for i, it in enumerate(self.queue):
+            if self._q_done(it):
+                last = i
+            else:
+                break
+        return last if last >= 0 else 0
 
     def _bind_keys(self):
         """键盘快捷键：← 上一题 / → 下一题（焦点在作答框/输入框时自动让位）"""
@@ -309,6 +331,8 @@ class App:
             messagebox.showwarning("考试中", "考试进行中，不能切换到其他板块！\n请先交卷或退出考试。")
             return
         self._stop_exam_timer()
+        if self.mode == "顺序" and mode != "顺序":
+            self._seq_saved_idx = self.idx      # 记住本次浏览位置，回到顺序板块时恢复
         self.mode = mode
         for m, b in self.mode_btns.items():
             b.config(bg="#34495e", fg="white")
@@ -318,7 +342,12 @@ class App:
             for w in self.exam_bar.winfo_children():
                 w.destroy()
             self.queue = list(self.bank)
-            self.idx = 0
+            # 首次进入（打开软件）：跳到"连续完成题目的最后一题"；之后回到上次浏览位置
+            self.idx = self._resume_index() if self._seq_saved_idx is None \
+                else self._seq_saved_idx
+            if self.queue:
+                self.idx = max(0, min(self.idx, len(self.queue) - 1))
+            self._resume_notice = bool(self.idx > 0 and self._seq_saved_idx is None)
             self.show_question()
         else:
             self._enter_exam_board()
@@ -425,6 +454,7 @@ class App:
         self._clear_fb()
         self.ans_text.delete("1.0", "end")
         self._set_ans_enabled(False)
+        self._cur_qid = None
         self._set_nav([])
         self._update_stat()
 
@@ -480,6 +510,7 @@ class App:
         mm, ss = divmod(self.exam_left, 60)
         self.head_label.config(
             text=f"⏱ 模拟考试 · 剩余 {mm:02d}:{ss:02d} · 第 {self.idx + 1}/{len(self.queue)} 题")
+        self._cur_qid = it.get("id", "")
         self._set_readonly(self.stem, str(it.get("stem", "")), 4, 14)
         self._render_images(it)
         rec = self.progress.get(it.get("id", ""), {})
@@ -495,6 +526,7 @@ class App:
 
     def _exam_render_paused(self):
         """暂停页"""
+        self._cur_qid = None                    # 只读页：禁止回写作答
         self._exam_update_topbar()
         mm, ss = divmod(self.exam_left, 60)
         self.head_label.config(text="⏸ 考试已暂停")
@@ -568,6 +600,7 @@ class App:
 
     def _exam_show_result_page(self):
         """成绩页：完成情况 + 题号按钮（点击逐题回顾）"""
+        self._cur_qid = None
         self._stop_exam_timer()
         self._exam_update_topbar()
         qs = self._exam_qlist()
@@ -613,6 +646,7 @@ class App:
         it = self._by_id(qid)
         if not it:
             return
+        self._cur_qid = None
         self._set_readonly(self.stem, str(it.get("stem", "")), 4, 14)
         self._render_images(it)
         self.head_label.config(text=f"📖 第 {it.get('num')} 题 · 回顾")
@@ -643,8 +677,12 @@ class App:
         self.idx = max(0, min(self.idx, len(self.queue) - 1))
         it = self.queue[self.idx]
         self.revealed = False
-        self.head_label.config(text=f"[{it.get('kind_name', '主观题')} "
-                                    f"{it.get('num', '')}]  {self.idx + 1}/{len(self.queue)}")
+        head = (f"[{it.get('kind_name', '主观题')} "
+                f"{it.get('num', '')}]  {self.idx + 1}/{len(self.queue)}")
+        if self._resume_notice:
+            head += "　↩ 已回到上次进度"
+            self._resume_notice = False
+        self.head_label.config(text=head)
         self._set_readonly(self.stem, str(it.get("stem", "")), 4, 14)
         self._render_images(it)
         rec = self.progress.get(it.get("id", ""), {})
@@ -656,6 +694,7 @@ class App:
                        ("👀 查看参考答案", self.toggle_reveal, COLOR_PURPLE),
                        ("下一题 ▶", self.next_q, COLOR_BLUE),
                        ("🗑 重置进度", self.reset_progress, COLOR_NO)])
+        self._cur_qid = it.get("id", "")        # 作答框现在对应本题，允许自动保存
         self._update_stat()
 
     def _set_ans_enabled(self, enabled):
@@ -858,7 +897,7 @@ class App:
         except Exception:
             pass
         self._fit_fb_view()
-        rec = self.progress.setdefault(it.get("id", ""),
+        rec = self.progress.setdefault(it.get("id", ""), 
                                        {"wrote": "", "revealed": False})
         rec["revealed"] = True
         self._save_progress()
@@ -893,6 +932,8 @@ class App:
             return
         if str(self.ans_text.cget("state")) == tk.DISABLED:
             return                          # 只读页面（待开始/成绩/回顾）不回写
+        if self._cur_qid != it.get("id", ""):
+            return                          # 作答框还没渲染过本题（如刚启动）→ 不回写，避免清空已存答案
         qid = it.get("id", "")
         rec = self.progress.setdefault(qid, {"wrote": "", "revealed": False})
         rec["wrote"] = self.ans_text.get("1.0", "end-1c")
@@ -961,6 +1002,8 @@ class App:
         self.queue = []
         self.idx = 0
         self.mode = "顺序"
+        self._seq_saved_idx = 0
+        self._resume_notice = False
         self._save_progress()
         self.ans_text.delete("1.0", "end")
         self.idx = 0
@@ -1009,8 +1052,7 @@ class App:
     def _update_stat(self):
         total = len(self.bank)
         done = sum(1 for it in self.bank
-                   if str(self.progress.get(it.get("id", ""), {})
-                          .get("wrote", "")).strip())
+                   if str(self.progress.get(it.get("id", ""), {}).get("wrote", "")).strip())
         revealed = sum(1 for it in self.bank
                        if self.progress.get(it.get("id", ""), {}).get("revealed"))
         self.stat_label.config(text=f"已看答案 {revealed}/{total} · 已作答 {done}/{total}")

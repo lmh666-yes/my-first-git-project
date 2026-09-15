@@ -4,6 +4,7 @@ import sys, io, os, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import 刷题软件 as bs
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 bs.messagebox.showinfo = lambda t, m: None
 bs.messagebox.showwarning = lambda t, m: None
 bs.messagebox.showerror = lambda t, m: None

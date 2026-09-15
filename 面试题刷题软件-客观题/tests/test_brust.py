@@ -5,6 +5,7 @@ import sys, io, os, json
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
 import tkinter as tk
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 import 刷题软件 as bs
 
 fails = 0

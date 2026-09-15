@@ -143,6 +143,8 @@ class App:
         self.mode = "顺序"
         self.queue = []
         self.idx = 0
+        self._seq_saved_idx = None      # 顺序板块本次会话中的位置（切板块返回时用）
+        self._resume_notice = False     # 恢复进度时在题头提示一次
         self.choice_var = tk.StringVar()
         self._choice_rows = []           # 单选选项行（自定义选中态）
         self.exam_left = 0
@@ -184,6 +186,25 @@ class App:
     def _nav_allowed(self):
         """快捷翻题/作答仅在顺序板块或考试进行中生效"""
         return self.mode == "顺序" or self._exam_running()
+
+    # ---------- 进度记忆 ----------
+    def _q_done(self, it):
+        """该题是否已完成：选择题/判断题已作答，简答/问答题已标记掌握/复习"""
+        pr = self.progress.get(it.get("id", ""))
+        if not isinstance(pr, dict):
+            return False
+        return pr.get("ok") is not None
+
+    def _resume_index(self):
+        """记忆位置 = 连续完成题目的最后一题。
+        例：做了 1、2、3、4，跳过 5 又做了 6、7、8 → 回到第 4 题。"""
+        last = -1
+        for i, it in enumerate(self.queue):
+            if self._q_done(it):
+                last = i
+            else:
+                break
+        return last if last >= 0 else 0
 
     def _bind_keys(self):
         """键盘快捷键：← 上一题 / → 下一题 / 回车 确认答案 / 1-4 或 A-D 选择选项
@@ -395,6 +416,8 @@ class App:
             messagebox.showwarning("考试中", "考试进行中，不能切换到其他板块！\n请先交卷或退出考试。")
             return
         self._stop_exam_timer()
+        if self.mode == "顺序" and mode != "顺序":
+            self._seq_saved_idx = self.idx      # 记住本次浏览位置，回到顺序板块时恢复
         self.mode = mode
         for m, b in self.mode_btns.items():
             b.config(bg="#34495e", fg="white")
@@ -414,7 +437,15 @@ class App:
         for w in self.exam_bar.winfo_children():
             w.destroy()
         self.exam_nav.grid_remove()
-        self.idx = 0
+        # 顺序板块：首次进入（打开软件）跳到"连续完成题目的最后一题"；之后回到上次浏览位置
+        if mode == "顺序":
+            self.idx = self._resume_index() if self._seq_saved_idx is None \
+                else self._seq_saved_idx
+            if self.queue:
+                self.idx = max(0, min(self.idx, len(self.queue) - 1))
+            self._resume_notice = bool(self.idx > 0 and self._seq_saved_idx is None)
+        else:
+            self.idx = 0
         self.show_question()
 
     # ---------- 考试 ----------
@@ -890,9 +921,13 @@ class App:
             self.idx = 0
         it = self.queue[self.idx]
         if self.mode != "考试":
-            self.head_label.config(text=f"[{it.get('kind_name', it.get('kind', '?'))} "
-                                        f"{it.get('num', '')}]  "
-                                        f"{self.idx + 1}/{len(self.queue)}")
+            head = (f"[{it.get('kind_name', it.get('kind', '?'))} "
+                    f"{it.get('num', '')}]  "
+                    f"{self.idx + 1}/{len(self.queue)}")
+            if getattr(self, "_resume_notice", False):
+                head += "　↩ 已回到上次进度"
+                self._resume_notice = False
+            self.head_label.config(text=head)
         self._set_stem(str(it.get("stem", "")))
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
@@ -1487,6 +1522,8 @@ class App:
         self.queue = []
         self.idx = 0
         self.mode = "顺序"
+        self._seq_saved_idx = 0
+        self._resume_notice = False
         self._save_progress()
         if self.note_text is not None:
             self.note_text.delete("1.0", "end")
