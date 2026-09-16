@@ -3442,7 +3442,7 @@
   "kind": "choice",
   "kind_name": "单选题",
   "num": 137,
-  "stem": "参考第 6 题电路，如果 FB=0.5V，RFBB=10K，RFBT=100K，则 VOUT=（　）",
+  "stem": "参考第 136 题的 DCDC 电路（配图见下，与第 136 题同一张图），如果 FB=0.5V，RFBB=10K，RFBT=100K，则 VOUT=（　）",
   "options": [
    {
     "key": "A",
@@ -3463,7 +3463,9 @@
   ],
   "answer": "B",
   "explain": "本题考查反馈分压公式。VOUT = VFB×(1 + RFBT/RFBB) = 0.5×(1+100k/10k) = 0.5×11 = 5.5V（B）。推导：FB 节点 VFB = VOUT×RFBB/(RFBT+RFBB)，变形即上式。",
-  "imgs": []
+  "imgs": [
+   "fig-6-dcdc.png"
+  ]
  },
  {
   "id": "multi-138",

@@ -346,6 +346,9 @@ class App:
         self.split = ttk.Panedwindow(left, orient=tk.VERTICAL)
         self.split.pack(fill=tk.BOTH, expand=True, padx=10, pady=(2, 4))
         self._sash_user = False
+        self._img_expand = False          # 当前题带配图 → 选项区自动占更大比例
+        self._img_after = None            # 配图延迟绘制定时器
+        self._img_widgets = []            # 配图相关控件（便于重绘/销毁）
         self.split.bind("<Configure>", self._on_split_configure)
         self.split.bind("<B1-Motion>", self._on_sash_drag)
 
@@ -987,7 +990,7 @@ class App:
         except Exception:
             return
         self._closing = True
-        for attr in ("_fb_after", "_stem_after", "_sync_job",
+        for attr in ("_fb_after", "_stem_after", "_sync_job", "_img_after",
                      "_note_save_job", "_exam_timer"):
             job = getattr(self, attr, None)
             if job:
@@ -998,11 +1001,13 @@ class App:
                 setattr(self, attr, None)
 
     def _on_split_configure(self, e):
-        """分栏默认按 58% / 42% 分配（选项区 / 解析区）；用户拖动过分隔条后不再自动改比例"""
+        """分栏默认按 58% / 42% 分配（选项区 / 解析区）；带配图题给选项区 74%，
+        免得配图把选项挤到滚动区外面；用户拖动过分隔条后不再自动改比例"""
         if getattr(self, "_sash_user", False) or e.height < 160:
             return
+        ratio = 0.74 if getattr(self, "_img_expand", False) else 0.58
         try:
-            self.split.sashpos(0, max(150, int(e.height * 0.58)))
+            self.split.sashpos(0, max(150, int(e.height * ratio)))
         except Exception:
             pass
 
@@ -1153,27 +1158,178 @@ class App:
         self.stem.config(state=tk.DISABLED)
 
     def _render_images(self, it):
-        """显示题目配图（imgs 文件名列表 → 软件根 imgs/ 目录）"""
-        for name in (it.get("imgs") or []):
-            img = self._load_image(os.path.join(ROOT, "imgs", name))
+        """显示题目配图；先占位，等分栏尺寸稳定后再按可用空间绘制（避免图把选项挤出屏幕）"""
+        names = list(it.get("imgs") or [])
+        self._img_expand = bool(names)          # 带配图：选项区自动占更大比例
+        self._apply_split_ratio()
+        self._clear_images()
+        if self._img_after:
+            try:
+                self.root.after_cancel(self._img_after)
+            except Exception:
+                pass
+            self._img_after = None
+        if not names:
+            return
+        ph = tk.Label(self.opt_frame, text="⏳ 配图加载中…", bg="#f5f7fa", fg="#7f8c8d",
+                      font=("Microsoft YaHei", 10))
+        ph.pack(pady=6)
+        self._img_widgets.append(ph)
+        self._img_after = self.root.after(90, lambda: self._draw_images(names))
+
+    def _clear_images(self):
+        for w in getattr(self, "_img_widgets", []):
+            try:
+                w.destroy()
+            except Exception:
+                pass
+        self._img_widgets = []
+
+    def _draw_images(self, names):
+        """真正绘制配图（此时分栏尺寸已生效，可算出合适大小）；
+        图片插在选项之前（紧跟题干），保证选项仍全部可见"""
+        self._img_after = None
+        if getattr(self, "_closing", False):
+            return
+        self._clear_images()
+        others = [w for w in self.opt_frame.winfo_children()
+                  if w not in self._img_widgets]
+        anchor = others[0] if others else None
+        for name in names:
+            path = os.path.join(ROOT, "imgs", name)
+            img = self._load_image(path)
             if img is None:
+                lbl = tk.Label(self.opt_frame, text=f"⚠ 配图加载失败：{name}\n（请确认 imgs 目录下有该图片）",
+                               bg="#fdf2f2", fg="#c62828", font=("Microsoft YaHei", 10),
+                               justify=tk.LEFT, padx=10, pady=8)
+                lbl.pack(pady=4, fill=tk.X, before=anchor)
+                self._img_widgets.append(lbl)
                 continue
             lbl = tk.Label(self.opt_frame, image=img, bg="#f5f7fa",
-                           bd=1, relief=tk.GROOVE)
-            lbl.pack(pady=4)
+                           bd=1, relief=tk.GROOVE, cursor="hand2")
+            lbl.pack(pady=(4, 0), before=anchor)
             lbl.image = img            # 保持引用防回收
-            self.opt_widgets.append(lbl)
+            lbl.bind("<Button-1>", lambda e, p=path: self._zoom_image(p))
+            lbl.bind("<MouseWheel>", self._on_opt_wheel)     # 鼠标停在图上也能滚动选项区
+            self._img_widgets.append(lbl)
+            tip = tk.Label(self.opt_frame, text="🔍 看不清？点图片可放大查看（滚轮缩放 / 拖动平移）",
+                           bg="#f5f7fa", fg="#7f8c8d", font=("Microsoft YaHei", 9))
+            tip.pack(pady=(2, 6), before=anchor)
+            self._img_widgets.append(tip)
 
-    @staticmethod
-    def _load_image(path, max_w=600):
-        """加载 PNG 并按最大宽度缩放；优先用 PIL（平滑缩放），否则 tk 原生"""
+    def _apply_split_ratio(self):
+        """按当前是否为配图题重设分栏比例（解析区拖过分隔条则尊重用户设置）"""
+        if getattr(self, "_sash_user", False):
+            return
+        try:
+            h = self.split.winfo_height()
+            if h > 200:
+                self.split.sashpos(0, int(h * (0.74 if getattr(self, "_img_expand", False) else 0.58)))
+        except Exception:
+            pass
+
+    def _zoom_image(self, path):
+        """弹出大图窗口：自适应窗口显示，滚轮缩放、拖动平移、Esc 关闭"""
+        try:
+            from PIL import Image, ImageTk
+        except Exception:
+            messagebox.showinfo("提示", "缺少 Pillow（PIL）库，无法放大查看。")
+            return
+        try:
+            src = Image.open(path)
+        except Exception as e:
+            messagebox.showinfo("提示", f"图片打不开：{e}")
+            return
+        win = tk.Toplevel(self.root)
+        win.title("题目配图 · 放大查看（滚轮缩放，拖动平移，Esc 关闭）")
+        sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+        w = max(640, min(1400, int(sw * 0.9)))
+        h = max(480, min(1000, int(sh * 0.92)))
+        win.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 2)}")
+        win.transient(self.root)
+        bar = tk.Frame(win, bg="#eaf2f8")
+        bar.pack(fill=tk.X)
+        canvas = tk.Canvas(win, bg="#3b4856", highlightthickness=0)
+        canvas.pack(fill=tk.BOTH, expand=True)
+        state = {"scale": 1.0, "photo": None, "box": None}
+
+        def redraw(*_):
+            s = state["scale"]
+            tw, th = max(1, int(src.width * s)), max(1, int(src.height * s))
+            im = src.resize((tw, th), Image.LANCZOS) if s != 1.0 else src
+            photo = ImageTk.PhotoImage(im)
+            canvas.delete("all")
+            canvas.create_image(0, 0, anchor="nw", image=photo)
+            canvas.configure(scrollregion=(0, 0, tw, th))
+            state["photo"] = photo          # 保持引用
+            state["box"] = (tw, th)
+            canvas.yview_moveto(0.0)
+            canvas.xview_moveto(0.0)
+
+        def fit():
+            cw, ch = max(200, canvas.winfo_width()), max(200, canvas.winfo_height())
+            state["scale"] = min(1.0, cw / src.width, ch / src.height) or 1.0
+            redraw()
+
+        def zoom(f):
+            state["scale"] = max(0.1, min(6.0, state["scale"] * f))
+            redraw()
+
+        def on_wheel(e):
+            zoom(1.15 if e.delta > 0 else 1 / 1.15)
+            return "break"
+
+        def on_drag_start(e):
+            canvas.scan_mark(e.x, e.y)
+
+        def on_drag(e):
+            canvas.scan_dragto(e.x, e.y, gain=1)
+
+        for txt, cmd in (("🔍 放大", lambda: zoom(1.25)), ("🔎 缩小", lambda: zoom(1 / 1.25)),
+                         ("⛶ 适应窗口", fit), ("1:1", lambda: (state.update(scale=1.0), redraw())),
+                         ("✖ 关闭", win.destroy)):
+            tk.Button(bar, text=txt, command=cmd, font=("Microsoft YaHei", 10),
+                      padx=12, pady=4).pack(side=tk.LEFT, padx=3, pady=5)
+        tk.Label(bar, text="滚轮缩放 · 按住左键拖动平移", bg="#eaf2f8", fg="#7f8c8d",
+                 font=("Microsoft YaHei", 9)).pack(side=tk.LEFT, padx=10)
+        canvas.bind("<MouseWheel>", on_wheel)
+        canvas.bind("<ButtonPress-1>", on_drag_start)
+        canvas.bind("<B1-Motion>", on_drag)
+        win.bind("<Escape>", lambda e: win.destroy())
+        win.bind("<MouseWheel>", on_wheel)
+        win.update_idletasks()
+        fit()
+        win.grab_set()
+        win.focus_set()
+
+    def _load_image(self, path, max_w=None, max_h=None):
+        """加载 PNG 并按可用区域缩放（宽度自适应、高度留出题号+选项的位置，不放大）"""
         if not path or not os.path.exists(path):
             return None
+        if max_w is None:
+            try:
+                avail = self.opt_canvas.winfo_width() - 48
+            except Exception:
+                avail = 600
+            max_w = max(360, min(1200, avail if avail > 120 else 600))
+        if max_h is None:
+            # 按当前选项区可视高度计算：给"请选择答案"标签 + 4 个选项 + 提示留出 ~300px
+            try:
+                ah = self.opt_canvas.winfo_height() - 340
+            except Exception:
+                ah = 0
+            if ah < 190:                     # 拿不到有效高度时按窗口估算
+                try:
+                    ah = int(self.root.winfo_height() * 0.36)
+                except Exception:
+                    ah = 380
+            max_h = min(760, max(190, ah))
         try:
             from PIL import Image, ImageTk
             im = Image.open(path)
-            if im.width > max_w:
-                im = im.resize((max_w, max(1, round(im.height * max_w / im.width))),
+            k = min(1.0, max_w / im.width, max_h / im.height)
+            if k < 1.0:
+                im = im.resize((max(1, int(im.width * k)), max(1, int(im.height * k))),
                                Image.LANCZOS)
             return ImageTk.PhotoImage(im)
         except Exception:

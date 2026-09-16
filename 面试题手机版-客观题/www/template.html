@@ -32,7 +32,15 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:
 .head{color:#1a5276;font-size:13px;font-weight:bold}
 .stem{background:#fff;border-radius:14px;padding:14px 16px;font-size:15px;line-height:1.7;white-space:pre-wrap;word-break:break-word;box-shadow:0 2px 12px rgba(0,0,0,.07)}
 /* 题目配图 */
-.qimg{width:100%;border-radius:10px;margin:6px 0;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08);animation:fadeSlide .3s ease}
+.qimg{width:100%;border-radius:10px;margin:6px 0;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08);animation:fadeSlide .3s ease;cursor:zoom-in}
+.qimg-tip{font-size:11px;color:#7f8c8d;text-align:center;margin:-2px 0 6px}
+/* 配图全屏查看 */
+#imgView{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;z-index:150;overflow:auto;-webkit-overflow-scrolling:touch}
+#imgView.show{display:block}
+#imgView img{display:block;margin:14px auto 84px;width:100%;max-width:none;background:#fff;border-radius:6px}
+#imgBar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:6px;padding:8px;background:rgba(26,82,118,.96);z-index:151}
+#imgBar button{flex:1;border:none;border-radius:9px;padding:12px 2px;font-size:13px;color:#fff;background:#2471a3;cursor:pointer}
+#imgBar button:last-child{background:#c62828}
 /* 选项 */
 #opts{display:flex;flex-direction:column;gap:9px}
 .opt{background:#fff;border:1.5px solid #e3e8ee;border-radius:12px;padding:12px 14px;font-size:15px;word-break:break-word;overflow-wrap:break-word;cursor:pointer;transition:transform .12s,border-color .2s,background .2s,box-shadow .2s;box-shadow:0 1px 4px rgba(26,82,118,.06)}
@@ -109,6 +117,14 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
 
 <!-- 弹窗 -->
 <div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<!-- 配图全屏查看 -->
+<div id="imgView"><img id="imgViewImg" src="" alt="题目配图"></div>
+<div id="imgBar" style="display:none">
+  <button onclick="imgZoom(1.4)">＋ 放大</button>
+  <button onclick="imgZoom(1/1.4)">－ 缩小</button>
+  <button onclick="imgZoom(0)">适应宽度</button>
+  <button onclick="closeImgView()">✕ 关闭</button>
+</div>
 <!-- 笔记独立弹窗 -->
 <div class="nmodal" id="nmodal">
   <div class="nbox">
@@ -363,7 +379,14 @@ function renderQ(){
 }
 function renderOpts(it,examSel){
   const o=$("#opts"); o.innerHTML="";
-  (it.imgs||[]).forEach(function(src){ const im=document.createElement("img"); im.className="qimg"; im.src=src; o.appendChild(im); });
+  (it.imgs||[]).forEach(function(src){
+    const im=document.createElement("img"); im.className="qimg"; im.src=src;
+    im.onclick=function(){ openImgView(src); };
+    o.appendChild(im);
+    const tip=document.createElement("div"); tip.className="qimg-tip";
+    tip.textContent="🔍 看不清？点图片放大查看";
+    o.appendChild(tip);
+  });
   if(it.kind==="choice"||it.kind==="multi"){
     const oinfo=(mode==="考试"&&exam&&exam.opts)?exam.opts[it.id]:undefined;
     const ans=String((oinfo?oinfo.answer:it.answer)||"").toUpperCase().trim();
@@ -536,7 +559,14 @@ function reviewWrong(qid){
   $("#head").textContent=`📖 错题回顾 · 第 ${it.num} 题`;
   $("#stem").textContent=it.stem||"";
   const o=$("#opts"); o.innerHTML="";
-  (it.imgs||[]).forEach(function(src){ const im=document.createElement("img"); im.className="qimg"; im.src=src; o.appendChild(im); });
+  (it.imgs||[]).forEach(function(src){
+    const im=document.createElement("img"); im.className="qimg"; im.src=src;
+    im.onclick=function(){ openImgView(src); };
+    o.appendChild(im);
+    const tip=document.createElement("div"); tip.className="qimg-tip";
+    tip.textContent="🔍 看不清？点图片放大查看";
+    o.appendChild(tip);
+  });
   const oinfo=exam&&exam.opts?exam.opts[qid]:undefined;
   const ans=((oinfo?oinfo.answer:it.answer)||"").toUpperCase().trim(), your=exam.answers[qid];
   if(it.kind==="choice"||it.kind==="multi"){
@@ -608,6 +638,37 @@ function resetProgress(){ resetStep(1); }function resetStep(n){
 }
 /* 考试中关页面自动保存 */
 window.addEventListener("beforeunload",()=>{ if(mode==="考试"&&exam&&exam.active&&!exam.finished){ exam.paused=true; exam.left=examLeft; progress.exam=exam; save(); } });
+/* ---------- 配图全屏查看（点图放大） ---------- */
+let imgScale=1;
+function openImgView(src){
+  const v=$("#imgView");
+  imgScale=1;
+  $("#imgViewImg").src=src;
+  applyImgZoom();
+  v.classList.add("show");
+  $("#imgBar").style.display="flex";
+  try{ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0'); }catch(e){}
+  try{ v.scrollTop=0; v.scrollLeft=0; }catch(e){}
+}
+function applyImgZoom(){
+  const im=$("#imgViewImg");
+  im.style.width=(imgScale<=1?"100%":(Math.round(imgScale*100)+"%"));
+}
+function imgZoom(f){
+  if(f===0) imgScale=1; else imgScale=Math.max(0.8, Math.min(6, imgScale*f));
+  applyImgZoom();
+}
+function closeImgView(){
+  $("#imgView").classList.remove("show");
+  $("#imgBar").style.display="none";
+  $("#imgViewImg").src="";
+  try{ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'); }catch(e){}
+}
+(function(){
+  const v=$("#imgView");
+  if(v) v.addEventListener("click", function(e){ if(e.target===v) closeImgView(); });
+})();
+
 /* 启动:恢复考试 */
 forEachNode(document.querySelectorAll("#tabs button"), function(b){
   b.addEventListener("click",function(){ setMode(b.dataset.mode); });

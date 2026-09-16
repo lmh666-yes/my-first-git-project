@@ -76,16 +76,38 @@ check(int(app.stem.cget("height")) < 14,
       f"短题干高度自适应（实际 {app.stem.cget('height')} 行）")
 check(app.stem_sb.winfo_manager() != "grid", "短题干不显示滚动条")
 
-# 5. 配图渲染
+# 5. 配图渲染（配图是"布局稳定后再画"的延迟绘制，这里抽几轮事件循环等它画出来）
 img_items = [it for it in app.bank if it.get("imgs")]
 if img_items:
     app.queue = img_items[:1]
     app.idx = 0
     app.show_question()
-    root.update()
-    root.update_idletasks()
-    imgs_ok = any(getattr(w_, "image", None) for w_ in app.opt_widgets)
-    check(imgs_ok, f"配图渲染成功（{img_items[0]['id']}）")
+    for _ in range(12):
+        root.update()
+        root.update_idletasks()
+        time.sleep(0.03)
+    drawn = [w_ for w_ in app.opt_frame.winfo_children()
+             if getattr(w_, "image", None) is not None]
+    check(bool(drawn), f"配图渲染成功（{img_items[0]['id']}）")
+    if drawn:
+        img_w_, img_h_ = drawn[0].winfo_width(), drawn[0].winfo_height()
+        check(img_w_ > 200 and img_h_ > 100, f"配图尺寸合理（{img_w_}x{img_h_}）")
+        check(img_w_ <= app.opt_canvas.winfo_width(),
+              f"配图不超出选项区宽度（{img_w_} ≤ {app.opt_canvas.winfo_width()}）")
+        tips = [w_ for w_ in app.opt_frame.winfo_children()
+                if isinstance(w_, tk.Label) and "放大" in str(w_.cget("text"))]
+        check(bool(tips), "配图带「点击放大」提示")
+    # 点图放大窗口能正常创建/销毁
+    try:
+        app._zoom_image(os.path.join(bs.ROOT, "imgs", img_items[0]["imgs"][0]))
+        root.update()
+        tops = [w_ for w_ in root.winfo_children() if isinstance(w_, tk.Toplevel)]
+        check(bool(tops), "点图可弹出放大查看窗口")
+        for w_ in tops:
+            w_.destroy()
+        root.update()
+    except Exception as e:
+        check(False, f"放大查看窗口异常：{e}")
 else:
     print("  [SKIP] 题库无配图题")
 
