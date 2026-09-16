@@ -234,23 +234,38 @@ function setMode(m){
 /* ============ 顺序 / 错词（选择题） ============ */
 function buildOptions(it){
   /* 1 个正确答案 + 3 个随机干扰（来自其它词条释义），选项顺序随机；
-     干扰项优先选与正确答案长度相近的，选项更像人话 */
+     干扰项优先选与正确答案长度相近的，选项更像人话；
+     并排除"与正确答案同义/互为子串"的干扰项，避免出现两个都算对的选项 */
   var correct=it.cn, L=Math.max(1, correct.length);
+  var nc=normCn(correct);
   var cap=Math.max(16, Math.round(L*1.6)), rcap=Math.max(24, Math.round(L*2.5));
   var best=[], fallback=[], seen={};
   seen[correct]=1;
+  function ambiguous(cn){
+    var n=normCn(cn);
+    if(n===nc) return true;                                  /* 规范化后完全相同 */
+    if(n.length>=2 && nc.length>=2 && (n.indexOf(nc)>=0 || nc.indexOf(n)>=0)) return true; /* 互为子串 */
+    return false;
+  }
   var others=shuffle(BANK);
   for(var i=0;i<others.length;i++){
     var cn=others[i].cn;
     if(!cn || seen[cn]) continue;
-    if(normCn(cn)===normCn(correct)) continue;
-    if(senses(cn)[0]===senses(correct)[0]) continue;   /* 首义项相同也跳过，避免近似重复 */
+    if(ambiguous(cn)) continue;
+    if(senses(cn)[0]===senses(correct)[0]) continue;         /* 首义项相同也跳过，避免近似重复 */
     seen[cn]=1;
     if(cn.length<=cap){ best.push(cn); if(best.length>=6) break; }
     else if(cn.length<=rcap){ fallback.push(cn); }
   }
   var pool=best.slice(0,3);
   for(var j=0;j<fallback.length && pool.length<3;j++) pool.push(fallback[j]);
+  if(pool.length<3){                                         /* 兜底：放宽长度限制再补 */
+    for(var k=0;k<others.length && pool.length<3;k++){
+      var c2=others[k].cn;
+      if(!c2 || seen[c2] || ambiguous(c2)) continue;
+      seen[c2]=1; pool.push(c2);
+    }
+  }
   return shuffle(pool.concat([correct]));
 }
 function renderQ(){

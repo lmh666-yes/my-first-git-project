@@ -60,6 +60,34 @@ for it in random.sample(bank, 120):
         unable.append(it['en'])
 check(not unable, f"随机 120 个词都能选出 3 个不同干扰项（失败 {len(unable)}：{unable[:5]}）")
 
+
+def _ncn(s):
+    """与网页 normCn 等价的简化规范化：去掉标点与空白"""
+    for ch in '，；;／/,、\u3000 ．。·（）()“”"\'':
+        s = s.replace(ch, '')
+    return s.strip()
+
+
+# 2b. 干扰项无歧义：排除"同义 / 互为子串"后，每个词仍能凑出 3 个干扰项
+amb = []
+for it in bank:
+    c = _ncn(it['cn'])
+    n = 0
+    for o in bank:
+        if o['en'] == it['en'] or not o['cn']:
+            continue
+        d = _ncn(o['cn'])
+        if d == c:                                    # 完全相同
+            continue
+        if len(d) >= 2 and len(c) >= 2 and (d in c or c in d):   # 互为子串
+            continue
+        if o['cn'].split('，')[0] == it['cn'].split('，')[0]:
+            continue
+        n += 1
+    if n < 3:
+        amb.append(it['en'])
+check(not amb, f"全部 {len(bank)} 个词在排除同义/互为子串后仍有 ≥3 个干扰项（不足 {len(amb)} 个：{amb[:5]}）")
+
 # 3. CSV 与 JSON 一致
 rows = io.open(csv_path, encoding='utf-8-sig').read().strip().split('\n')[1:]
 check(len(rows) == len(bank), f"词库.csv 行数与词库.json 一致（{len(rows)} vs {len(bank)}）")

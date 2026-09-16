@@ -40,11 +40,11 @@ app = bs.App(root)
 root.update()
 
 # 1. 题库
-check(len(app.bank) == 213, f"题库 213 题 (实际 {len(app.bank)})")
+check(len(app.bank) == 286, f"题库 286 题 (实际 {len(app.bank)})")
 kinds = {}
 for it in app.bank:
     kinds[it["kind"]] = kinds.get(it["kind"], 0) + 1
-check(kinds == {"choice": 171, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
+check(kinds == {"choice": 244, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
 
 # 2. 顺序 + 单选判分 + 错题次数
 app.set_mode("顺序")
@@ -112,7 +112,12 @@ check(app.mode == "考试" and any("考试" in w for w in warned), "考试中切
 
 # 8. 考试作答（错题进错题库 + 只能答一次）
 q0 = app.queue[0]
-app.choice_var.set("A" if q0["answer"] != "A" else "B")
+oinfo = app.exam.get("opts", {}).get(q0["id"])
+if oinfo:                                   # 选择题：选项已打乱，正确答案是打乱后的 key
+    real = str(oinfo.get("answer"))
+    app.choice_var.set("A" if real != "A" else "B")
+else:                                       # 判断题：答案为 √ / ×
+    app.choice_var.set("×" if q0["answer"] == "√" else "√")
 app.check()
 root.update()
 check(q0["id"] in app.exam["answers"], "考试答案已记录")

@@ -35,7 +35,7 @@ def main():
     app = bs.App(root)
     root.update()
     N = len(app.bank)
-    ok("题库加载", N == 213, f"({N})")
+    ok("题库加载", N == 286, f"({N})")
 
     # ---- 1. 快速翻题 5000 次 ----
     max_n, nav_lost = 0, 0

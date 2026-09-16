@@ -36,8 +36,8 @@ root.update()
 kinds = {}
 for it in app.bank:
     kinds[it["kind"]] = kinds.get(it["kind"], 0) + 1
-check(len(app.bank) == 213, f"题库 213 题（实际 {len(app.bank)}）")
-check(kinds == {"choice": 171, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
+check(len(app.bank) == 286, f"题库 286 题（实际 {len(app.bank)}）")
+check(kinds == {"choice": 244, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
 
 # 2. 单选判分
 app.set_mode("顺序")
@@ -112,14 +112,17 @@ root.update()
 wrong_ids = {it["id"] for it in app.queue}
 check("multi-72" in wrong_ids, f"错题本收录答错题（{len(wrong_ids)} 题）")
 
-# 7. 考试：12 次覆盖全部题目 + 多选判分（用打乱后答案）
-#    环形算法保证连续 9 场必覆盖全部选择题（176/20→8.8 轮），12 次富余验证
+# 7. 考试：覆盖全部题目 + 多选判分（用打乱后答案）
+#    环形算法保证连续若干场必覆盖全部题：轮数 = ceil(可抽题目数/20) + 3 富余
 app.progress.pop("_exam_plan", None)
 app.set_mode("考试")
 root.update()
 covered = set()
 multi_hit = False
-for i in range(12):
+all_c = {it["id"] for it in app.bank if it["kind"] in ("choice", "multi")}
+all_j = {it["id"] for it in app.bank if it["kind"] == "judge"}
+rounds = (len(all_c | all_j) + 19) // 20 + 3
+for i in range(rounds):
     app._exam_start()
     root.update()
     check_ids = [it["id"] for it in app.queue]
@@ -128,10 +131,8 @@ for i in range(12):
         multi_hit = True
     app.finish_exam()
     root.update()
-all_c = {it["id"] for it in app.bank if it["kind"] in ("choice", "multi")}
-all_j = {it["id"] for it in app.bank if it["kind"] == "judge"}
-check(all_c <= covered, f"12 次考试覆盖全部选择题 {len(all_c)} 道（覆盖 {len(all_c & covered)}）")
-check(all_j <= covered, f"12 次考试覆盖全部判断题 {len(all_j)} 道（覆盖 {len(all_j & covered)}）")
+check(all_c <= covered, f"{rounds} 次考试覆盖全部选择题 {len(all_c)} 道（覆盖 {len(all_c & covered)}）")
+check(all_j <= covered, f"{rounds} 次考试覆盖全部判断题 {len(all_j)} 道（覆盖 {len(all_j & covered)}）")
 check(multi_hit, "考试题目中抽到过多选题")
 
 # 8. 考试多选：乱序选项后判分正确

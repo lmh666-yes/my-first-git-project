@@ -35,10 +35,12 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:
 .qimg{width:100%;border-radius:10px;margin:6px 0;background:#fff;box-shadow:0 2px 12px rgba(0,0,0,.08);animation:fadeSlide .3s ease;cursor:zoom-in}
 .qimg-tip{font-size:11px;color:#7f8c8d;text-align:center;margin:-2px 0 6px}
 /* 配图全屏查看 */
-#imgView{position:fixed;inset:0;background:rgba(0,0,0,.93);display:none;z-index:150;overflow:auto;-webkit-overflow-scrolling:touch}
+/* 配图全屏查看（可拖动 / 捏合缩放 / 双击放大） */
+#imgView{position:fixed;left:0;right:0;top:0;bottom:58px;background:#0d0d0d;display:none;overflow:hidden;z-index:150;touch-action:none;-webkit-user-select:none;user-select:none}
 #imgView.show{display:block}
-#imgView img{display:block;margin:14px auto 84px;width:100%;max-width:none;background:#fff;border-radius:6px}
-#imgBar{position:fixed;left:0;right:0;bottom:0;display:flex;gap:6px;padding:8px;background:rgba(26,82,118,.96);z-index:151}
+#imgView img{position:absolute;left:0;top:0;transform-origin:0 0;max-width:none;background:#fff;border-radius:4px;box-shadow:0 6px 28px rgba(0,0,0,.55)}
+#imgHint{position:fixed;left:0;right:0;bottom:58px;text-align:center;color:#cfd8dc;font-size:11px;padding:5px;background:rgba(0,0,0,.42);z-index:150;display:none}
+#imgBar{position:fixed;left:0;right:0;bottom:0;display:none;gap:6px;padding:8px;background:rgba(26,82,118,.97);z-index:151}
 #imgBar button{flex:1;border:none;border-radius:9px;padding:12px 2px;font-size:13px;color:#fff;background:#2471a3;cursor:pointer}
 #imgBar button:last-child{background:#c62828}
 /* 选项 */
@@ -119,10 +121,12 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
 <div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
 <!-- 配图全屏查看 -->
 <div id="imgView"><img id="imgViewImg" src="" alt="题目配图"></div>
-<div id="imgBar" style="display:none">
-  <button onclick="imgZoom(1.4)">＋ 放大</button>
-  <button onclick="imgZoom(1/1.4)">－ 缩小</button>
-  <button onclick="imgZoom(0)">适应宽度</button>
+<div id="imgHint">单指拖动 · 双指缩放 · 双击放大/还原</div>
+<div id="imgBar">
+  <button onclick="imgZoom(1.35)">＋ 放大</button>
+  <button onclick="imgZoom(1/1.35)">－ 缩小</button>
+  <button onclick="imgFit()">适应屏幕</button>
+  <button onclick="imgOneToOne()">1:1</button>
   <button onclick="closeImgView()">✕ 关闭</button>
 </div>
 <!-- 笔记独立弹窗 -->
@@ -638,35 +642,112 @@ function resetProgress(){ resetStep(1); }function resetStep(n){
 }
 /* 考试中关页面自动保存 */
 window.addEventListener("beforeunload",()=>{ if(mode==="考试"&&exam&&exam.active&&!exam.finished){ exam.paused=true; exam.left=examLeft; progress.exam=exam; save(); } });
-/* ---------- 配图全屏查看（点图放大） ---------- */
-let imgScale=1;
+/* ---------- 配图全屏查看：可拖动 / 双指缩放 / 双击放大 ---------- */
+var IV={s:1,x:0,y:0,natW:0,natH:0,minS:0.15,maxS:10,pointers:0,lastX:0,lastY:0,pinchDist:0,lastTap:0,dragging:false,manual:false};
+function ivEl(){ return $("#imgView"); }
+function ivImg(){ return $("#imgViewImg"); }
+function ivView(){ var v=ivEl(); return {w:v.clientWidth||window.innerWidth, h:v.clientHeight||(window.innerHeight-58)}; }
 function openImgView(src){
-  const v=$("#imgView");
-  imgScale=1;
-  $("#imgViewImg").src=src;
-  applyImgZoom();
-  v.classList.add("show");
+  IV.s=1; IV.x=0; IV.y=0; IV.pointers=0; IV.pinchDist=0; IV.manual=false;
+  var im=ivImg();
+  im.onload=function(){
+    IV.natW=im.naturalWidth||im.width; IV.natH=im.naturalHeight||im.height;
+    imgFit();
+  };
+  im.src=src;
+  if(im.complete && im.naturalWidth){ IV.natW=im.naturalWidth; IV.natH=im.naturalHeight; imgFit(); }
+  ivEl().classList.add("show");
   $("#imgBar").style.display="flex";
-  try{ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0'); }catch(e){}
-  try{ v.scrollTop=0; v.scrollLeft=0; }catch(e){}
+  $("#imgHint").style.display="block";
+  /* 不修改 viewport meta：避免移动端重新布局，缩放完全由本查看器接管
+     （遮罩已设 touch-action:none，会阻止浏览器自带手势） */
 }
-function applyImgZoom(){
-  const im=$("#imgViewImg");
-  im.style.width=(imgScale<=1?"100%":(Math.round(imgScale*100)+"%"));
+function ivDraw(){
+  if(!IV.natW) return;
+  var im=ivImg();
+  im.style.width=IV.natW+"px"; im.style.height=IV.natH+"px";
+  im.style.transform="translate("+IV.x+"px,"+IV.y+"px) scale("+IV.s+")";
 }
-function imgZoom(f){
-  if(f===0) imgScale=1; else imgScale=Math.max(0.8, Math.min(6, imgScale*f));
-  applyImgZoom();
+function ivClamp(){
+  var r=ivView(), w=IV.natW*IV.s, h=IV.natH*IV.s;
+  IV.x = (w<=r.w) ? Math.round((r.w-w)/2) : Math.min(0, Math.max(r.w-w, IV.x));
+  IV.y = (h<=r.h) ? Math.round((r.h-h)/2) : Math.min(0, Math.max(r.h-h, IV.y));
 }
+function ivZoomAt(f, cx, cy){
+  var ns=Math.max(IV.minS, Math.min(IV.maxS, IV.s*f));
+  var k=ns/IV.s;
+  IV.x = cx - (cx - IV.x)*k;
+  IV.y = cy - (cy - IV.y)*k;
+  IV.s = ns;
+  IV.manual = true;          /* 用户已手动缩放：窗口变化时不再自动适应 */
+  ivClamp(); ivDraw();
+}
+function imgZoom(f){ var r=ivView(); ivZoomAt(f, r.w/2, r.h/2); }
+function imgFit(){
+  if(!IV.natW) return;
+  var r=ivView();
+  IV.s=Math.min(1, r.w/IV.natW, r.h/IV.natH);
+  IV.manual=false;
+  ivClamp(); ivDraw();
+}
+function imgOneToOne(){ var r=ivView(); ivZoomAt(1/IV.s, r.w/2, r.h/2); }
 function closeImgView(){
-  $("#imgView").classList.remove("show");
+  ivEl().classList.remove("show");
   $("#imgBar").style.display="none";
-  $("#imgViewImg").src="";
-  try{ document.querySelector('meta[name=viewport]').setAttribute('content','width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no'); }catch(e){}
+  $("#imgHint").style.display="none";
+  ivImg().src="";
+  IV.manual=false;
 }
-(function(){
-  const v=$("#imgView");
-  if(v) v.addEventListener("click", function(e){ if(e.target===v) closeImgView(); });
+function ivLocalPos(clientX, clientY){
+  var r=ivEl().getBoundingClientRect();
+  return {x:clientX-r.left, y:clientY-r.top};
+}
+function ivDist(t){ var dx=t[0].clientX-t[1].clientX, dy=t[0].clientY-t[1].clientY; return Math.sqrt(dx*dx+dy*dy); }
+function ivMid(t){ return {x:(t[0].clientX+t[1].clientX)/2, y:(t[0].clientY+t[1].clientY)/2}; }
+(function ivBind(){
+  var v=ivEl(); if(!v) return;
+  v.addEventListener("touchstart", function(e){
+    if(e.touches.length===1){
+      IV.pointers=1; IV.lastX=e.touches[0].clientX; IV.lastY=e.touches[0].clientY;
+    }else if(e.touches.length>=2){
+      IV.pointers=2; IV.pinchDist=ivDist(e.touches);
+    }
+    e.preventDefault();
+  }, {passive:false});
+  v.addEventListener("touchmove", function(e){
+    if(e.touches.length===1 && IV.pointers===1){
+      var t=e.touches[0];
+      IV.x += t.clientX-IV.lastX; IV.y += t.clientY-IV.lastY;
+      IV.lastX=t.clientX; IV.lastY=t.clientY;
+      ivClamp(); ivDraw();
+    }else if(e.touches.length>=2){
+      var d=ivDist(e.touches), m=ivMid(e.touches);
+      if(IV.pinchDist>0){
+        var p=ivLocalPos(m.x, m.y);
+        ivZoomAt(d/IV.pinchDist, p.x, p.y);
+      }
+      IV.pinchDist=d;
+    }
+    e.preventDefault();
+  }, {passive:false});
+  v.addEventListener("touchend", function(e){
+    if(e.touches.length===0){
+      IV.pointers=0; IV.pinchDist=0;
+      var now=Date.now();
+      if(now-IV.lastTap<300 && e.changedTouches && e.changedTouches.length){
+        var p=ivLocalPos(e.changedTouches[0].clientX, e.changedTouches[0].clientY);
+        if(IV.s<1.6) ivZoomAt(2.2/IV.s, p.x, p.y); else imgFit();
+      }
+      IV.lastTap=now;
+    }
+  }, {passive:false});
+  v.addEventListener("mousedown", function(e){ IV.dragging=true; IV.lastX=e.clientX; IV.lastY=e.clientY; e.preventDefault(); });
+  v.addEventListener("mousemove", function(e){ if(!IV.dragging) return; IV.x+=e.clientX-IV.lastX; IV.y+=e.clientY-IV.lastY; IV.lastX=e.clientX; IV.lastY=e.clientY; ivClamp(); ivDraw(); });
+  v.addEventListener("mouseup", function(){ IV.dragging=false; });
+  v.addEventListener("mouseleave", function(){ IV.dragging=false; });
+  v.addEventListener("wheel", function(e){ var p=ivLocalPos(e.clientX, e.clientY); ivZoomAt(e.deltaY<0?1.12:1/1.12, p.x, p.y); e.preventDefault(); }, {passive:false});
+  v.addEventListener("click", function(e){ if(e.target===v && IV.s<=1.02) closeImgView(); });
+  window.addEventListener("resize", function(){ if(ivEl().classList.contains("show")){ if(IV.manual){ ivClamp(); ivDraw(); } else { imgFit(); } } });
 })();
 
 /* 启动:恢复考试 */

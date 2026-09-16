@@ -36,7 +36,7 @@ app = ss.App(root)
 root.update()
 
 # 1. 题库
-check(len(app.bank) == 366, f"题库 366 题（实际 {len(app.bank)}）（写代码/画图题已迁至 03_编程画图大题.md）")
+check(len(app.bank) == 432, f"题库 432 题（实际 {len(app.bank)}）（写代码/画图题已迁至 03_编程画图大题.md）")
 kinds = {it["kind"] for it in app.bank}
 check(kinds == {"subjective"}, f"全部为主观题（{kinds}）")
 check(all(it.get("answer") for it in app.bank if it["num"] != 88),
