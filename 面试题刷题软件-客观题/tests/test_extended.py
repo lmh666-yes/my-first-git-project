@@ -45,7 +45,7 @@ root.update()
 
 # ---- 1. 数据完整性 ----
 bank = app.bank
-ok("题库285题", len(bank) == 285, f"({len(bank)})")
+ok("题库292题", len(bank) == 292, f"({len(bank)})")
 kind = {}
 for it in bank:
     kind[it["kind"]] = kind.get(it["kind"], 0) + 1

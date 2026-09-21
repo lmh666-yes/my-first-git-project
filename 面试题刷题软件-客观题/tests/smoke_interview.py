@@ -36,8 +36,8 @@ root.update()
 kinds = {}
 for it in app.bank:
     kinds[it["kind"]] = kinds.get(it["kind"], 0) + 1
-check(len(app.bank) == 285, f"题库 285 题（实际 {len(app.bank)}）")
-check(kinds == {"choice": 243, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
+check(len(app.bank) == 292, f"题库 292 题（实际 {len(app.bank)}）")
+check(kinds == {"choice": 250, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
 
 # 2. 单选判分
 app.set_mode("顺序")

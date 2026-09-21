@@ -60,7 +60,7 @@ def test_normal():
     root.geometry("1180x720")
     app, err = make_app(root)
     ok("正常题库启动不崩溃", err is None, str(err) if err else "")
-    ok("题库285题", app is not None and len(app.bank) == 285,
+    ok("题库292题", app is not None and len(app.bank) == 292,
        str(len(app.bank)) if app else "N/A")
     root.destroy()
 

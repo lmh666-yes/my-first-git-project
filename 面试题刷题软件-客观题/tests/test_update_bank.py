@@ -151,9 +151,9 @@ shutil.rmtree(TMP, ignore_errors=True)
 
 # 恢复后校验
 bank2 = json.load(open(BANK_JSON, encoding="utf-8"))
-ok("原题库已恢复(285题)", len(bank2) == 285, f"({len(bank2)})")
+ok("原题库已恢复(292题)", len(bank2) == 292, f"({len(bank2)})")
 cnt2 = bank_parser.count(bank2)
-ok("原题库题型恢复", cnt2 == {"choice": 171, "multi": 5, "judge": 35, "qa": 2}, str(cnt2))
+ok("原题库题型恢复", cnt2 == {"choice": 250, "multi": 5, "judge": 35, "qa": 2}, str(cnt2))
 orig_docs_now = [f for f in os.listdir(BANK_DIR) if f.endswith((".docx", ".md"))]
 ok("原题库文档已恢复", len(orig_docs_now) == len(orig_docs), str(orig_docs_now))
 
