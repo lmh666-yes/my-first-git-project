@@ -180,11 +180,13 @@ if (typeof BANK === "undefined" || !Array.isArray(BANK) || !BANK.length) {
   throw new Error("BANK missing: 请打开 index.html");
 }
 const EXAM_MIN=40, EXAM_NUM=30, EXAM_CHOICE_NUM=20, EXAM_JUDGE_NUM=10, EXAM_SCORE=5;
+const WEXAM_NUM=10;   /* 错题考试：随机抽 ≤10 道错题 */
 const LS_KEY="interview_obj_v1";
 let mode="顺序", queue=[], idx=0, sel="";
 let seqSavedIdx=null;                 // 顺序板块本次会话中的位置（切板块返回时恢复）
 let exam=null, examLeft=0, examTimer=null;
 let progress=load();
+migrateProgress();          /* 旧数据兼容：补 in_wrong / life / wrong_count */
 let noteTimer=null;
 let noteOpen=false;
 
@@ -202,7 +204,29 @@ function examIsOk(it,k){
   if(oinfo) return String(k||"").trim()===a;
   return isOk(it,k);
 }
-function rec(qid){ return progress[qid]||(progress[qid]={ok:null,wrong_count:0,notes:""}) }
+function rec(qid){ const r=progress[qid]||(progress[qid]={ok:null,wrong_count:0,notes:""}); if(r.in_wrong===undefined){ r.in_wrong=(r.ok===false); r.life=r.in_wrong?1:0; } return r; }
+/* 只读访问：不存在返回空对象，不往进度里塞空记录 */
+function recGet(qid){ const r=progress[qid]; if(!r||typeof r!=="object") return {};
+  if(r.in_wrong===undefined){ r.in_wrong=(r.ok===false); r.life=r.in_wrong?1:0; }
+  return r; }
+function migrateProgress(){ let ch=false;
+  for(const qid in progress){ const r=progress[qid];
+    if(!r||typeof r!=="object"||qid.charAt(0)==="_") continue;
+    if(r.in_wrong===undefined){ r.in_wrong=(r.ok===false); r.life=r.in_wrong?1:0; ch=true; }
+    if(r.wrong_count===undefined){ r.wrong_count=0; ch=true; }
+    if(!r.in_wrong && r.life){ r.life=0; ch=true; }
+  }
+  if(ch) save(); }
+/* ---------- 错题寿命机制 ----------
+   答错（任何模块）：累计次数+1，入错题集（寿命初始 1）；次数达 3/5/7/9 或 >10 时寿命+1。
+   只有「错题考试」答对才寿命 -1，归零后移除；顺序/普通考试答对不影响错题状态。 */
+function bumpWrong(r){ r.wrong_count=(r.wrong_count||0)+1; const wc=r.wrong_count;
+  if(!r.in_wrong){ r.in_wrong=true; r.life=1; }
+  if(wc===3||wc===5||wc===7||wc===9||wc>10) r.life=(r.life||1)+1; }
+function lifeDec(r){ if(!r.in_wrong) return false;
+  r.life=Math.max(0,(r.life||1)-1);
+  if(r.life<=0){ r.in_wrong=false; return true; }
+  return false; }
 /* ---------- 进度记忆 ----------
    记忆位置 = "连续完成题目的最后一题"：做了 1、2、3、4，跳过 5 又做了 6、7、8 → 回到第 4 题。
    一道题算完成：选择题/判断题已作答（ok 非空），简答/问答题已标记掌握或复习。 */
@@ -221,7 +245,7 @@ function setMode(m){
   stopExamTimer(); mode=m;
   forEachNode(document.querySelectorAll("#tabs button"), function(b){ toggleCls(b,"active",b.dataset.mode===m); });
   if(m==="顺序") queue=BANK.slice();
-  else if(m==="错题"){ queue=BANK.filter(x=>rec(x.id).ok===false); if(!queue.length){ msg("错题本","太棒了，当前没有错题！"); setMode("顺序"); return; } }
+  else if(m==="错题"){ queue=BANK.filter(x=>recGet(x.id).in_wrong); if(!queue.length){ msg("错题本","太棒了，当前没有错题！\n\n（错题需在「错题考试」中答对、寿命归零后才会移除）"); setMode("顺序"); return; } }
   else if(m==="考试"){ renderExamReady(); return; }
   // 顺序板块：首次进入（打开软件）跳到"连续完成题目的最后一题"，之后回到上次浏览位置
   if(m==="顺序"){
@@ -237,7 +261,7 @@ function renderExamReady(){
   const nj=BANK.filter(x=>x.kind==="judge").length;
   const rc=Math.max(1,Math.ceil(nc/EXAM_CHOICE_NUM)), rj=Math.max(1,Math.ceil(nj/EXAM_JUDGE_NUM));
   $("#head").textContent=`📝 模拟考试 · 第 ${cnt+1} 次考试`;
-  $("#stem").textContent=`考试说明：\n\n· 共 ${EXAM_NUM} 题（选择题 ${EXAM_CHOICE_NUM}（含多选）+ 判断 ${EXAM_JUDGE_NUM}），限时 ${EXAM_MIN} 分钟\n· 每题 ${EXAM_SCORE} 分，满分 ${EXAM_NUM*EXAM_SCORE} 分\n· 当前第 ${cnt+1} 次考试 · 已累计完成 ${cnt} 次\n· 环形抽题：同一场绝不重复；连续 ${rc} 场必覆盖全部选择题、连续 ${rj} 场必覆盖全部判断题\n· 考试中题干上方标注题型：单选题/多选题/判断题\n· 每题只能作答一次，答错自动进入错题库\n· 考试中可暂停/退出，强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块，也不能打开笔记\n\n点击下方「开始考试」按钮开始。`;
+  $("#stem").textContent=`考试说明：\n\n· 共 ${EXAM_NUM} 题（选择题 ${EXAM_CHOICE_NUM}（含多选）+ 判断 ${EXAM_JUDGE_NUM}），限时 ${EXAM_MIN} 分钟\n· 每题 ${EXAM_SCORE} 分，满分 ${EXAM_NUM*EXAM_SCORE} 分\n· 当前第 ${cnt+1} 次考试 · 已累计完成 ${cnt} 次\n· 环形抽题：同一场绝不重复；连续 ${rc} 场必覆盖全部选择题、连续 ${rj} 场必覆盖全部判断题\n· 考试中题干上方标注题型：单选题/多选题/判断题\n· 每题只能作答一次，答错自动进入错题库\n· 错题清除规则：只有「错题考试」答对才减少寿命，寿命归零后移除\n· 考试中可暂停/退出，强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块，也不能打开笔记\n\n点击下方「开始考试」按钮开始。（错题考试在「错题」板块进入）`;
   $("#opts").innerHTML=""; hideFb();
   $("#qnav").style.display="none"; $("#qnav").innerHTML="";
   footerBtns([["开始考试","#1a5276",startExam]]);
@@ -265,12 +289,20 @@ function pickPlanned(ids,orderKey,curKey,n){
   progress._exam_plan=plan;
   return picked;
 }
-function startExam(){
-  const cIds=BANK.filter(x=>x.kind==="choice"||x.kind==="multi").map(x=>x.id);
-  const jIds=BANK.filter(x=>x.kind==="judge").map(x=>x.id);
-  const qs=shuffle(pickPlanned(cIds,"c","cc",EXAM_CHOICE_NUM)
-                   .concat(pickPlanned(jIds,"j","jc",EXAM_JUDGE_NUM)));
-  exam={active:true,finished:false,paused:false,ids:qs,idx:0,left:EXAM_MIN*60,answers:{}};
+function startExam(kind){
+  kind=kind||"normal";
+  let qs;
+  if(kind==="wrong"){
+    const wIds=BANK.filter(x=>recGet(x.id).in_wrong).map(x=>x.id);
+    if(!wIds.length){ msg("错题考试","当前没有错题，先去做题吧！"); return; }
+    qs=shuffle(wIds).slice(0,Math.min(WEXAM_NUM,wIds.length));
+  }else{
+    const cIds=BANK.filter(x=>x.kind==="choice"||x.kind==="multi").map(x=>x.id);
+    const jIds=BANK.filter(x=>x.kind==="judge").map(x=>x.id);
+    qs=shuffle(pickPlanned(cIds,"c","cc",EXAM_CHOICE_NUM)
+                     .concat(pickPlanned(jIds,"j","jc",EXAM_JUDGE_NUM)));
+  }
+  exam={active:true,finished:false,paused:false,kind:kind,ids:qs,idx:0,left:EXAM_MIN*60,answers:{}};
   progress.exam=exam; save();
   queue=qs.map(byId).filter(Boolean); idx=0; examLeft=EXAM_MIN*60;
   // 考试选项随机化：选择/多选题选项顺序打乱，答案 key 跟随内容（按原位置索引映射）
@@ -287,13 +319,21 @@ function startExam(){
   exam.opts=opts;
   examBarShow(); tick(); renderQ();
 }
+function examTitle(){ return (exam&&exam.kind==="wrong")?"错题考试":"模拟考试"; }
+function startWrongExam(){
+  if(mode==="考试"&&exam&&exam.active&&!exam.finished){ msg("考试中","考试进行中，不能开始新的考试！\n请先交卷或退出考试。"); return; }
+  const w=BANK.filter(x=>recGet(x.id).in_wrong);
+  if(!w.length){ msg("错题考试","当前没有错题，先去做题吧！"); return; }
+  setMode("考试");
+  startExam("wrong");
+}
 function tick(){
   if(mode!=="考试"||!exam||!exam.active||exam.finished||exam.paused){ examTimer=null; return; }
   if(examLeft<=0){ finishExam(); return; }
   examLeft--; exam.left=examLeft;
   const mm=pad2(Math.floor(examLeft/60)), ss=pad2(examLeft%60);
   const curQ=queue[idx]||{};
-  $("#head").textContent=`⏱ 模拟考试 · 剩余 ${mm}:${ss} · 第 ${idx+1}/${queue.length} 题${curQ.kind_name?" · "+curQ.kind_name:""}`;
+  $("#head").textContent=`⏱ ${examTitle()} · 剩余 ${mm}:${ss} · 第 ${idx+1}/${queue.length} 题${curQ.kind_name?" · "+curQ.kind_name:""}`;
   examTimer=setTimeout(tick,1000);
 }
 function stopExamTimer(){ if(examTimer){clearTimeout(examTimer);examTimer=null;} }
@@ -309,7 +349,7 @@ function examBarShow(){
 function examBarHide(){ const b=$("#examBar"); b.style.display="none"; b.innerHTML=""; }
 function showPaused(){
   examBarShow();
-  $("#head").textContent="⏸ 考试已暂停";
+  $("#head").textContent=`⏸ ${examTitle()}已暂停`;
   $("#stem").textContent=`考试已暂停。\n\n剩余时间：${fmt(examLeft)}\n已完成 ${Object.keys(exam.answers).length}/${queue.length} 题\n\n点击顶部「▶ 继续考试」恢复答题。`;
   $("#opts").innerHTML=""; hideFb(); renderQnav();
 }
@@ -368,6 +408,11 @@ function renderQ(){
   let txt="";
   if(r.ok===true)txt+="✅ 上次作答：正确\n"; else if(r.ok===false)txt+="❌ 上次作答：错误\n"; else txt+="未作答\n";
   if(r.wrong_count)txt+=`🔁 本题累计错误：${r.wrong_count} 次\n`;
+  if(r.in_wrong)txt+=`📕 本题在错题集中：错题寿命 ${r.life}（在「错题考试」中答对 -1，归零后移除）\n`;
+  if(mode==="错题"){
+    const wn=BANK.filter(x=>recGet(x.id).in_wrong).length;
+    txt+=`\n📚 错题共 ${wn} 道。点下方「📝 错题考试」随机抽题练习；答对减寿命，归零后移除。`;
+  }
   showFb(txt);
   // 笔记弹窗跟随当前题（若打开）
   if(noteOpen){ noteQid=it.id; $("#nnote").value=rec(it.id).notes||""; }
@@ -375,7 +420,10 @@ function renderQ(){
   if(mode==="考试"&&exam&&exam.active&&!exam.finished){
     footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)]]);
   }else{
-    footerBtns([["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)],["📝 笔记","#8e44ad",openNote],["重置","#c62828",()=>resetProgress()]]);
+    const fbtns=[["◀ 上一题","#1a5276",()=>nav(-1)],["确认答案","#27ae60",()=>checkAnswer()],["下一题 ▶","#1a5276",()=>nav(1)]];
+    if(mode==="错题") fbtns.push(["📝 错题考试","#d35400",startWrongExam]);
+    fbtns.push(["📝 笔记","#8e44ad",openNote],["重置","#c62828",()=>resetProgress()]);
+    footerBtns(fbtns);
   }
   renderQnav();
   stat();
@@ -469,7 +517,8 @@ function renderOpts(it,examSel){
     o.appendChild(b2);
     const b3=document.createElement("button"); b3.className="chip";
     b3.textContent="还需复习 ✘";
-    b3.onclick=()=>{ rec(it.id).ok=false; save(); stat(); showFb("📖 已标记为需复习"); };
+    b3.onclick=()=>{ const r=rec(it.id); r.ok=false; bumpWrong(r); save(); stat();
+      showFb("📖 已标记为需复习\n📕 本题在错题集中：错题寿命 "+r.life+"（在「错题考试」中答对 -1）"); };
     o.appendChild(b3);
   }
 }
@@ -486,7 +535,7 @@ function checkAnswer(){
   if(it.kind==="qa"){ msg("提示","本题无固定选项答案，请点选项区按钮对照说明。"); return; }
   if(!sel){ msg("提示", it.kind==="choice"?"请先选择一个答案":(it.kind==="multi"?"请先选择答案（可多选）":"请先选择答案（正确/错误）")); return; }
   const ok=isOk(it,sel);
-  record(it,sel,ok); showResult(it,sel,ok);
+  record(it,sel,ok, mode==="错题"?"wrong":"seq"); showResult(it,sel,ok);
   if(noteOpen){ noteQid=it.id; $("#nnote").value=rec(it.id).notes||""; }
   stat();
 }
@@ -501,15 +550,24 @@ function answerJudge(key){
 function examAnswer(it,k){
   if(exam.answers[it.id]){ msg("提示","本题已作答，不能更改"); return; }
   const ok=examIsOk(it,k); exam.answers[it.id]=k; exam.left=examLeft; save();
-  record(it,k,ok); renderQ();
+  const ctx=(exam.kind==="wrong")?"wexam":"exam";
+  const cleared=record(it,k,ok,ctx); renderQ();
+  if(exam.kind==="wrong"){
+    const fb=$("#fb");
+    if(fb) fb.innerHTML+=(cleared?"\n🎉 错题寿命归零，已从错题集移除！"
+                                :("\n📕 当前错题寿命："+(recGet(it.id).life||0)+"（答错时累计错误达 3/5/7/9/>10 会 +1）"));
+  }
 }
-function record(it,ans,ok){
-  const r=rec(it.id); r.ok=ok; if(!ok)r.wrong_count=(r.wrong_count||0)+1; save();
+function record(it,ans,ok,ctx){
+  const r=rec(it.id); r.ok=ok; let cleared=false;
+  if(!ok) bumpWrong(r); else if(ctx==="wexam") cleared=lifeDec(r);
+  save(); return cleared;
 }
 function showResult(it,ans,ok){
   const r=rec(it.id); let txt="";
   txt+= ok?`<span class="tag-ok">✅ 回答正确！</span>`:`<span class="tag-no">❌ 回答错误。正确答案：${it.answer}</span>`;
   if(r.wrong_count)txt+=`\n🔁 本题累计错误：${r.wrong_count} 次`;
+  if(r.in_wrong)txt+=`\n📕 本题在错题集中：错题寿命 ${r.life}（在「错题考试」中答对 -1）`;
   if(it.explain)txt+="\n\n解析：\n"+it.explain;
   showFb(txt);
 }
@@ -527,7 +585,8 @@ function finishExam(){
   stopExamTimer();
   if(!exam||!exam.active||exam.finished)return;
   exam.finished=true; exam.paused=false; exam.left=examLeft;
-  progress._exam_count=(progress._exam_count||0)+1;   // 完成交卷才计入考试次数
+  if(exam.kind==="wrong") progress._wexam_count=(progress._wexam_count||0)+1;
+  else progress._exam_count=(progress._exam_count||0)+1;   // 完成交卷才计入考试次数
   progress.exam=exam; save(); examBarHide();
   renderResult();
 }
@@ -537,9 +596,17 @@ function renderResult(){
   let correct=0, wrong=[], un=0;
   qs.forEach(x=>{ if(ans[x.id]===undefined)un++; else if(examIsOk(x,ans[x.id]))correct++; else wrong.push(x); });
   const score=correct*EXAM_SCORE;
-  $("#head").textContent="🏁 考试结束";
-  $("#stem").textContent=`🏆 考试成绩：${score} 分 / 满分 ${qs.length*EXAM_SCORE} 分\n\n✅ 答对 ${correct} 题 · ❌ 答错 ${wrong.length} 题 · ⭕ 未答 ${un} 题`;
-  let fbTxt=`得分：${score} 分（每题 ${EXAM_SCORE} 分）　答题进度：${Object.keys(ans).length}/${qs.length}\n\n错题已自动进入「错题」板块。`;
+  const wrongKind=(exam.kind==="wrong");
+  $("#head").textContent=`🏁 ${examTitle()}结束`;
+  $("#stem").textContent=`🏆 ${examTitle()}成绩：${score} 分 / 满分 ${qs.length*EXAM_SCORE} 分\n\n✅ 答对 ${correct} 题 · ❌ 答错 ${wrong.length} 题 · ⭕ 未答 ${un} 题`;
+  let fbTxt;
+  if(wrongKind){
+    const clearedN=qs.filter(x=>ans[x.id]!==undefined && examIsOk(x,ans[x.id]) && !recGet(x.id).in_wrong).length;
+    const leftN=BANK.filter(x=>recGet(x.id).in_wrong).length;
+    fbTxt=`得分：${score} 分（每题 ${EXAM_SCORE} 分）　答题进度：${Object.keys(ans).length}/${qs.length}\n\n🎉 本次清除 ${clearedN} 道错题（寿命归零）；答对寿命 -1，答错寿命不变。\n📕 剩余错题：${leftN} 道`;
+  }else{
+    fbTxt=`得分：${score} 分（每题 ${EXAM_SCORE} 分）　答题进度：${Object.keys(ans).length}/${qs.length}\n\n错题已自动进入「错题」板块；错题需在「错题考试」中答对、寿命归零才会移除。`;
+  }
   showFb(fbTxt);
   const o=$("#opts"); o.innerHTML="";
   const scoreDiv=document.createElement("div");
@@ -554,7 +621,9 @@ function renderResult(){
   }else{
     const t=document.createElement("div"); t.className="opt"; t.textContent="🎉 全部答对，太棒了！"; t.classList.add("right"); o.appendChild(t);
   }
-  footerBtns([["🔄 重新考试","#b9770e",restartToReady],["返回顺序","#1a5276",()=>setMode("顺序")]]);
+  footerBtns(wrongKind
+    ? [["🔄 再考一次错题","#b9770e",()=>startExam("wrong")],["返回错题列表","#1a5276",()=>setMode("错题")],["返回顺序","#7f8c8d",()=>setMode("顺序")]]
+    : [["🔄 重新考试","#b9770e",restartToReady],["返回顺序","#1a5276",()=>setMode("顺序")]]);
   renderQnav();
   stat();
 }
@@ -625,7 +694,7 @@ function footerBtns(btns){
 function stat(){
   const done=BANK.filter(x=>rec(x.id).ok!==null), okN=done.filter(x=>rec(x.id).ok===true).length;
   const rate=done.length?Math.round(okN/done.length*100):0;
-  const wrong=BANK.filter(x=>rec(x.id).ok===false).length;
+  const wrong=BANK.filter(x=>recGet(x.id).in_wrong).length;
   $("#stat").textContent=`已做 ${done.length}/${BANK.length} · 正确率 ${rate}% · 错题 ${wrong}`;
 }
 /* ---------- 弹窗 ---------- */

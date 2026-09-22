@@ -53,7 +53,7 @@ footer{background:#fff;padding:9px;display:flex;gap:6px;box-shadow:0 -2px 8px rg
 footer button{flex:1;border:none;border-radius:10px;padding:12px 2px;font-size:12px;color:#fff;cursor:pointer;white-space:nowrap;transition:transform .12s,filter .2s}
 footer button:active{transform:scale(.95);filter:brightness(.92)}
 /* 弹窗 */
-.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:99;animation:fadeIn .18s ease}
+.modal{position:fixed;inset:0;background:rgba(0,0,0,.5);display:none;align-items:center;justify-content:center;z-index:1200;animation:fadeIn .18s ease}
 .modal.show{display:flex}
 .mbox{background:#fff;border-radius:16px;width:86%;max-width:360px;padding:18px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.25);animation:zoomIn .25s ease}
 .mbox h3{font-size:16px;margin-bottom:8px}
@@ -75,7 +75,11 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
   </header>
   <div class="tabs" id="tabs">
     <button data-mode="顺序" class="active">顺序练习</button>
+    <button data-mode="收藏">收藏</button>
     <button data-mode="考试">模拟考试</button>
+  </div>
+  <div style="display:flex;justify-content:flex-end;padding:0 10px 6px">
+    <button onclick="openSections()" style="border:none;border-radius:8px;padding:6px 12px;font-size:12px;background:#34495e;color:#fff;cursor:pointer">📂 分区跳转</button>
   </div>
   <div id="examBar"></div>
   <main id="main">
@@ -91,6 +95,8 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
   <footer id="footer"></footer>
 </div>
 <div class="modal" id="modal"><div class="mbox" id="mbox"></div></div>
+<!-- 分区跳转面板 -->
+<div id="secPanel" style="display:none"><div id="secBox"></div></div>
 <!-- 配图全屏查看 -->
 <div id="imgView"><img id="imgViewImg" src="" alt="题目配图"></div>
 <div id="imgHint">单指拖动 · 双指缩放 · 双击放大/还原</div>
@@ -146,6 +152,7 @@ if (typeof BANK === "undefined" || !Array.isArray(BANK) || !BANK.length) {
 const LS_KEY="interview_sub_v1";
 const EXAM_NUM=10, EXAM_MIN=40;
 let mode="顺序", idx=0, revealed=false, saveTimer=null, statTimer=null;
+let queue=BANK.slice();               // 当前视图列表（顺序/收藏）
 let seqSavedIdx=null;                 // 顺序板块本次会话中的位置（切板块返回时恢复）
 let exam=null, examLeft=0, examTimer=null;
 let progress=load();
@@ -174,37 +181,78 @@ function shuffle(a){ const r=a.slice(); for(let i=r.length-1;i>0;i--){const j=Ma
 function wrapCn(s, lim){ return String(s||""); }
 
 /* ---------- 模式切换 ---------- */
+function favList(){
+  var f=progress._favs; if(!Array.isArray(f)) return [];
+  return f.map(byId).filter(function(x){ return !!x; });
+}
+function isFav(id){ var f=progress._favs; return Array.isArray(f) && f.indexOf(id)>=0; }
 function setMode(m){
   if(mode==="考试" && exam && exam.active && !exam.finished){ msg("考试中","考试进行中，不能切换到其他板块！"); return; }
   if(mode==="顺序" && m!=="顺序") seqSavedIdx=idx;      // 离开顺序板块：记住当前位置
+  if(m==="收藏" && !favList().length){ msg("收藏","还没有收藏题目。\n在「顺序练习」里点「⭐ 收藏」即可收藏。"); return; }
   stopExamTimer(); mode=m;
   forEachNode(document.querySelectorAll("#tabs button"), function(b){ toggleCls(b,"active",b.dataset.mode===m); });
   if(m==="考试"){ enterExamBoard(); return; }
   examBarHide();
-  // 顺序板块：首次进入（打开软件）跳到"连续完成题目的最后一题"，之后回到上次浏览位置
-  if(m==="顺序") idx = (seqSavedIdx===null) ? resumeIndex() : seqSavedIdx;
-  idx=Math.min(idx, BANK.length-1);
+  if(m==="顺序"){
+    queue=BANK.slice();
+    idx = (seqSavedIdx===null) ? resumeIndex() : seqSavedIdx;
+  }else{                        /* 收藏 */
+    queue=favList(); idx=0;
+  }
+  idx=Math.min(idx, queue.length-1);
   renderQ();
 }
 
-/* ---------- 顺序模式 ---------- */
+/* ---------- 顺序 / 收藏 ---------- */
 function renderQ(){
-  const it=BANK[idx];
+  const it=queue[idx];
   if(!it){ $("#head").textContent="暂无题目"; return; }
-  $("#head").textContent="[主观题 "+it.num+"]  "+(idx+1)+"/"+BANK.length;
+  $("#head").textContent="[主观题 "+it.num+"]  "+(idx+1)+"/"+queue.length+((mode==="收藏")?" · ⭐收藏":"");
   $("#stem").textContent=it.stem||"";
   renderImgs(it);
   revealed=false;
   showAnsBox(false);
   setAnsEnabled(true, "✍️ 我的作答（打字作答，自动保存；不判对错）");
   $("#myans").value=rec(it.id).wrote||"";
-  footerBtns([["◀ 上一题","#1a5276",function(){nav(-1)}],
-              ["👀 查看参考答案","#8e44ad",toggleReveal],
-              ["下一题 ▶","#1a5276",function(){nav(1)}],
-              ["🗑 重置","#c62828",resetProgress]]);
+  if(mode==="收藏"){
+    footerBtns([["◀ 上一题","#1a5276",function(){nav(-1)}],
+                ["💔 取消收藏","#c62828",unfavCur],
+                ["下一题 ▶","#1a5276",function(){nav(1)}],
+                ["🗑 重置","#c62828",resetProgress]]);
+  }else{
+    footerBtns([["◀ 上一题","#1a5276",function(){nav(-1)}],
+                [isFav(it.id)?"⭐ 已收藏":"⭐ 收藏","#b9770e",favAdd],
+                ["👀 查看参考答案","#8e44ad",toggleReveal],
+                ["下一题 ▶","#1a5276",function(){nav(1)}],
+                ["🗑 重置","#c62828",resetProgress]]);
+  }
   progress._last=idx; save();
   $("#main").scrollTop=0;
   stat();
+}
+/* ---------- 收藏 ---------- */
+function favAdd(){
+  const it=curIt(); if(!it || mode==="考试") return;
+  if(isFav(it.id)){ msg("收藏","本题已在收藏中。\n如需取消，请到「收藏」板块点「💔 取消收藏」。"); return; }
+  var f=progress._favs; if(!Array.isArray(f)) f=[];
+  f.push(it.id); progress._favs=f; save();
+  renderQ();
+  msg("收藏","⭐ 已收藏第 "+it.num+" 题（在「收藏」板块查看）");
+}
+function unfavCur(){
+  const it=curIt(); if(!it) return;
+  confirmDlg("取消收藏","确定取消收藏第 "+it.num+" 题吗？",function(){
+    var f=progress._favs; if(!Array.isArray(f)) f=[];
+    f=f.filter(function(x){ return x!==it.id; });
+    progress._favs=f; save();
+    if(mode==="收藏"){
+      queue=favList();
+      if(!queue.length){ msg("收藏","收藏已清空。"); setMode("顺序"); return; }
+      idx=Math.max(0,Math.min(idx,queue.length-1));
+      renderQ();
+    }
+  });
 }
 function renderImgs(it){
   const ia=$("#imgs"); ia.innerHTML="";
@@ -228,7 +276,7 @@ function showAnsBox(show, it){
   ab.style.display="block";
 }
 function toggleReveal(){
-  const it=BANK[idx]; if(!it || mode!=="顺序")return;
+  const it=queue[idx]; if(!it || mode==="考试")return;
   if(revealed){
     showAnsBox(false); revealed=false;
     const b=findBtn("参考答案"); if(b)b.textContent="👀 查看参考答案";
@@ -245,7 +293,7 @@ function nav(d){
   saveNow();
   const ni=idx+d;
   if(ni<0){ msg("提示","已经是第一题"); return; }
-  if(ni>=BANK.length){ msg("提示","已经是最后一题"); return; }
+  if(ni>=queue.length){ msg("提示","已经是最后一题"); return; }
   idx=ni; renderQ();
 }
 
@@ -428,7 +476,7 @@ $("#myans").addEventListener("input",function(){
   clearTimeout(saveTimer); saveTimer=setTimeout(save,600);
   clearTimeout(statTimer); statTimer=setTimeout(stat,600);
 });
-function curIt(){ return (mode==="考试"&&exam&&exam.active&&!exam.finished) ? byId(exam.ids[idx]) : BANK[idx]; }
+function curIt(){ return (mode==="考试"&&exam&&exam.active&&!exam.finished) ? byId(exam.ids[idx]) : queue[idx]; }
 function saveNow(){
   const it=curIt(); if(!it)return;
   if($("#myans").disabled)return;
@@ -444,7 +492,8 @@ function stat(){
   const total=BANK.length;
   const done=BANK.filter(function(x){return isAnswered(x)}).length;
   const rev=BANK.filter(function(x){return (progress[x.id]||{}).revealed}).length;
-  $("#stat").textContent="已看答案 "+rev+"/"+total+" · 已作答 "+done+"/"+total;
+  const fav=favList().length;
+  $("#stat").textContent="已看答案 "+rev+"/"+total+" · 已作答 "+done+"/"+total+" · ⭐"+fav;
 }
 function footerBtns(btns){
   const f=$("#footer"); f.innerHTML="";
@@ -452,6 +501,68 @@ function footerBtns(btns){
     const b=document.createElement("button"); b.textContent=item[0]; b.style.background=item[1]; b.onclick=item[2]; f.appendChild(b);
   });
 }
+/* ---------- 分区跳转（两级：分区目录 → 题目清单 → 确认跳转） ---------- */
+function secData(){
+  /* 返回 [{g: 大区名, secs: [{name: 分区名, items: [题目...]}]}]，顺序与题库一致 */
+  const groups=[], gm={};
+  BANK.forEach(function(it){
+    const g=it.sec_group||"未分类", s=it.sec||g;
+    if(!gm[g]){ gm[g]={g:g, secs:[], sm:{}}; groups.push(gm[g]); }
+    if(!gm[g].sm[s]){ gm[g].sm[s]={name:s, items:[]}; gm[g].secs.push(gm[g].sm[s]); }
+    gm[g].sm[s].items.push(it);
+  });
+  return groups;
+}
+function openSections(){
+  if(mode==="考试" && exam && exam.active && !exam.finished){ msg("考试中","考试进行中，不能跳题！\n请先交卷或退出考试。"); return; }
+  const p=$("#secPanel");
+  p.style.cssText="position:fixed;left:0;right:0;top:0;bottom:0;background:#f5f7fa;z-index:990;display:flex;flex-direction:column";
+  $("#secBox").style.cssText="flex:1;overflow:auto;padding:10px 10px 28px;-webkit-overflow-scrolling:touch";
+  secView1();
+}
+function secClose(){ $("#secPanel").style.display="none"; }
+function secView1(){
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 10px">'+
+    '<b style="color:#1a5276;font-size:14px">📂 分区目录（点分区看题目清单）</b>'+
+    '<button onclick="secClose()" style="border:none;border-radius:8px;padding:8px 14px;background:#7f8c8d;color:#fff;font-size:13px;cursor:pointer">✕ 关闭</button></div>';
+  secData().forEach(function(g,gi){
+    html+='<div style="margin:12px 2px 4px;font-weight:bold;color:#8e44ad;font-size:13px">📁 '+g.g+'</div>';
+    g.secs.forEach(function(s,si){
+      html+='<div onclick="secView2('+gi+','+si+')" style="background:#fff;border-radius:10px;padding:11px 12px;margin:6px 0;font-size:14px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08);display:flex;justify-content:space-between;align-items:center">'+
+        '<span>📄 '+s.name+'</span><span style="color:#95a5a6;font-size:12px">'+s.items.length+' 题 ›</span></div>';
+    });
+  });
+  $("#secBox").innerHTML=html;
+  $("#secBox").scrollTop=0;
+}
+function secView2(gi,si){
+  const g=secData()[gi], s=g.secs[si];
+  var html='<div style="display:flex;justify-content:space-between;align-items:center;padding:4px 2px 10px;gap:6px">'+
+    '<button onclick="secView1()" style="border:none;border-radius:8px;padding:8px 12px;background:#1a5276;color:#fff;font-size:13px;cursor:pointer">⬅ 返回分区</button>'+
+    '<b style="color:#1a5276;font-size:12px;flex:1;text-align:center;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">'+s.name+'</b>'+
+    '<button onclick="secClose()" style="border:none;border-radius:8px;padding:8px 12px;background:#7f8c8d;color:#fff;font-size:13px;cursor:pointer">✕</button></div>';
+  s.items.forEach(function(it){
+    const stem=String(it.stem||"").replace(/\n/g," ").slice(0,42);
+    html+='<div onclick="secJump(\''+it.id+'\')" style="background:#fff;border-radius:10px;padding:10px 12px;margin:6px 0;font-size:13px;cursor:pointer;box-shadow:0 1px 3px rgba(0,0,0,.08)">'+
+      '<b style="color:#1a5276">第 '+it.num+' 题</b> · '+stem+'…</div>';
+  });
+  $("#secBox").innerHTML=html;
+  $("#secBox").scrollTop=0;
+}
+function secJump(id){
+  const it=byId(id); if(!it) return;
+  confirmDlg("跳转确认","确定跳转到第 "+it.num+" 题吗？",function(){
+    secClose();
+    saveNow();
+    const pos=BANK.findIndex(function(x){ return x.id===id; });
+    if(pos<0) return;
+    if(mode!=="顺序") setMode("顺序");
+    queue=BANK.slice();
+    idx=pos;
+    renderQ();
+  });
+}
+
 /* ---------- 弹窗 ---------- */
 let modalCb=null;
 function msg(t,p){ $("#mbox").innerHTML='<h3>'+t+'</h3><p>'+p+'</p><div class="btns"><button style="background:#1a5276" onclick="closeModal()">确定</button></div>'; $("#modal").classList.add("show"); }
@@ -463,9 +574,13 @@ function resetProgress(){ resetStep(1); }
 function resetStep(n){
   if(n===1) confirmDlg("重置进度（1/3）","确定要清除全部作答记录与看答案记录吗？\n此操作不可恢复！",function(){resetStep(2)});
   else if(n===2) confirmDlg("重置进度（2/3）","再次确认：将清空所有作答内容与看答案记录！",function(){resetStep(3)});
-  else if(n===3) confirmDlg("重置进度（3/3）","最后一次确认：立即清空全部数据并重新开始！",function(){
-    progress={}; save(); stopExamTimer(); exam=null; examBarHide(); idx=0; seqSavedIdx=null; setMode("顺序");
-    msg("完成","🗑 已清除全部作答记录，重新开始！");
+  else if(n===3) confirmDlg("重置进度（3/3）","最后一次确认：立即清空全部数据并重新开始！\n（收藏会保留）",function(){
+    var favs=progress._favs;
+    progress={};
+    if(Array.isArray(favs) && favs.length) progress._favs=favs;
+    save(); stopExamTimer(); exam=null; examBarHide(); idx=0; seqSavedIdx=null;
+    queue=BANK.slice(); setMode("顺序");
+    msg("完成","🗑 已清除全部作答记录，重新开始！（收藏已保留）");
   });
 }
 /* 关闭页面时保存 */

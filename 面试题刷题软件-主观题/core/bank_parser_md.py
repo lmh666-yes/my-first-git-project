@@ -12,18 +12,32 @@ import shutil
 
 
 def _split_blocks(lines):
-    """按 '**N.**' 题号行切块；代码块（```）内的行不切。"""
+    """按 '**N.**' 题号行切块；代码块（```）内的行不切。
+    同时记录每道题所属分区：sec_group（一/二级标题）与 sec（更深标题，如试卷名）"""
     blocks, cur, in_code = [], None, False
+    sec_group, sec = "", ""
     for ln in lines:
         s = ln.rstrip()
         if s.strip().startswith("```"):
             in_code = not in_code
         if not in_code:
+            if s.startswith("#"):
+                lvl = len(s) - len(s.lstrip("#"))
+                title = s.lstrip("#").strip()
+                if lvl <= 2:
+                    sec_group, sec = title, title
+                else:
+                    sec = title
+                if cur is not None:          # 标题行结束当前块（与块内遇 # 截断等价）
+                    blocks.append(cur)
+                    cur = None
+                continue
             m = re.match(r"^\*\*(\d+)\.\*\*\s*(.*)$", s)
             if m:
                 if cur is not None:
                     blocks.append(cur)
-                cur = {"num": int(m.group(1)), "first": m.group(2), "lines": []}
+                cur = {"num": int(m.group(1)), "first": m.group(2), "lines": [],
+                       "sec": sec, "sec_group": sec_group}
                 continue
         if cur is not None:
             cur["lines"].append(s)
@@ -119,6 +133,7 @@ def _parse_block(b):
             "num": num, "stem": _norm_text("\n".join(stem_lines)),
             "options": [], "answer": _norm_text("\n".join(ans_lines)),
             "explain": _norm_text("\n".join(exp_lines)),
+            "sec": b.get("sec", ""), "sec_group": b.get("sec_group", ""),
             "imgs": [os.path.basename(p) for p in srcs]}
     warn = ""
     if not item["answer"]:

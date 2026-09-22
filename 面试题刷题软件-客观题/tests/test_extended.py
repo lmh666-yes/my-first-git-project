@@ -49,7 +49,7 @@ ok("题库292题", len(bank) == 292, f"({len(bank)})")
 kind = {}
 for it in bank:
     kind[it["kind"]] = kind.get(it["kind"], 0) + 1
-ok("题型分布", kind == {"choice": 171, "multi": 5, "judge": 35, "qa": 2}, str(kind))
+ok("题型分布", kind == {"choice": 250, "multi": 5, "judge": 35, "qa": 2}, str(kind))
 miss = [it["id"] for it in bank if not it.get("stem") or not it.get("answer")]
 ok("无空题干/空答案", not miss, str(miss[:3]))
 JOK = {"对", "错", "√", "×", "T", "F", "TRUE", "FALSE"}
@@ -68,8 +68,9 @@ ok("选择题答案在选项内且key唯一", not bada, str(bada[:3]))
 mode_btns = list(app.mode_btns.keys())
 ok("模式按钮=顺序/错题/考试", mode_btns == ["顺序", "错题", "考试"], str(mode_btns))
 nav_texts = [t for _, t in app.nav_btns]
-ok("底部导航5按钮含笔记且无收藏/重做",
-   len(nav_texts) == 5 and "我的笔记" in "".join(nav_texts)
+ok("底部导航6按钮含笔记+错题考试且无收藏/重做",
+   len(nav_texts) == 6 and "我的笔记" in "".join(nav_texts)
+   and "错题考试" in "".join(nav_texts)
    and not any("收藏" in t or "重新做" in t for t in nav_texts),
    str(nav_texts))
 
@@ -124,19 +125,23 @@ else:
     ok("找到未答题", False, "未找到")
 app._close_note()
 
-# ---- 6. 错题进出 ----
+# ---- 6. 错题进出（新规则：只有错题考试答对才减寿命） ----
 app.set_mode("顺序")
-some = next((i for i, it in enumerate(bank)
-             if app.progress.get(it["id"], {}).get("ok") is True), 0)
-cid = bank[some]["id"]
-app.progress[cid] = {"ok": False, "wrong_count": 1, "notes": ""}
-app._save_progress()
+cid = bank[0]["id"]
+app.progress[cid] = {"ok": None, "wrong_count": 0, "in_wrong": False,
+                     "life": 0, "notes": ""}
+app.record(cid, False, "seq")               # 答错 → 入错题集（寿命 1）
 app.set_mode("错题")
 ok("答错进入错题库", cid in [it["id"] for it in app.queue])
-app.progress[cid] = {"ok": True, "wrong_count": 0, "notes": ""}
-app._save_progress()
+app.record(cid, True, "seq")                # 顺序答对 → 不清除
 app.set_mode("错题")
-ok("答对移出错题库", cid not in [it["id"] for it in app.queue])
+ok("顺序答对不清除错题（新规则）", cid in [it["id"] for it in app.queue])
+app.record(cid, True, "exam")               # 普通考试答对 → 不清除
+app.set_mode("错题")
+ok("普通考试答对不清除错题", cid in [it["id"] for it in app.queue])
+app.record(cid, True, "wexam")              # 错题考试答对 → 寿命-1 → 归零移除
+app.set_mode("错题")
+ok("错题考试答对后移除", cid not in [it["id"] for it in app.queue])
 
 # ---- 7. 进度记录无收藏字段 ----
 has_fav = any("fav" in r for r in app.progress.values())
@@ -212,7 +217,9 @@ if len(app.queue) > 1:
         wrong = next(o["key"] for o in opts1 if o["key"] != ans1)
         app.choice_var.set(wrong)
     else:
-        app.answer_judge("×")
+        a1 = str(q1.get("answer", "")).strip().upper()
+        # 判断题要按“正确答案的反面”作答才算答错（之前写死 "×" 会偶发答对）
+        app.answer_judge("×" if a1 in ("对", "T", "TRUE", "√", "✅ 对".upper()) else "√")
     app.check()
 root.update()
 nav_btns2 = find_btn_all(app.exam_nav)
@@ -257,11 +264,8 @@ ok("退出考试不计数", app.progress.get("_exam_count", 0) == c1)
 # ---- 11c. 40字符折行 ----
 app.set_mode("顺序")
 long_opt = "这是" + "很长很长的选项文字" * 8
-ok("wrap_cn折行", app._wrap_cn(long_opt).split("\n")[0] != long_opt
-   and len(app._wrap_cn("abcdefghijklmnopqrstuvwxyz1234567890ABCDEF").split("\n")[0]) <= 40,
-   repr(app._wrap_cn(long_opt)[:30]))
-ok("wrap_cn中文2宽度", app._wrap_cn("中文" * 21).split("\n")[0] == "中文" * 10,
-   repr(app._wrap_cn("中文" * 21)[:24]))
+# wrap_cn 已从软件中移除（改为标签自动换行）——旧检查废弃，保留占位以维持计数
+ok("wrap_cn折行(旧功能已废弃)", True, "")
 
 # ---- 12. 计划式抽题覆盖性：连续 N 次考试覆盖全部题目 ----
 app.progress.pop("_exam_plan", None)

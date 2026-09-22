@@ -2,9 +2,10 @@
 """面试题刷题软件 · 主观题
 题库来源：题库.json（由 build_bank.py 从 题库/02_主观题.md 生成）
 功能：顺序浏览 + 打字作答（自动保存）+ 查看参考答案与得分点 + 跳题 +
+      收藏题目（收藏区取消收藏，带确认）+ 分区跳转（按试卷分区、确认后跳转）+
       模拟考试（10 题 / 40 分钟，计划式抽题、暂停/退出/恢复、交卷后逐题回顾）+ 重置进度。
 特点：不打分、无错题库；考试交卷后对照参考答案与得分点自评。
-版本：2.1.0（新增模拟考试）"""
+版本：2.7.0（跳题修复 + 收藏 + 分区跳转）"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -210,21 +211,26 @@ class App:
         bar.grid(row=0, column=0, sticky="ew")
         tk.Label(bar, text="🎯 面试题刷题（主观题）", bg="#2c3e50", fg="white",
                  font=("Microsoft YaHei", 13, "bold"), padx=12).pack(side=tk.LEFT, pady=6)
-        # 板块按钮：顺序 / 考试
+        # 板块按钮：顺序 / 收藏 / 考试
         self.mode_btns = {}
-        for m in ("顺序", "考试"):
+        for m in ("顺序", "收藏", "考试"):
             b = tk.Button(bar, text=m, command=lambda mm=m: self.set_mode(mm),
                           relief=tk.FLAT, padx=10, cursor="hand2",
                           font=("Microsoft YaHei", 10))
             b.pack(side=tk.LEFT, padx=3, pady=6)
             self.mode_btns[m] = b
+        # 分区跳转
+        bsec = tk.Button(bar, text="📂 分区", command=self._open_sections,
+                         relief=tk.FLAT, padx=8, cursor="hand2", bg="#34495e", fg="#ecf0f1",
+                         font=("Microsoft YaHei", 10))
+        bsec.pack(side=tk.LEFT, padx=(10, 0), pady=6)
         # 右上角：考试上下文按钮区（开始/暂停/退出/重新考试）
         self.exam_bar = tk.Frame(bar, bg="#2c3e50")
         self.exam_bar.pack(side=tk.RIGHT, padx=8)
         self.stat_label = tk.Label(bar, text="", bg="#2c3e50", fg="#ecf0f1",
                                    font=("Microsoft YaHei", 10, "bold"))
         self.stat_label.pack(side=tk.RIGHT, padx=12)
-        tk.Label(bar, text="跳题:", bg="#2c3e50", fg="#ecf0f1",
+        tk.Label(bar, text="跳题号:", bg="#2c3e50", fg="#ecf0f1",
                  font=("Microsoft YaHei", 10)).pack(side=tk.RIGHT, padx=(0, 2))
         self.jump_var = tk.StringVar()
         self.jump_entry = tk.Entry(bar, textvariable=self.jump_var, width=5,
@@ -330,6 +336,11 @@ class App:
                 and self._exam_active() and not self._exam_finished()):
             messagebox.showwarning("考试中", "考试进行中，不能切换到其他板块！\n请先交卷或退出考试。")
             return
+        if mode == "收藏":
+            favs = set(self._favs())
+            if not any(it.get("id") in favs for it in self.bank):
+                messagebox.showinfo("收藏", "还没有收藏题目。\n在「顺序」板块做题时点「⭐ 收藏」即可收藏。")
+                return
         self._stop_exam_timer()
         if self.mode == "顺序" and mode != "顺序":
             self._seq_saved_idx = self.idx      # 记住本次浏览位置，回到顺序板块时恢复
@@ -348,6 +359,13 @@ class App:
             if self.queue:
                 self.idx = max(0, min(self.idx, len(self.queue) - 1))
             self._resume_notice = bool(self.idx > 0 and self._seq_saved_idx is None)
+            self.show_question()
+        elif mode == "收藏":
+            for w in self.exam_bar.winfo_children():
+                w.destroy()
+            favs = set(self._favs())
+            self.queue = [it for it in self.bank if it.get("id") in favs]
+            self.idx = 0
             self.show_question()
         else:
             self._enter_exam_board()
@@ -690,10 +708,18 @@ class App:
         self.ans_text.delete("1.0", "end")
         self.ans_text.insert("1.0", rec.get("wrote", ""))
         self._clear_fb()
-        self._set_nav([("◀ 上一题", self.prev_q, COLOR_BLUE),
-                       ("👀 查看参考答案", self.toggle_reveal, COLOR_PURPLE),
-                       ("下一题 ▶", self.next_q, COLOR_BLUE),
-                       ("🗑 重置进度", self.reset_progress, COLOR_NO)])
+        if self.mode == "收藏":
+            self._set_nav([("◀ 上一题", self.prev_q, COLOR_BLUE),
+                           ("💔 取消收藏", self.unfav_cur, COLOR_NO),
+                           ("下一题 ▶", self.next_q, COLOR_BLUE),
+                           ("🗑 重置进度", self.reset_progress, COLOR_NO)])
+        else:
+            fav_txt = "⭐ 已收藏" if self._is_fav(it.get("id", "")) else "⭐ 收藏"
+            self._set_nav([("◀ 上一题", self.prev_q, COLOR_BLUE),
+                           (fav_txt, self.fav_add, "#b9770e"),
+                           ("👀 查看参考答案", self.toggle_reveal, COLOR_PURPLE),
+                           ("下一题 ▶", self.next_q, COLOR_BLUE),
+                           ("🗑 重置进度", self.reset_progress, COLOR_NO)])
         self._cur_qid = it.get("id", "")        # 作答框现在对应本题，允许自动保存
         self._update_stat()
 
@@ -970,35 +996,213 @@ class App:
             self.show_question()
 
     def _jump(self):
-        if self.mode != "顺序":
+        """跳题：先按题号精确查找；找不到再按“第 n 题”（顺序位置）兑底；
+        题库编号有空档（迁出/合并留空），提示中给出真实范围"""
+        if self.mode == "考试":
             return
         s = self.jump_var.get().strip()
         self.jump_var.set("")
         if not s.isdigit():
             return
         n = int(s)
-        for i, it in enumerate(self.queue):
-            if it.get("num") == n:
-                self._save_answer()
-                self.idx = i
-                self.show_question()
+        pos = next((i for i, it in enumerate(self.queue) if it.get("num") == n), None)
+        if pos is None and 1 <= n <= len(self.queue):
+            pos = n - 1          # 兑底：按“第几题”（顺序位置）跳
+        if pos is None:
+            nums = [it.get("num") for it in self.queue if isinstance(it.get("num"), int)]
+            messagebox.showinfo(
+                "未找到",
+                f"未找到题号 {n}。\n\n· 题号范围 1~{max(nums) if nums else '?'}"
+                "（中间空号为迁出/合并留下的空档）\n"
+                f"· 也可输入 1~{len(self.queue)} 表示第几题（按顺序位置）")
+            return
+        self._save_answer()
+        self.idx = pos
+        self.show_question()
+
+    # ---------- 收藏 ----------
+    def _favs(self):
+        f = self.progress.get("_favs")
+        return f if isinstance(f, list) else []
+
+    def _is_fav(self, qid):
+        return qid in self._favs()
+
+    def fav_add(self):
+        """题目页：收藏本题（取消收藏需到收藏板块）"""
+        it = self._cur()
+        if it is None or self.mode == "考试":
+            return
+        qid = it.get("id", "")
+        if self._is_fav(qid):
+            messagebox.showinfo("收藏", "本题已在收藏中。\n如需取消，请到「收藏」板块点「💔 取消收藏」。")
+            return
+        favs = self._favs()
+        favs.append(qid)
+        self.progress["_favs"] = favs
+        self._save_progress()
+        self.show_question()
+        messagebox.showinfo("收藏", f"⭐ 已收藏第 {it.get('num')} 题（在「收藏」板块查看）")
+
+    def unfav_cur(self):
+        """收藏板块：取消收藏（弹窗确认）"""
+        it = self._cur()
+        if it is None:
+            return
+        qid = it.get("id", "")
+        if not self._is_fav(qid):
+            return
+        if not messagebox.askyesno("取消收藏",
+                                   f"确定取消收藏第 {it.get('num')} 题吗？"):
+            return
+        favs = [x for x in self._favs() if x != qid]
+        self.progress["_favs"] = favs
+        self._save_progress()
+        # 从收藏队列中移除后刷新
+        self.queue = [x for x in self.queue if x.get("id") != qid]
+        if not self.queue:
+            messagebox.showinfo("收藏", "收藏已清空。")
+            self.set_mode("顺序")
+            return
+        self.idx = max(0, min(self.idx, len(self.queue) - 1))
+        self.show_question()
+
+    # ---------- 分区跳转 ----------
+    def _open_sections(self):
+        """分区目录窗口：左侧按大区（年份/附加）分组的分区树，右侧分区内题目清单，双击/按钮跳转"""
+        if self.mode == "考试" and self._exam_active() and not self._exam_finished():
+            messagebox.showwarning("考试中", "考试进行中，不能跳题！\n请先交卷或退出考试。")
+            return
+        sections, seen = [], set()
+        for it in self.bank:
+            g = it.get("sec_group") or "未分类"
+            s = it.get("sec") or g
+            if (g, s) not in seen:
+                seen.add((g, s))
+                sections.append((g, s))
+        if not sections:
+            messagebox.showinfo("分区跳转", "当前题库没有分区信息（请重新运行 build_bank.py 生成题库）。")
+            return
+        win = tk.Toplevel(self.root)
+        win.title("📂 分区跳转")
+        win.transient(self.root)
+        try:
+            sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
+            w, h = max(760, min(980, int(sw * 0.62))), max(520, min(820, int(sh * 0.72)))
+            win.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 2 - 30)}")
+        except Exception:
+            pass
+        main = tk.Frame(win, bg="#f5f7fa")
+        main.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
+        tk.Label(main, text="① 选择分区（左侧） → ② 点选题目（右侧） → 确认后跳转",
+                 bg="#f5f7fa", fg=COLOR_BLUE, font=("Microsoft YaHei", 10, "bold"),
+                 anchor="w").pack(fill=tk.X, pady=(0, 6))
+        body = tk.Frame(main, bg="#f5f7fa")
+        body.pack(fill=tk.BOTH, expand=True)
+        lf = tk.Frame(body, bg="#f5f7fa")
+        lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        rf = tk.Frame(body, bg="#f5f7fa")
+        rf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0))
+        tk.Label(lf, text="分区目录", bg="#eaf2f8", fg=COLOR_BLUE,
+                 font=("Microsoft YaHei", 10, "bold")).pack(fill=tk.X)
+        tk.Label(rf, text="题目清单", bg="#eaf2f8", fg=COLOR_BLUE,
+                 font=("Microsoft YaHei", 10, "bold")).pack(fill=tk.X)
+        tv = ttk.Treeview(lf, show="tree", selectmode="browse")
+        tv.pack(fill=tk.BOTH, expand=True)
+        lb = tk.Listbox(rf, font=("Microsoft YaHei", 10), activestyle="dotbox")
+        lb.pack(fill=tk.BOTH, expand=True)
+        # 建树：大区 → 分区
+        groups = {}
+        for g, s in sections:
+            groups.setdefault(g, []).append(s)
+        for g, ss in groups.items():
+            gid = "g|" + g
+            tv.insert("", "end", iid=gid, text=f"📁 {g}（{len(ss)} 个分区）")
+            for s in ss:
+                sid = "s|" + g + "|" + s
+                cnt = sum(1 for it in self.bank
+                          if (it.get("sec_group") or "未分类") == g and (it.get("sec") or g) == s)
+                label = s if s != g else f"（{g}）未细分"
+                tv.insert(gid, "end", iid=sid, text=f"　📄 {label}（{cnt} 题）")
+
+        def fill_list(items):
+            lb.delete(0, tk.END)
+            for it in items:
+                stem = str(it.get("stem", "")).replace("\n", " ")
+                lb.insert(tk.END, f"{it.get('num')}. {stem[:44]}")
+            lb._items = items
+
+        def on_tree(_e=None):
+            sel = tv.selection()
+            if not sel:
                 return
-        messagebox.showinfo("提示", f"未找到题号 {n}（范围 1~{len(self.queue)}）")
+            sid = sel[0]
+            if sid.startswith("g|"):
+                g = sid[2:]
+                items = [it for it in self.bank
+                         if (it.get("sec_group") or "未分类") == g]
+            else:
+                _, g, s = sid.split("|", 2)
+                items = [it for it in self.bank
+                         if (it.get("sec_group") or "未分类") == g and (it.get("sec") or g) == s]
+            fill_list(items)
+
+        def do_jump(_e=None):
+            sel = lb.curselection()
+            items = getattr(lb, "_items", [])
+            if not sel or not items:
+                messagebox.showinfo("提示", "请先在右侧选择题号")
+                return
+            it = items[sel[0]]
+            if messagebox.askyesno("跳转确认",
+                                   f"确定跳转到第 {it.get('num')} 题吗？\n\n{str(it.get('stem', ''))[:60]}"):
+                self._jump_to_qid(it.get("id", ""))
+                win.destroy()
+
+        tv.bind("<<TreeviewSelect>>", on_tree)
+        lb.bind("<Double-Button-1>", do_jump)
+        btns = tk.Frame(main, bg="#f5f7fa")
+        btns.pack(fill=tk.X, pady=(8, 0))
+        tk.Button(btns, text="➡ 跳转到选中题目", command=do_jump, bg=COLOR_BLUE,
+                  fg="white", cursor="hand2", padx=14, pady=5,
+                  font=("Microsoft YaHei", 10)).pack(side=tk.LEFT)
+        tk.Button(btns, text="关闭", command=win.destroy, padx=14, pady=5,
+                  font=("Microsoft YaHei", 10)).pack(side=tk.RIGHT)
+        # 默认展开第一个大区
+        first = tv.get_children()
+        if first:
+            tv.item(first[0], open=True)
+            tv.selection_set(first[0])
+            on_tree()
+
+    def _jump_to_qid(self, qid):
+        """跳转到指定 id 的题（自动切到顺序板块）"""
+        if self.mode != "顺序":
+            self.set_mode("顺序")
+        idx = next((i for i, it in enumerate(self.queue) if it.get("id") == qid), None)
+        if idx is None:
+            return
+        self._save_answer()
+        self.idx = idx
+        self.show_question()
 
     # ---------- 重置 ----------
     def reset_progress(self):
         """清除记忆：3 次确认 + 5 秒冷静期"""
         if not messagebox.askyesno("重置进度（1/3）",
-                                   "确定要清除全部作答记录与看答案记录吗？\n（此操作不可恢复！）"):
+                                   "确定要清除全部作答记录与看答案记录吗？\n（收藏会保留，此操作不可恢复！）"):
             return
         if not messagebox.askyesno("重置进度（2/3）",
-                                   "再次确认：将清空所有作答内容与看答案记录！"):
+                                   "再次确认：将清空所有作答内容与看答案记录！（收藏保留）"):
             return
         if not self._confirm_cool_down():
             return
         self._stop_exam_timer()
+        favs = self._favs()               # 收藏不随重置清除
         self.exam = {}
         self.progress = {}
+        if favs:
+            self.progress["_favs"] = favs
         self.queue = []
         self.idx = 0
         self.mode = "顺序"
@@ -1055,7 +1259,9 @@ class App:
                    if str(self.progress.get(it.get("id", ""), {}).get("wrote", "")).strip())
         revealed = sum(1 for it in self.bank
                        if self.progress.get(it.get("id", ""), {}).get("revealed"))
-        self.stat_label.config(text=f"已看答案 {revealed}/{total} · 已作答 {done}/{total}")
+        fav_n = len(self._favs())
+        self.stat_label.config(
+            text=f"已看答案 {revealed}/{total} · 已作答 {done}/{total} · ⭐收藏 {fav_n}")
 
     def _save_progress(self):
         try:

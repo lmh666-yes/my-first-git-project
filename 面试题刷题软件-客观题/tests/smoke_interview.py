@@ -111,6 +111,18 @@ app.set_mode("错题")
 root.update()
 wrong_ids = {it["id"] for it in app.queue}
 check("multi-72" in wrong_ids, f"错题本收录答错题（{len(wrong_ids)} 题）")
+# 6b. 新规则：顺序答对不清除错题；底部有错题考试入口
+check(any("错题考试" in t for _, t in app.nav_btns), "底部有「错题考试」按钮")
+app.set_mode("顺序")
+app.queue = [m]
+app.idx = 0
+app.show_question()
+app.choice_var.set("BC")
+app.check()
+root.update()
+check(app.progress["multi-72"].get("in_wrong") is True, "顺序答对不清除错题（新规则）")
+check(app.progress["multi-72"].get("life", 0) >= 1,
+      f"错题寿命记录（life={app.progress['multi-72'].get('life')}）")
 
 # 7. 考试：覆盖全部题目 + 多选判分（用打乱后答案）
 #    环形算法保证连续若干场必覆盖全部题：轮数 = ceil(可抽题目数/20) + 3 富余

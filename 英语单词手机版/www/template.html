@@ -128,7 +128,35 @@ var LS_KEY="enword_v1";
 function load(){ try{ return JSON.parse(localStorage.getItem(LS_KEY)||"{}"); }catch(e){ return {}; } }
 function save(){ try{ localStorage.setItem(LS_KEY, JSON.stringify(progress)); }catch(e){} }
 var progress=load();
-function rec(id){ if(!progress[id]) progress[id]={ok:null,wrong_count:0}; return progress[id]; }
+function rec(id){ if(!progress[id]) progress[id]={ok:null,wrong_count:0}; var r=progress[id];
+  if(r.in_wrong===undefined){ r.in_wrong=(r.ok===false); r.life=r.in_wrong?1:0; } return r; }
+/* 只读访问：不存在返回空对象，不往进度里塞空记录 */
+function recGet(id){ var r=progress[id]; if(!r||typeof r!=="object") return {};
+  if(r.in_wrong===undefined){ r.in_wrong=(r.ok===false); r.life=r.in_wrong?1:0; } return r; }
+function migrateProgress(){ var ch=false;
+  for(var id in progress){ var r=progress[id];
+    if(!r||typeof r!=="object"||id.charAt(0)==="_") continue;
+    if(r.in_wrong===undefined){ r.in_wrong=(r.ok===false); r.life=r.in_wrong?1:0; ch=true; }
+    if(r.wrong_count===undefined){ r.wrong_count=0; ch=true; }
+    if(!r.in_wrong && r.life){ r.life=0; ch=true; }
+  }
+  if(ch) save(); }
+migrateProgress();
+/* ---------- 错词寿命机制 ----------
+   答错（任何模块）：累计次数+1，入错词本（寿命初始 1）；次数达 3/5/7/9 或 >10 时寿命+1。
+   只有「错词考试」答对才寿命 -1，归零后移除；顺序/普通考试答对不影响错词状态。 */
+function bumpWrong(r){ r.wrong_count=(r.wrong_count||0)+1; var wc=r.wrong_count;
+  if(!r.in_wrong){ r.in_wrong=true; r.life=1; }
+  if(wc===3||wc===5||wc===7||wc===9||wc>10) r.life=(r.life||1)+1; }
+function lifeDec(r){ if(!r.in_wrong) return false;
+  r.life=Math.max(0,(r.life||1)-1);
+  if(r.life<=0){ r.in_wrong=false; return true; }
+  return false; }
+/* ctx: seq=顺序/错词重做等非考试，exam=普通考试，wexam=错词考试 */
+function record(id, ok, ctx){ var r=rec(id); r.ok=ok;
+  var cleared=false;
+  if(!ok) bumpWrong(r); else if(ctx==="wexam") cleared=lifeDec(r);
+  save(); return cleared; }
 
 /* ============ 词库工具 ============ */
 function byId(id){ for(var i=0;i<BANK.length;i++){ if(BANK[i].id===id) return BANK[i]; } return null; }
@@ -203,7 +231,8 @@ function stat(){
     if(r && r.ok!==null && r.ok!==undefined){ done++; if(r.ok===true) right++; else wrong++; }
   }
   var rate=done?Math.round(right/done*100):0;
-  $("#stat").textContent="已做 "+done+"/"+BANK.length+" · 正确率 "+rate+"% · 错词 "+wrong;
+  var wq=BANK.filter(function(x){ return recGet(x.id).in_wrong; }).length;
+  $("#stat").textContent="已做 "+done+"/"+BANK.length+" · 正确率 "+rate+"% · 错词 "+wq;
 }
 
 /* ============ 模式切换 ============ */
@@ -222,8 +251,8 @@ function setMode(m){
     idx=(seqSavedIdx===null)?resumeIndex():seqSavedIdx;
     idx=Math.max(0,Math.min(idx,Math.max(0,queue.length-1)));
   }else{      /* 错词 */
-    queue=BANK.filter(function(x){ var r=progress[x.id]; return r && r.ok===false; });
-    if(!queue.length){ msg("错词本","太棒了，当前没有错词！"); mode="顺序"; queue=BANK.slice(); idx=0;
+    queue=BANK.filter(function(x){ return recGet(x.id).in_wrong; });
+    if(!queue.length){ msg("错词本","太棒了，当前没有错词！\n\n（错词需在「错词考试」中答对、寿命归零后才会移除）"); mode="顺序"; queue=BANK.slice(); idx=0;
       forEachNode(document.querySelectorAll("#tabs button"), function(b){ toggleCls(b,"active",b.dataset.mode==="顺序"); });
     } else idx=0;
   }
@@ -285,10 +314,22 @@ function renderQ(){
     o.appendChild(d);
     d.style.animation="staggerIn .3s ease "+(i*0.06)+"s both";
   });
-  footerBtns([["◀ 上一题","#1a5276",function(){nav(-1)}],
-              ["跳过 ▶","#7f8c8d",function(){nav(1)}],
-              ["🔁 换一批","#8e44ad",renderQ],
-              ["🗑 重置","#c62828",resetProgress]]);
+  footerBtns((mode==="错词")
+    ? [["◀ 上一题","#1a5276",function(){nav(-1)}],
+       ["跳过 ▶","#7f8c8d",function(){nav(1)}],
+       ["📝 错词考试","#d35400",startWrongExam],
+       ["🔁 换一批","#8e44ad",renderQ],
+       ["🗑 重置","#c62828",resetProgress]]
+    : [["◀ 上一题","#1a5276",function(){nav(-1)}],
+       ["跳过 ▶","#7f8c8d",function(){nav(1)}],
+       ["🔁 换一批","#8e44ad",renderQ],
+       ["🗑 重置","#c62828",resetProgress]]);
+  if(mode==="错词"){
+    var rr=recGet(it.id);
+    if(rr.in_wrong) showFb("📕 错词寿命 "+rr.life+"（在「错词考试」中答对 -1，归零后移除）"+
+                           (rr.wrong_count?("\n🔁 累计答错 "+rr.wrong_count+" 次"):"")+
+                           "\n\n📚 错词共 "+BANK.filter(function(x){return recGet(x.id).in_wrong;}).length+" 个，点下方「📝 错词考试」抽题练习。");
+  }
   progress._last=idx; save();
   $("#main").scrollTop=0;
   stat();
@@ -307,16 +348,20 @@ function pickOption(el, cn, it){
   });
   var r=rec(it.id);
   if(right){
-    r.ok=true; save(); stat();
+    record(it.id, true, mode==="错词"?"wrong":"seq");
+    stat();
     var extra="";
-    if(r.wrong_count) extra="\n（该词累计答错 "+r.wrong_count+" 次，现已掌握）";
+    if(r.wrong_count) extra="\n（该词累计答错 "+r.wrong_count+" 次）";
+    if(r.in_wrong) extra+="\n📕 仍在错词本：寿命 "+r.life+"（只有「错词考试」答对才 -1）";
     showFb("<span class='tag-ok'>✅ 回答正确！</span>\n<span class='k'>"+it.en+"</span> —— "+it.cn+extra);
     toast("✅ 正确");
     setTimeout(function(){ if(answered && mode!=="错词") nav(1); }, 1100);
   }else{
-    r.ok=false; r.wrong_count=(r.wrong_count||0)+1; save(); stat();
+    record(it.id, false, mode==="错词"?"wrong":"seq");
+    stat();
     showFb("<span class='tag-no'>❌ 答错了，已加入错词本</span>\n<span class='k'>"+it.en+"</span> —— "+it.cn+
-           "\n你选的是："+cn+(r.wrong_count>1?("\n（该词累计答错 "+r.wrong_count+" 次）"):""));
+           "\n你选的是："+cn+(r.wrong_count>1?("\n（该词累计答错 "+r.wrong_count+" 次）"):"")+
+           "\n📕 错词寿命 "+r.life+"（在「错词考试」中答对 -1，归零后移除）");
     toast("❌ 已加入错词本");
   }
 }
@@ -327,9 +372,10 @@ function nav(d){
   idx=ni; renderQ();
 }
 
-/* ============ 考试（20 题填空听写） ============ */
-var EXAM_NUM=20, EXAM_SCORE=5;
+/* ============ 考试（普通：20 题填空听写；错词考试：≤10 题选中文） ============ */
+var EXAM_NUM=20, EXAM_SCORE=5, WEXAM_NUM=10;
 var exam=null, examUsed=0, examTimer=null, examChecked=false;
+function examTitle(){ return (exam&&exam.kind==="wrong")?"错词考试":"模拟考试"; }
 
 function examIds(){ return BANK.map(function(x){ return x.id; }); }
 function pickPlanned(ids, orderKey, curKey, n){
@@ -375,19 +421,35 @@ function renderExamReady(){
     "· 点「确认答案」后立刻对照：释义一致即算对（多义项答出任一义项即可）\n"+
     "· 「改变…的位置」这类带省略号的释义：输入「改变…的位置」「改变什么的位置」「改变...的位置」都算对\n"+
     "· 答错的词自动进入「错词」板块\n"+
+    "· 错词清除规则：只有「错词考试」答对才减少寿命，寿命归零后移除\n"+
     "· 抽词用环形算法：每场 20 题不重复，连续多场可覆盖全部 "+BANK.length+" 个单词\n"+
     "· 考试中可暂停/退出，强制关闭也会自动保存，下次打开继续\n"+
-    "· 考试中不能切换板块\n\n当前第 "+(cnt+1)+" 次考试 · 已完成 "+cnt+" 次\n\n点击下方「开始考试」按钮开始。";
-  footerBtns([["开始考试","#1a5276",startExam]]);
+    "· 考试中不能切换板块\n\n当前第 "+(cnt+1)+" 次考试 · 已完成 "+cnt+" 次\n\n点击下方「开始考试」按钮开始。（错词考试在「错词」板块进入）";
+  footerBtns([["开始考试","#1a5276",function(){ startExam(); }]]);
   stat();
 }
-function startExam(){
-  var ids=pickPlanned(examIds(), "en_order", "en_cur", EXAM_NUM);
-  exam={active:true,finished:false,paused:false,ids:ids,idx:0,answers:{},order:{}};
+function startExam(kind){
+  kind=kind||"normal";
+  var ids;
+  if(kind==="wrong"){
+    var wIds=BANK.filter(function(x){ return recGet(x.id).in_wrong; }).map(function(x){ return x.id; });
+    if(!wIds.length){ msg("错词考试","当前没有错词，先去刷词吧！"); return; }
+    ids=shuffle(wIds).slice(0,Math.min(WEXAM_NUM,wIds.length));
+  }else{
+    ids=pickPlanned(examIds(), "en_order", "en_cur", EXAM_NUM);
+  }
+  exam={active:true,finished:false,paused:false,kind:kind,ids:ids,idx:0,answers:{},order:{}};
   examUsed=0; examChecked=false;
   progress.exam=exam; save();
   startTicker(); examBarShow([["⏸ 暂停","#b9770e",pauseExam],["📮 交卷","#27ae60",askFinish]]);
   renderExamQ();
+}
+function startWrongExam(){
+  if(mode==="考试" && exam && exam.active && !exam.finished){ msg("考试中","考试进行中，不能开始新的考试！\n请先交卷或退出考试。"); return; }
+  var w=BANK.filter(function(x){ return recGet(x.id).in_wrong; });
+  if(!w.length){ msg("错词考试","当前没有错词，先去刷词吧！"); return; }
+  setMode("考试");
+  startExam("wrong");
 }
 function startTicker(){
   if(examTimer) clearInterval(examTimer);
@@ -395,17 +457,48 @@ function startTicker(){
     if(!exam || !exam.active || exam.finished || exam.paused) return;
     examUsed++; exam.used=examUsed;
     var h=$("#head");
-    if(h && mode==="考试") h.textContent="⏱ 已用 "+fmt(examUsed)+" · 第 "+((exam.idx||0)+1)+"/"+exam.ids.length+" 题";
+    if(h && mode==="考试") h.textContent="⏱ "+examTitle()+" · 已用 "+fmt(examUsed)+" · 第 "+((exam.idx||0)+1)+"/"+exam.ids.length+" 题";
   }, 1000);
 }
 function stopTicker(){ if(examTimer){ clearInterval(examTimer); examTimer=null; } }
 function renderExamQ(){
   var it=byId(exam.ids[exam.idx]);
   if(!it){ renderResult(); return; }
+  var wrongKind=(exam.kind==="wrong");
   $("#wordcard").style.display="block"; $("#card").style.display="none"; hideFb();
   var qn=$("#qnav");
-  $("#head").textContent="⏱ 已用 "+fmt(examUsed)+" · 第 "+(exam.idx+1)+"/"+exam.ids.length+" 题";
+  $("#head").textContent="⏱ "+examTitle()+" · 已用 "+fmt(examUsed)+" · 第 "+(exam.idx+1)+"/"+exam.ids.length+" 题";
   $("#word").textContent=it.en;
+  if(wrongKind){
+    /* 错词考试：给英文选中文（4 选 1、选项随机），点选即判分，每题一次 */
+    $("#note").textContent=it.note?("全称：" + it.note):"";
+    $("#note").style.display=it.note?"block":"none";
+    $("#answerBox").style.display="none";
+    exam.order=exam.order||{};
+    var opts=exam.order[it.id];
+    if(!opts){ opts=buildOptions(it); exam.order[it.id]=opts; progress.exam=exam; save(); }
+    var a=exam.answers[it.id];
+    var o=$("#opts"); o.innerHTML="";
+    opts.forEach(function(cn,i){
+      var d=document.createElement("div"); d.className="opt"; d.textContent=cn;
+      if(a){
+        if(checkMeaning(cn, it)) d.classList.add("right");
+        else if(cn===a.ans) d.classList.add("wrong");
+      }else{
+        d.onclick=function(){ wrongExamPick(it, cn); };
+      }
+      o.appendChild(d);
+      if(!a) d.style.animation="staggerIn .3s ease "+(i*0.06)+"s both";
+    });
+    examChecked=!!a;
+    footerBtns([["◀ 上一题","#1a5276",function(){ examNav(-1) }],
+                ["下一题 ▶","#1a5276",function(){ examNext() }],
+                ["📮 交卷","#c62828",askFinish]]);
+    renderExamNav();
+    $("#main").scrollTop=0;
+    stat();
+    return;
+  }
   $("#note").textContent=it.note?("全称：" + it.note):"";
   $("#note").style.display=it.note?"block":"none";
   $("#opts").innerHTML="";
@@ -435,6 +528,21 @@ function renderExamNav(){
     q.appendChild(b);
   });
 }
+function wrongExamPick(it, cn){
+  if(!exam || !exam.active || exam.finished || exam.paused) return;
+  if(exam.answers[it.id]) return;                       /* 每题只判一次 */
+  var right=(normCn(cn)===normCn(it.cn));
+  if(!right && checkMeaning(cn, it)) right=true;
+  exam.answers[it.id]={ans:cn, correct:it.cn, ok:right};
+  var cleared=record(it.id, right, "wexam");            /* 错词考试：答对寿命-1 */
+  examChecked=true; progress.exam=exam; save();
+  renderExamQ(); renderExamNav();
+  showFb((right?"<span class='tag-ok'>✅ 回答正确！</span>":"<span class='tag-no'>❌ 回答错误</span>")+
+         "\n<span class='k'>"+it.en+"</span> —— 正确答案："+it.cn+
+         "\n你选的是："+cn+
+         (cleared?"\n🎉 错词寿命归零，已从错词本移除！":"\n📕 仍在错词本：寿命 "+recGet(it.id).life+""));
+  toast(right?"✅ 正确":"❌ 错误");
+}
 function checkExamAnswer(){
   var it=byId(exam.ids[exam.idx]);
   var inp=$("#answerInput");
@@ -443,14 +551,14 @@ function checkExamAnswer(){
   var ok=checkMeaning(user, it);
   exam.answers[it.id]={ans:user, correct:it.cn, ok:ok};
   progress.exam=exam; save();
-  var r=rec(it.id);
-  if(ok){ r.ok=true; } else { r.ok=false; r.wrong_count=(r.wrong_count||0)+1; }
-  save(); stat(); renderExamNav();
+  record(it.id, ok, "exam");
+  stat(); renderExamNav();
   examChecked=true;
   inp.disabled=true;
   showFb((ok?"<span class='tag-ok'>✅ 回答正确！</span>":"<span class='tag-no'>❌ 回答错误（已加入错词本）</span>")+
          "\n<span class='k'>"+it.en+"</span> —— 正确答案："+it.cn+
-         "\n你的答案："+user);
+         "\n你的答案："+user+
+         (ok?"":"\n📕 错词寿命 "+recGet(it.id).life+"（在「错词考试」中答对 -1）"));
   toast(ok?"✅ 正确":"❌ 错误");
 }
 function examNext(){
@@ -478,7 +586,7 @@ function showPaused(){
   $("#wordcard").style.display="none"; $("#opts").innerHTML=""; $("#answerBox").style.display="none";
   $("#qnav").style.display="none";
   $("#card").style.display="block";
-  $("#head").textContent="⏸ 考试已暂停";
+  $("#head").textContent="⏸ "+examTitle()+"已暂停";
   $("#card").textContent="考试已暂停。\n\n已用时间："+fmt(examUsed)+"\n已作答 "+
     (Object.keys(exam.answers||{}).length)+"/"+exam.ids.length+" 题\n\n点下面「继续考试」恢复答题（进度已自动保存，关掉页面也不会丢）。";
   footerBtns([["▶ 继续考试","#1a5276",resumeExam],
@@ -492,7 +600,8 @@ function askFinish(){
 function finishExam(){
   stopTicker();
   exam.finished=true; exam.paused=false; exam.left=0; exam.used=examUsed;
-  progress._exam_count=(progress._exam_count||0)+1;
+  if(exam.kind==="wrong") progress._wexam_count=(progress._wexam_count||0)+1;
+  else progress._exam_count=(progress._exam_count||0)+1;
   progress.exam=exam; save(); examBarHide(); renderResult();
 }
 function renderResult(){
@@ -506,14 +615,22 @@ function renderResult(){
     else if(a.ok) correct++; else wrong.push(x);
   });
   var score=correct*EXAM_SCORE;
+  var wrongKind=(exam.kind==="wrong");
   $("#card").style.display="block";
-  $("#head").textContent="🏁 考试结束";
-  $("#card").textContent="🏆 考试成绩："+score+" 分 / 满分 "+(qs.length*EXAM_SCORE)+" 分\n\n"+
-    "✅ 答对 "+correct+" 题 · ❌ 答错 "+wrong.length+" 题 · ⭕ 未答 "+un+" 题\n"+
-    "⏱ 用时 "+fmt(examUsed)+"\n\n"+
-    ((un===0 && wrong.length===0) ? "全部答对，太棒了！"
-      : (wrong.length ? "下滑查看错题号，点击可逐题回顾；错词已自动进入「错词」板块。"
+  $("#head").textContent="🏁 "+examTitle()+"结束";
+  var tailTxt;
+  if(wrongKind){
+    var clearedN=qs.filter(function(x){ return ans[x.id] && ans[x.id].ok && !recGet(x.id).in_wrong; }).length;
+    var leftN=BANK.filter(function(x){ return recGet(x.id).in_wrong; }).length;
+    tailTxt="🎉 本次清除 "+clearedN+" 个错词（寿命归零）；答对寿命 -1，答错寿命不变。\n📕 剩余错词："+leftN+" 个";
+  }else{
+    tailTxt=((un===0 && wrong.length===0) ? "全部答对，太棒了！"
+      : (wrong.length ? "下滑查看错题号，点击可逐题回顾；错词已自动进入「错词」板块（需在错词考试中答对才能移除）。"
                       : "本次没有答错的词，但还有题目未作答。"));
+  }
+  $("#card").textContent="🏆 "+examTitle()+"成绩："+score+" 分 / 满分 "+(qs.length*EXAM_SCORE)+" 分\n\n"+
+    "✅ 答对 "+correct+" 题 · ❌ 答错 "+wrong.length+" 题 · ⭕ 未答 "+un+" 题\n"+
+    "⏱ 用时 "+fmt(examUsed)+"\n\n"+tailTxt;
   var o=$("#opts"); o.innerHTML="";
   var d=document.createElement("div");
   d.className="opt ok";
@@ -538,9 +655,13 @@ function renderResult(){
   tb.textContent="📋 逐题回顾全部 "+qs.length+" 题";
   tb.onclick=function(){ reviewOne(exam.ids[0]); };
   allWrap.appendChild(tb); o.appendChild(allWrap);
-  footerBtns([["🔄 重新考试","#b9770e",renderExamReady],
-              ["⬅ 返回顺序","#1a5276",function(){ exam=null; delete progress.exam; save(); setMode("顺序"); }],
-              ["🗑 重置","#c62828",resetProgress]]);
+  footerBtns(wrongKind
+    ? [["🔄 再考一次错词","#b9770e",function(){ startExam("wrong"); }],
+       ["⬅ 返回错词列表","#1a5276",function(){ exam=null; delete progress.exam; save(); setMode("错词"); }],
+       ["🗑 重置","#c62828",resetProgress]]
+    : [["🔄 重新考试","#b9770e",renderExamReady],
+       ["⬅ 返回顺序","#1a5276",function(){ exam=null; delete progress.exam; save(); setMode("顺序"); }],
+       ["🗑 重置","#c62828",resetProgress]]);
   stat();
 }
 var reviewIdx=0;
