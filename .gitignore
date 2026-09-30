@@ -8,8 +8,10 @@ __pycache__/
 C刷题软件/progress.json
 面试题刷题软件-客观题/progress.json
 面试题刷题软件-主观题/progress.json
+面试题刷题软件-大题/progress.json
 面试题刷题软件-客观题/progress.json.testbak.*
 面试题刷题软件-主观题/progress.json.testbak.*
+面试题刷题软件-大题/progress.json.testbak.*
 
 # 测试脚本生成的运行日志
 *.run.txt
