@@ -45,11 +45,11 @@ root.update()
 
 # ---- 1. 数据完整性 ----
 bank = app.bank
-ok("题库292题", len(bank) == 292, f"({len(bank)})")
+ok("题库312题", len(bank) == 312, f"({len(bank)})")
 kind = {}
 for it in bank:
     kind[it["kind"]] = kind.get(it["kind"], 0) + 1
-ok("题型分布", kind == {"choice": 250, "multi": 5, "judge": 35, "qa": 2}, str(kind))
+ok("题型分布", kind == {"choice": 270, "multi": 5, "judge": 35, "qa": 2}, str(kind))
 miss = [it["id"] for it in bank if not it.get("stem") or not it.get("answer")]
 ok("无空题干/空答案", not miss, str(miss[:3]))
 JOK = {"对", "错", "√", "×", "T", "F", "TRUE", "FALSE"}
