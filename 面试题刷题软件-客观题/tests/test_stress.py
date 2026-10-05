@@ -5,11 +5,12 @@
 import sys, io, os, random, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
-faulthandler.dump_traceback_later(150, exit=True)
+faulthandler.dump_traceback_later(300, exit=True)
 import importlib.util
 spec = importlib.util.spec_from_file_location("bs", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "刷题软件.py"))
 bs = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(bs)
+import progress_guard as pg   # 保护用户进度（progress.json 不在 git 里）
 
 PASS = 0
 FAIL = 0

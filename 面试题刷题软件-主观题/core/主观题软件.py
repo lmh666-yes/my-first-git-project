@@ -739,7 +739,10 @@ class App:
         widget.insert("1.0", str(text))
         try:
             widget.update_idletasks()
-            raw = int(widget.count("1.0", "end-1c", "displaylines")[0])
+            if len(widget.get("1.0", "end-1c")) > 6000:
+                raw = max_h + 1   # 超长文本必超行数上限：跳过昂贵的 displaylines 计算（Tk 对万字文本极慢）
+            else:
+                raw = int(widget.count("1.0", "end-1c", "displaylines")[0])
         except Exception:
             raw = str(text).count("\n") + 1
         if not isinstance(raw, int) or raw <= 0:

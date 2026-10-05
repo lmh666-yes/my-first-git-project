@@ -1067,7 +1067,10 @@ class App:
         self._stem_after = None
         try:
             self.stem.update_idletasks()
-            raw = int(self.stem.count("1.0", "end-1c", "displaylines")[0])
+            if len(self.stem.get("1.0", "end-1c")) > 6000:
+                raw = 15      # 超长文本必超 14 行：跳过昂贵的 displaylines 计算（Tk 对万字文本极慢）
+            else:
+                raw = int(self.stem.count("1.0", "end-1c", "displaylines")[0])
         except Exception:
             raw = str(getattr(self, "_stem_text", "")).count("\n") + 1
         if not isinstance(raw, int) or raw <= 0:

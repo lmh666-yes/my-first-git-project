@@ -40,7 +40,7 @@ main{flex:1;overflow-y:auto;padding:14px;display:flex;flex-direction:column;gap:
 #myans{width:100%;min-height:120px;border:none;border-radius:0 0 10px 10px;padding:10px 12px;font-size:14px;font-family:inherit;line-height:1.7;background:#fffdf5;resize:vertical;outline:none;box-shadow:0 2px 10px rgba(0,0,0,.06);transition:box-shadow .2s}
 #myans:focus{box-shadow:0 0 0 2px #aed6f1,0 2px 10px rgba(0,0,0,.08)}
 #myans:disabled{background:#f4f6f7;color:#666}
-/* 参考答案区 */
+/* 答案与解析区 */
 #ansBox{display:none;background:#fff;border-radius:12px;padding:12px 14px;font-size:13px;line-height:1.75;box-shadow:0 2px 10px rgba(0,0,0,.06);animation:fadeSlide .3s ease;white-space:pre-wrap;word-break:break-word}
 #ansBox .h-ans{color:#1a7f37;font-weight:bold}
 #ansBox .h-exp{color:#8e44ad;font-weight:bold;margin-top:8px}
@@ -75,6 +75,7 @@ footer button:active{transform:scale(.95);filter:brightness(.92)}
   </header>
   <div class="tabs" id="tabs">
     <button data-mode="顺序" class="active">顺序练习</button>
+    <button data-mode="热点">🔥 热点</button>
     <button data-mode="收藏">收藏</button>
     <button data-mode="考试">模拟考试</button>
   </div>
@@ -185,11 +186,13 @@ function favList(){
   var f=progress._favs; if(!Array.isArray(f)) return [];
   return f.map(byId).filter(function(x){ return !!x; });
 }
+function hotList(){ return BANK.filter(function(x){ return !!x.hot; }); }
 function isFav(id){ var f=progress._favs; return Array.isArray(f) && f.indexOf(id)>=0; }
 function setMode(m){
   if(mode==="考试" && exam && exam.active && !exam.finished){ msg("考试中","考试进行中，不能切换到其他板块！"); return; }
   if(mode==="顺序" && m!=="顺序") seqSavedIdx=idx;      // 离开顺序板块：记住当前位置
   if(m==="收藏" && !favList().length){ msg("收藏","还没有收藏题目。\n在「顺序练习」里点「⭐ 收藏」即可收藏。"); return; }
+  if(m==="热点" && !hotList().length){ msg("热点","当前题库没有热点标记（可用最新版重新生成 index.html）。"); return; }
   stopExamTimer(); mode=m;
   forEachNode(document.querySelectorAll("#tabs button"), function(b){ toggleCls(b,"active",b.dataset.mode===m); });
   if(m==="考试"){ enterExamBoard(); return; }
@@ -197,8 +200,10 @@ function setMode(m){
   if(m==="顺序"){
     queue=BANK.slice();
     idx = (seqSavedIdx===null) ? resumeIndex() : seqSavedIdx;
-  }else{                        /* 收藏 */
+  }else if(m==="收藏"){
     queue=favList(); idx=0;
+  }else{                        /* 热点 */
+    queue=hotList(); idx=0;
   }
   idx=Math.min(idx, queue.length-1);
   renderQ();
@@ -208,7 +213,7 @@ function setMode(m){
 function renderQ(){
   const it=queue[idx];
   if(!it){ $("#head").textContent="暂无题目"; return; }
-  $("#head").textContent="[主观题 "+it.num+"]  "+(idx+1)+"/"+queue.length+((mode==="收藏")?" · ⭐收藏":"");
+  $("#head").textContent="[主观题 "+it.num+"]  "+(idx+1)+"/"+queue.length+((mode==="收藏")?" · ⭐收藏":(mode==="热点"?" · 🔥热点":""));
   $("#stem").textContent=it.stem||"";
   renderImgs(it);
   revealed=false;
@@ -269,9 +274,13 @@ function showAnsBox(show, it){
   const ab=$("#ansBox");
   if(!show){ ab.style.display="none"; ab.innerHTML=""; return; }
   ab.innerHTML="";
-  const h1=document.createElement("div"); h1.className="h-ans"; h1.textContent="✅ 参考答案"; ab.appendChild(h1);
+  if(it.analysis){
+    const h0=document.createElement("div"); h0.className="h-ans"; h0.textContent="📖 题目解析"; ab.appendChild(h0);
+    const a0=document.createElement("div"); a0.textContent=it.analysis; ab.appendChild(a0);
+  }
+  const h1=document.createElement("div"); h1.className="h-ans"; h1.textContent="✅ 标准答案"; ab.appendChild(h1);
   const a=document.createElement("div"); a.textContent=(it.answer||"（无）"); ab.appendChild(a);
-  const h2=document.createElement("div"); h2.className="h-exp"; h2.textContent="🎯 得分点"; ab.appendChild(h2);
+  const h2=document.createElement("div"); h2.className="h-exp"; h2.textContent="📝 自评要点"; ab.appendChild(h2);
   const e=document.createElement("div"); e.textContent=(it.explain||"（无）"); ab.appendChild(e);
   ab.style.display="block";
 }
@@ -309,7 +318,7 @@ function renderExamReady(){
   const cnt=progress._exam_count||0;
   const rounds=Math.max(1, Math.ceil(BANK.length/EXAM_NUM));
   $("#head").textContent="📝 模拟考试 · 第 "+(cnt+1)+" 次考试";
-  $("#stem").textContent="考试说明：\n\n· 共 "+EXAM_NUM+" 题（从 "+BANK.length+" 题主观题库中计划式抽取），限时 "+EXAM_MIN+" 分钟\n· 打字作答，自动保存；考试中可随时修改\n· 主观题不打分：交卷后逐题对照参考答案与得分点自评\n· 当前第 "+(cnt+1)+" 次考试 · 已累计完成 "+cnt+" 次 · 环形抽题：同一场不重复，连续 "+rounds+" 场必覆盖全部题目\n· 考试中可暂停 / 退出；强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块\n\n点击「▶ 开始考试」按钮开始。";
+  $("#stem").textContent="考试说明：\n\n· 共 "+EXAM_NUM+" 题（从 "+BANK.length+" 题主观题库中计划式抽取），限时 "+EXAM_MIN+" 分钟\n· 打字作答，自动保存；考试中可随时修改\n· 主观题不打分：交卷后逐题对照标准答案与自评要点自评\n· 当前第 "+(cnt+1)+" 次考试 · 已累计完成 "+cnt+" 次 · 环形抽题：同一场不重复，连续 "+rounds+" 场必覆盖全部题目\n· 考试中可暂停 / 退出；强制关闭自动保存，下次打开继续\n· 考试中不能切换到其他板块\n\n点击「▶ 开始考试」按钮开始。";
   $("#imgs").innerHTML="";
   showAnsBox(false);
   setAnsEnabled(false, "📖 我的作答");
@@ -439,7 +448,7 @@ function renderResult(){
   const answered=qs.filter(isAnswered);
   const un=qs.length-answered.length;
   $("#head").textContent="🏁 考试结束";
-  $("#stem").textContent="📋 考试完成：已作答 "+answered.length+"/"+qs.length+" 题 · 未作答 "+un+" 题\n\n主观题不打分——点击下方题号逐题回顾：\n对照参考答案与得分点，自我评估掌握程度。";
+  $("#stem").textContent="📋 考试完成：已作答 "+answered.length+"/"+qs.length+" 题 · 未作答 "+un+" 题\n\n主观题不打分——点击下方题号逐题回顾：\n对照标准答案与自评要点，自我评估掌握程度。";
   $("#imgs").innerHTML="";
   showAnsBox(false);
   setAnsEnabled(false, "📖 我的作答");
@@ -493,7 +502,8 @@ function stat(){
   const done=BANK.filter(function(x){return isAnswered(x)}).length;
   const rev=BANK.filter(function(x){return (progress[x.id]||{}).revealed}).length;
   const fav=favList().length;
-  $("#stat").textContent="已看答案 "+rev+"/"+total+" · 已作答 "+done+"/"+total+" · ⭐"+fav;
+  const hot=hotList().length;
+  $("#stat").textContent="已看答案 "+rev+"/"+total+" · 已作答 "+done+"/"+total+" · ⭐"+fav+" · 🔥"+hot;
 }
 function footerBtns(btns){
   const f=$("#footer"); f.innerHTML="";

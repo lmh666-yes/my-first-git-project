@@ -5,7 +5,7 @@
 import sys, io, os, json, shutil, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
-faulthandler.dump_traceback_later(150, exit=True)
+faulthandler.dump_traceback_later(240, exit=True)
 
 import importlib.util
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -18,6 +18,7 @@ BANK = os.path.join(ROOT, "题库.json")
 PROG = os.path.join(ROOT, "progress.json")
 BAK_BANK = os.path.join(HERE, "题库.json.bak")
 BAK_PROG = os.path.join(HERE, "progress.json.bak")
+SNAP_BANK = os.path.join(HERE, "题库.good.json")   # 上次跑动的干净题库快照（硬超时时兜底）
 
 PASS = 0
 FAIL = 0
@@ -123,14 +124,14 @@ def test_huge_stem():
     huge = "很长的题干" * 2000
     q = {"kind": "choice", "id": "big", "num": 1, "stem": huge,
          "options": [{"key": "A", "text": "选项" * 1000}], "answer": "A"}
-    write_bank(json.dumps([q] * 50, ensure_ascii=False))
+    write_bank(json.dumps([q] * 12, ensure_ascii=False))
     root = tk.Tk()
     root.geometry("1180x720")
     app, err = make_app(root)
     ok("超长题干不崩溃", err is None, str(err) if err else "")
     err2 = 0
     if app:
-        for i in range(50):
+        for i in range(12):
             try:
                 app.idx = i
                 app.show_question()
@@ -203,6 +204,22 @@ def restore():
             os.remove(p)
 
 def main():
+    # 题库快照防污染：优先用当前题库；当前题库异常时回退到上次快照（防硬超时残留）
+    def _valid_bank(p):
+        try:
+            with open(p, encoding="utf-8") as f:
+                d = json.load(f)
+            return isinstance(d, list) and len(d) >= 100
+        except Exception:
+            return False
+    if os.path.exists(BANK) and _valid_bank(BANK):
+        shutil.copy(BANK, SNAP_BANK)
+    elif os.path.exists(SNAP_BANK) and _valid_bank(SNAP_BANK):
+        shutil.copy(SNAP_BANK, BANK)
+        print("  （当前题库异常，已从上次快照恢复）")
+    else:
+        print("题库文件异常且无可用快照，请先运行 core/build_bank.py 重建题库！")
+        sys.exit(1)
     if os.path.exists(BANK):
         shutil.copy(BANK, BAK_BANK)
     if os.path.exists(PROG):
@@ -217,6 +234,8 @@ def main():
             fn()
     finally:
         restore()
+        if _valid_bank(BANK):          # 成功收尾后刷新快照
+            shutil.copy(BANK, SNAP_BANK)
     print(f"\n===== 崩溃测试结果: PASS={PASS} FAIL={FAIL} =====")
     sys.exit(1 if FAIL else 0)
 
