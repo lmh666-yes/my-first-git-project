@@ -38,7 +38,7 @@ root.update()
 nums = {it["num"] for it in app.bank}
 
 # 1. 题库
-check(len(app.bank) == 131, f"题库 131 题（实际 {len(app.bank)}）（03_编程画图大题.md）")
+check(len(app.bank) == 141, f"题库 141 题（实际 {len(app.bank)}）（03_编程画图大题.md，含查漏补缺补充题 506~515）")
 kinds = {it["kind"] for it in app.bank}
 check(kinds == {"bigq"}, f"全部为编程/画图大题（{kinds}）")
 check(all(it.get("answer") for it in app.bank), "每题均有参考答案")
