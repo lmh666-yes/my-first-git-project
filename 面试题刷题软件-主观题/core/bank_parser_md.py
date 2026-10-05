@@ -1,10 +1,12 @@
 # -*- coding: utf-8 -*-
 """解析面试题库 md 文件（如 02_主观题.md）为 题库.json 数据。
 
-格式：**N.** 题干 → **参考答案：**（或 **参考译文：**）→ **得分点：** → ---
-每题生成 {id, kind:'subjective', num, stem, options:[], answer, explain}：
-  · answer  = 参考答案（或参考译文）
-  · explain = 得分点
+格式：**N.** 题干 → **题目解析：** → **标准答案：**（兼容旧 **参考答案：**/**参考译文：**）→ **得分点：** → ---
+每题生成 {id, kind:'subjective', num, stem, options:[], answer, explain, analysis, hot}：
+  · analysis = 题目解析（新格式；旧格式为空）
+  · answer   = 标准答案（新格式；旧格式取 参考答案/参考译文）
+  · explain  = 得分点
+  · hot      = 热点题标记（**热点：** 是）
 """
 import os
 import re
@@ -81,11 +83,13 @@ def _sync_images(md_path, bank, problems):
 
 
 def _parse_block(b):
-    """解析单个主观题块 → (item, warn)"""
+    """解析单个主观题块 → (item, warn)
+    字段：**题目解析：** / **标准答案：**（兼容旧 **参考答案：**/**参考译文：**）/ **得分点：** / **热点：**"""
     num, first = b["num"], b["first"]
     stem_lines = [first] if first.strip() else []
-    ans_lines, exp_lines, srcs = [], [], []
-    phase = "stem"          # stem → ans → explain → done
+    ana_lines, ans_lines, exp_lines, srcs = [], [], [], []
+    hot = False
+    phase = "stem"          # stem → analysis → ans → explain
     in_code = False
     for ln in b["lines"]:
         if ln.strip().startswith("```"):
@@ -94,6 +98,8 @@ def _parse_block(b):
         if in_code:
             if phase == "stem":
                 stem_lines.append(ln)
+            elif phase == "analysis":
+                ana_lines.append(ln)
             elif phase == "ans":
                 ans_lines.append(ln)
             elif phase == "explain":
@@ -105,39 +111,45 @@ def _parse_block(b):
         if m_src:
             srcs += _extract_src_links(m_src.group(1))
             break
-        if phase in ("stem", "ans"):
-            m_a = re.match(r"^\*\*参考(答案|译文)：\*\*\s*(.*)$", ln)
-            if m_a:
-                if m_a.group(2).strip():
-                    ans_lines.append(m_a.group(2))
+        m_f = re.match(r"^\*\*(题目解析|标准答案|参考答案|参考译文|得分点|热点)：\*\*\s*(.*)$", ln)
+        if m_f:
+            key, val = m_f.group(1), m_f.group(2).strip()
+            if key == "题目解析":
+                phase = "analysis"
+                if val:
+                    ana_lines.append(val)
+            elif key in ("标准答案", "参考答案", "参考译文"):
                 phase = "ans"
-                continue
-        if phase == "ans":
-            m_e = re.match(r"^\*\*得分点：\*\*\s*(.*)$", ln)
-            if m_e:
-                if m_e.group(1).strip():
-                    exp_lines.append(m_e.group(1))
+                if val:
+                    ans_lines.append(val)
+            elif key == "得分点":
                 phase = "explain"
-                continue
-            if ln.strip():
+                if val:
+                    exp_lines.append(val)
+            elif key == "热点":
+                hot = val not in ("", "否", "无")
+            continue
+        if ln.strip():
+            if phase == "analysis":
+                ana_lines.append(ln)
+            elif phase == "ans":
                 ans_lines.append(ln)
-            continue
-        if phase == "explain":
-            if ln.strip():
+            elif phase == "explain":
                 exp_lines.append(ln)
-            continue
-        if phase == "stem" and ln.strip():
-            stem_lines.append(ln)
+            else:
+                stem_lines.append(ln)
 
     item = {"id": f"sub-{num}", "kind": "subjective", "kind_name": "主观题",
             "num": num, "stem": _norm_text("\n".join(stem_lines)),
             "options": [], "answer": _norm_text("\n".join(ans_lines)),
             "explain": _norm_text("\n".join(exp_lines)),
+            "analysis": _norm_text("\n".join(ana_lines)),
+            "hot": hot,
             "sec": b.get("sec", ""), "sec_group": b.get("sec_group", ""),
             "imgs": [os.path.basename(p) for p in srcs]}
     warn = ""
     if not item["answer"]:
-        warn = f"#{num} 缺参考答案"
+        warn = f"#{num} 缺标准答案"
     elif not item["explain"]:
         warn = f"#{num} 缺得分点"
     return item, warn
