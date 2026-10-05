@@ -25,7 +25,7 @@
 
 | 文件 | 位置 | 大小 |
 |---|---|---|
-| **`面试刷题-大题.apk`** | 本文件夹根目录 | 约 5.8 MB |
+| **`面试刷题-大题.apk`** | 本文件夹根目录 | 约 5.6 MB |
 | `app-debug.apk`（同一版本） | `android\app\build\outputs\apk\debug\` | 同上 |
 
 **安装步骤**：把 `面试刷题-大题.apk` 发到手机 → 手机上点击该文件 → 按提示**允许“安装未知来源应用”** → 桌面出现「面试刷题·大题」图标，点击即可使用（需 Android 7.0 及以上）。
@@ -75,8 +75,8 @@ python build_web.py
 - 根目录 `面试刷题-大题.html`（友好名）
 - `android/app/src/main/assets/index.html`（APK 版）
 
-> 配图在生成时自动做**手机端自适应**（最大宽度 1000、灰度 PNG），本库配图 6.9 MB → 2.5 MB，内嵌页面 9.8 MB → 3.7 MB（APK 从 10.5 MB 降到 5.8 MB）；桌面版仍使用 `imgs/` 原图。
-> 重建 APK 一定要用 **`构建APK.bat`** 或 `gradlew clean assembleDebug`（增量构建会在 APK 里留下旧版页面的空洞，体积虚高）；最近一次已 clean 重建并验证（5.8 MB）。
+> 配图在生成时自动做**手机端自适应**（最大宽度 1000、灰度 PNG），本库配图 6.9 MB → 2.5 MB，内嵌页面 9.8 MB → 3.7 MB（APK 从 10.5 MB 降到 5.6 MB）；桌面版仍使用 `imgs/` 原图。
+> 重建 APK 一定要用 **`构建APK.bat`** 或 `gradlew clean assembleDebug`（增量构建会在 APK 里留下旧版页面的空洞，体积虚高）；最近一次已 clean 重建并验证（5.6 MB，含热点板块与三段答案）。
 > 重新生成后，再用 **`构建APK.bat`**（或 Android Studio）重新 Build APK 即可。
 
 ## 文件结构

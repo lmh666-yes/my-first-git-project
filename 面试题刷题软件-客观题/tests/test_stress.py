@@ -5,7 +5,7 @@
 import sys, io, os, random, faulthandler, tkinter as tk
 sys.stdout = io.TextIOWrapper(sys.stdout.buffer, encoding="utf-8", line_buffering=True)
 sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core"))
-faulthandler.dump_traceback_later(300, exit=True)
+faulthandler.dump_traceback_later(600, exit=True)   # 本测试重负载（5000翻题/50场考试/3000随机），保留较长余量
 import importlib.util
 spec = importlib.util.spec_from_file_location("bs", os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "core", "刷题软件.py"))
 bs = importlib.util.module_from_spec(spec)
