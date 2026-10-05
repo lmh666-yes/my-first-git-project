@@ -1,11 +1,11 @@
 # -*- coding: utf-8 -*-
 """面试题刷题软件 · 大题
 题库来源：题库.json（由 build_bank.py 从 题库/03_编程画图大题.md 生成，131 题）
-功能：顺序浏览 + 打字作答（自动保存）+ 查看参考答案与得分点 + 跳题 +
+功能：顺序浏览 + 打字作答（自动保存）+ 查看题目解析与标准答案（含自评要点）+ 跳题 +
       收藏题目（收藏区取消收藏，带确认）+ 分区跳转（按试卷分区、确认后跳转）+
       模拟考试（10 题 / 40 分钟，计划式抽题、暂停/退出/恢复、交卷后逐题回顾）+ 重置进度。
-特点：不打分、无错题库；考试交卷后对照参考答案与得分点自评。
-版本：1.0.0（独立大题题库软件：编程 / 画图大题 131 题）"""
+特点：不打分、无错题库；考试交卷后对照标准答案与自评要点自评。
+版本：3.0.0-dev（查看答案拆分为「题目解析 + 标准答案 + 自评要点」；内容逐批重构中）"""
 import sys, io, os, json, random, time
 import tkinter as tk
 from tkinter import ttk, messagebox
@@ -292,7 +292,7 @@ class App:
         self.fb_frame.grid_rowconfigure(1, weight=1)
         self.fb_head = tk.Label(
             self.fb_frame,
-            text="👀 参考答案 / 得分点（拖动上方分隔条可放大此区域，内容可滚动）",
+            text="👀 题目解析 / 标准答案（拖动上方分隔条可放大此区域，内容可滚动）",
             bg="#f4ecf7", fg=COLOR_PURPLE, font=("Microsoft YaHei", 9, "bold"),
             anchor="w", padx=8, pady=3)
         self.fb_head.grid(row=0, column=0, columnspan=2, sticky="ew")
@@ -302,6 +302,8 @@ class App:
                           state=tk.DISABLED, yscrollcommand=self._fb_on_scroll)
         self.fb_sb.config(command=self.fb.yview)
         self.fb.grid(row=1, column=0, sticky="nsew", padx=(6, 0), pady=(0, 6))
+        self.fb.tag_configure("h_ana", foreground=COLOR_BLUE,
+                              font=("Microsoft YaHei", 11, "bold"))
         self.fb.tag_configure("h_ans", foreground=COLOR_OK,
                               font=("Microsoft YaHei", 11, "bold"))
         self.fb.tag_configure("h_exp", foreground=COLOR_PURPLE,
@@ -464,7 +466,7 @@ class App:
             "考试说明：\n\n"
             f"· 共 {EXAM_NUM} 题（从 {len(self.bank)} 题大题题库中环形抽取，同一场不重复），限时 {EXAM_MIN} 分钟\n"
             "· 打字作答，自动保存；考试中可随时修改\n"
-            "· 大题不打分：交卷后逐题对照参考答案与得分点自评\n"
+            "· 大题不打分：交卷后逐题对照标准答案与自评要点自评\n"
             f"· 当前第 {cnt + 1} 次考试 · 已累计完成 {cnt} 次 · 连续 {rounds} 场必覆盖全部题目\n"
             "· 考试中可暂停 / 退出；强制关闭程序会自动保存，下次打开继续\n"
             "· 考试中不能切换到其他板块\n\n"
@@ -631,7 +633,7 @@ class App:
         self._set_readonly(self.stem,
             f"📋 考试完成：已作答 {len(answered)}/{total} 题 · 未作答 {un} 题\n\n"
             "大题不打分——点击下方题号逐题回顾：\n"
-            "对照参考答案与得分点，自我评估掌握程度。", 4, 16)
+            "对照标准答案与自评要点，自我评估掌握程度。", 4, 16)
         self._render_images({})
         self._clear_fb()
         self._set_ans_enabled(False)
@@ -661,7 +663,7 @@ class App:
             b.pack(side=tk.LEFT, padx=4)
 
     def _exam_review(self, qid):
-        """回顾：题干 + 我的作答 + 参考答案 + 得分点"""
+        """回顾：题干 + 我的作答 + 题目解析 + 标准答案 + 自评要点"""
         it = self._by_id(qid)
         if not it:
             return
@@ -673,14 +675,9 @@ class App:
         self.ans_text.delete("1.0", "end")
         wrote = self.progress.get(qid, {}).get("wrote", "")
         self.ans_text.insert("1.0", wrote or "（本题未作答）")
-        ans = it.get("answer") or "（无）"
-        exp = it.get("explain") or "（无）"
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
-        self.fb.insert(tk.END, "✅ 参考答案\n", ("h_ans",))
-        self.fb.insert(tk.END, ans + "\n\n")
-        self.fb.insert(tk.END, "🎯 得分点\n", ("h_exp",))
-        self.fb.insert(tk.END, exp)
+        self._render_answer_sections(it)
         self.fb.config(state=tk.DISABLED)
         try:
             self.fb.yview_moveto(0)
@@ -889,7 +886,7 @@ class App:
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
         if placeholder:
-            self.fb.insert(tk.END, "（点「查看参考答案」显示答案与得分点）")
+            self.fb.insert(tk.END, "（点「查看参考答案」显示题目解析与标准答案）")
         self.fb.config(state=tk.DISABLED)
         try:
             self.fb.yview_moveto(0)
@@ -903,6 +900,20 @@ class App:
         return None
 
     # ---------- 查看答案（顺序模式） ----------
+    def _render_answer_sections(self, it):
+        """把「题目解析 → 标准答案 → 自评要点」写入反馈区（查看答案 / 考试回顾共用）"""
+        ana = (it.get("analysis") or "").strip()
+        ans = it.get("answer") or "（无）"
+        exp = (it.get("explain") or "").strip()
+        if ana:
+            self.fb.insert(tk.END, "📖 题目解析\n", ("h_ana",))
+            self.fb.insert(tk.END, ana + "\n\n")
+        self.fb.insert(tk.END, "✅ 标准答案\n", ("h_ans",))
+        self.fb.insert(tk.END, ans + "\n")
+        if exp:
+            self.fb.insert(tk.END, "\n📝 自评要点\n", ("h_exp",))
+            self.fb.insert(tk.END, exp)
+
     def toggle_reveal(self):
         it = self._cur()
         if it is None or self.mode == "考试":
@@ -914,14 +925,9 @@ class App:
                 self.reveal_btn.config(text="👀 查看参考答案")
             return
         self._save_answer()
-        ans = it.get("answer") or "（无）"
-        exp = it.get("explain") or "（无）"
         self.fb.config(state=tk.NORMAL)
         self.fb.delete("1.0", "end")
-        self.fb.insert(tk.END, "✅ 参考答案\n", ("h_ans",))
-        self.fb.insert(tk.END, ans + "\n\n")
-        self.fb.insert(tk.END, "🎯 得分点\n", ("h_exp",))
-        self.fb.insert(tk.END, exp)
+        self._render_answer_sections(it)
         self.fb.config(state=tk.DISABLED)
         try:
             self.fb.yview_moveto(0)          # 新答案从顶部开始看
