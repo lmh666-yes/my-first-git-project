@@ -1103,31 +1103,57 @@ class App:
         win = tk.Toplevel(self.root)
         win.title("📂 分区跳转")
         win.transient(self.root)
+        win.minsize(860, 560)
         try:
             sw, sh = win.winfo_screenwidth(), win.winfo_screenheight()
-            w, h = max(760, min(980, int(sw * 0.62))), max(520, min(820, int(sh * 0.72)))
+            w = max(860, min(1080, int(sw * 0.62)))
+            h = max(560, min(840, int(sh * 0.76)))
+            w, h = min(w, sw - 20), min(h, sh - 60)
             win.geometry(f"{w}x{h}+{max(0, (sw - w) // 2)}+{max(0, (sh - h) // 2 - 30)}")
         except Exception:
             pass
         main = tk.Frame(win, bg="#f5f7fa")
         main.pack(fill=tk.BOTH, expand=True, padx=8, pady=8)
-        tk.Label(main, text="① 选择分区（左侧） → ② 点选题目（右侧） → 确认后跳转",
+        main.grid_rowconfigure(1, weight=1)
+        main.grid_columnconfigure(0, weight=1)
+        tk.Label(main, text="① 选分区 → ② 选题目 → ③ 跳转（双击题目也可）",
                  bg="#f5f7fa", fg=COLOR_BLUE, font=("Microsoft YaHei", 10, "bold"),
-                 anchor="w").pack(fill=tk.X, pady=(0, 6))
-        body = tk.Frame(main, bg="#f5f7fa")
-        body.pack(fill=tk.BOTH, expand=True)
-        lf = tk.Frame(body, bg="#f5f7fa")
-        lf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        rf = tk.Frame(body, bg="#f5f7fa")
-        rf.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(8, 0))
-        tk.Label(lf, text="分区目录", bg="#eaf2f8", fg=COLOR_BLUE,
-                 font=("Microsoft YaHei", 10, "bold")).pack(fill=tk.X)
-        tk.Label(rf, text="题目清单", bg="#eaf2f8", fg=COLOR_BLUE,
-                 font=("Microsoft YaHei", 10, "bold")).pack(fill=tk.X)
-        tv = ttk.Treeview(lf, show="tree", selectmode="browse")
-        tv.pack(fill=tk.BOTH, expand=True)
-        lb = tk.Listbox(rf, font=("Microsoft YaHei", 10), activestyle="dotbox")
-        lb.pack(fill=tk.BOTH, expand=True)
+                 anchor="w").grid(row=0, column=0, sticky="ew", pady=(0, 6))
+        paned = ttk.PanedWindow(main, orient=tk.HORIZONTAL)
+        paned.grid(row=1, column=0, sticky="nsew")
+        lf = tk.Frame(paned, bg="#f5f7fa")
+        rf = tk.Frame(paned, bg="#f5f7fa")
+        paned.add(lf, weight=4)
+        paned.add(rf, weight=6)
+
+        def _pane(box, title):
+            tk.Label(box, text=title, bg="#eaf2f8", fg=COLOR_BLUE,
+                     font=("Microsoft YaHei", 10, "bold")).pack(fill=tk.X)
+            wrap = tk.Frame(box, bg="#f5f7fa")
+            wrap.pack(fill=tk.BOTH, expand=True)
+            wrap.grid_rowconfigure(0, weight=1)
+            wrap.grid_columnconfigure(0, weight=1)
+            return wrap
+
+        tvw = _pane(lf, "分区目录")
+        tv = ttk.Treeview(tvw, show="tree", selectmode="browse")
+        tv_sb = ttk.Scrollbar(tvw, orient="vertical", command=tv.yview)
+        tv.configure(yscrollcommand=tv_sb.set)
+        tv.grid(row=0, column=0, sticky="nsew")
+        tv_sb.grid(row=0, column=1, sticky="ns")
+        lbw = _pane(rf, "题目清单")
+        lb = tk.Listbox(lbw, font=("Microsoft YaHei", 10), activestyle="dotbox")
+        lb_sb = ttk.Scrollbar(lbw, orient="vertical", command=lb.yview)
+        lb.configure(yscrollcommand=lb_sb.set)
+        lb.grid(row=0, column=0, sticky="nsew")
+        lb_sb.grid(row=0, column=1, sticky="ns")
+
+        def _init_sash():
+            try:
+                paned.sashpos(0, max(320, int(win.winfo_width() * 0.42)))
+            except Exception:
+                pass
+        win.after(60, _init_sash)
         # 建树：大区 → 分区
         groups = {}
         for g, s in sections:
@@ -1179,7 +1205,7 @@ class App:
         tv.bind("<<TreeviewSelect>>", on_tree)
         lb.bind("<Double-Button-1>", do_jump)
         btns = tk.Frame(main, bg="#f5f7fa")
-        btns.pack(fill=tk.X, pady=(8, 0))
+        btns.grid(row=2, column=0, sticky="ew", pady=(8, 0))
         tk.Button(btns, text="➡ 跳转到选中题目", command=do_jump, bg=COLOR_BLUE,
                   fg="white", cursor="hand2", padx=14, pady=5,
                   font=("Microsoft YaHei", 10)).pack(side=tk.LEFT)
