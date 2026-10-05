@@ -9,7 +9,7 @@
   "answer": "结论：右边所有可能的排法就是 1~N 的全部合法出栈序列（把 Y 型铁轨的竖直段看作栈），总数为卡特兰数 C(2N,N)/(N+1)；例如 N=3 时共 5 种（123、132、213、231、321，312 非法）。\n枚举与判定的完整程序如下（读入 N，按字典序输出全部合法序列）：\n#include <stdio.h>\n\n#define MAXN 12\n\nstatic int n;\nstatic int seq[MAXN];              /* 当前排列 */\nstatic int used[MAXN];             /* 车厢是否已用 */\n\n/* 判定 out 是否为 1..n 的合法出栈序列：栈模拟 */\nstatic int valid(const int *out)\n{\n    int stack[MAXN], top = 0;\n    int next = 1;                  /* 下一个待入栈车厢号 */\n    for (int i = 0; i < n; i++)\n    {\n        while (next <= out[i])     /* 把 <= 当前输出值的车厢都压栈 */\n            stack[top++] = next++;\n        if (top > 0 && stack[top - 1] == out[i])\n            top--;                 /* 栈顶正是当前车厢：弹出 */\n        else\n            return 0;              /* 否则该序列非法 */\n    }\n    return 1;\n}\n\n/* 回溯枚举 1..n 的所有排列，合法的按字典序输出 */\nstatic void dfs(int pos)\n{\n    if (pos == n)\n    {\n        if (valid(seq))\n        {\n            for (int i = 0; i < n; i++)\n                printf(\"%d%c\", seq[i], i + 1 == n ? '\\n' : ' ');\n        }\n        return;\n    }\n    for (int v = 1; v <= n; v++)\n    {\n        if (!used[v])\n        {\n            used[v] = 1;\n            seq[pos] = v;\n            dfs(pos + 1);\n            used[v] = 0;\n        }\n    }\n}\n\nint main(void)\n{\n    printf(\"Input N (1-8): \");\n    if (scanf(\"%d\", &n) != 1 || n < 1 || n > 8)\n        return 1;\n    dfs(0);\n    return 0;\n}\n要点：①合法性判定用栈模拟、O(N)；②全排列枚举 O(N!) 仅适合小 N，面试口答时可只给判定方法；③总数可用卡特兰数公式自检。",
   "explain": "①识别为栈（后进先出）排列问题并说明映射关系 ②给出全部合法序列（或明确枚举/合法性判定方法）③总数 = 卡特兰数 C(2N,N)/(N+1) ④加分：给出 312 模式判定或 N=3 的列举示例。",
   "analysis": "Y 型铁轨的竖直段就是一个'栈'：左轨按 1~N 顺序把车厢推入（push），右轨相当于弹栈（pop），'不允许走重复路径'保证每节车厢恰好经过一次，因此右边能形成的排列就是 1~N 的全部合法出栈序列。判定两条路：①栈模拟——按候选序列扫描，需要时把下一节车厢压栈、栈顶等于当前待输出车厢就弹出，能完整走完即合法；②模式判定——合法出栈序列不出现 312 模式（先输出较大的 b、再输出较小的 a、最后输出介于两者之间的 c，即 a<c<b）。合法序列总数是卡特兰数 C(2N,N)/(N+1)：N=1~4 依次为 1、2、5、14 种；N=3 时 6 个排列中只有 312 非法、合法 5 种（123、132、213、231、321）。易错点：把'列出全部排法'答成'某一种固定排法'；漏掉 312 模式或总数公式。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题1",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": [
@@ -43,7 +43,7 @@
   "answer": "(b) 工作原理：输入 A 先经 RC 低通滤波去除窄毛刺、减缓跳变边沿；再经两级串联 D 触发器在同一时钟下连续打两拍——第一级把输入与本地时钟同步（可能出现亚稳态），第二级提供完整时钟周期让亚稳态衰减、防止其传播，输入须稳定两个时钟周期才被确认，因此输出去除了毛刺、只在信号稳定后随时钟沿翻转。(c) 占空比通常不相同：①被滤除的窄脉冲改变了高低电平的持续时间；②所有跳变被对齐到时钟沿并延迟约两个时钟周期、脉宽按整拍变化（可能多落一拍）；只有输入无毛刺、电平足够宽且与时钟同步时，两者占空比才基本相同。",
   "explain": "①RC 滤波去毛刺 + 两级触发器同步/打拍（防亚稳态）②占空比结论：通常不同，原因＝窄脉冲被滤除、跳变对齐时钟沿使脉宽改变 ③加分：输入干净且同步时两者基本相同。",
   "analysis": "电路由两段组成：RC 低通网络先对输入 A 做'去毛刺'滤波——窄干扰脉冲被电容吸收、跳变边沿被减缓；两级串联 D 触发器再用同一时钟对滤波结果连续打两拍——第一级把异步输入与本地时钟对齐（可能进入亚稳态），第二级给足一个时钟周期让亚稳态衰减到确定值、抑制其向下游传播；同时要求输入电平至少稳定两个时钟周期才被确认，窄毛刺被彻底滤除，输出 C 的跳变被对齐到时钟沿。占空比分情况：只要 A 上有被滤除的窄脉冲、或 A 的跳变未对齐时钟沿（被吞或按整拍变化），C 的脉宽就与 A 不同、占空比随之变化；只有 A 无毛刺、各电平远宽于一个时钟周期且与时钟同步时，C 与 A 的占空比才基本相同。易错点：把'同步纠正'答成'分频'；误认为占空比一定不变。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题1",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": [
@@ -61,7 +61,7 @@
   "answer": "核心写法：`*(volatile int *)0x67a9 = 0xaa66;`\n完整函数示例：\n/* 把绝对地址 0x67a9 处的整型变量赋值为 0xaa66（假定该地址合法可写） */\nvoid set_value_at_fixed_addr(void)\n{\n    *(volatile int *)0x67a9 = 0xaa66;   /* 强制转换为指针后解引用赋值 */\n}\n说明：①volatile 必不可少——该地址为硬件寄存器/内存映射位置，禁止编译器优化或缓存该访问；②访问宽度由指针类型决定，需要 32 位访问时可写 `*(volatile uint32_t *)0x67a9 = 0xaa66u;`；③驱动中地址应来自数据手册或 ioremap，并用 writel 等访问器函数；④未对齐访问在 ARM 上可能触发 HardFault。",
   "explain": "①`*(int *)0x67a9 = 0xaa66;` 强制转换+解引用正确 ②加分：加 volatile、说明访问宽度/对齐/访问器函数等注意事项。",
   "analysis": "要点是把地址当指针用：'常数→指针'必须显式强制类型转换，再解引用赋值；因为该地址是硬件寄存器/内存映射地址，内容随时可能变化、写入也不能被编译器优化掉或缓存，所以指针必须加 volatile。附带约束：①地址要按数据手册确认在有效可写范围（本题假定 0x67a9 合法）；②访问宽度由指针类型决定，用 uint32_t 指针更严谨地表达 32 位访问；③未对齐访问在 ARM 上可能触发 HardFault；④内核/裸机中通常用 writel(val, addr) 等访问器函数而不是裸指针。易错点：忘记强制转换（常数不能直接解引用）；漏掉 volatile；不说明访问宽度/对齐问题。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题4（C/C++/Java 笔试题）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": []
@@ -76,7 +76,7 @@
   "answer": "判断两个数的大小（以取较大值为例）：\n#define MAX(a, b) ((a) > (b) ? (a) : (b))   /* 取较大值；取小值把 > 改为 < */\n要点：①整个表达式加外层括号、每个参数加括号，保证任何上下文展开后优先级正确；②宏参数会被求值两次，`MAX(i++, j)` 这类带副作用的实参会出错；③工程上更安全的写法：`static inline int max(int a, int b) { return a > b ? a : b; }`（C++ 用 std::max）。",
   "explain": "①三目表达式形式正确 ②整体括号+参数括号完整（缺括号要扣分）③加分：指出副作用/优先级陷阱或给出 static inline 替代。 ④合并说明：同第 489 题（附加面试题·面试题4 解答题第 1 题 + 欣诺通信面试题第 5 题），重复题已合并。",
   "analysis": "宏是文本替换，坑全在优先级与副作用：①外层必须整体加括号，否则 `2*MAX(1,3)` 展开成 `2*1>3?1:3` 被优先级打乱；②每个参数都要加括号，否则 `MAX(1 & 3, 0)` 中 `&` 优先级低于 `>` 会算错；③参数在宏体中出现两次，`MAX(i++, j)` 会多次自增、结果错误，带副作用的实参不能用宏；④更安全的替代是 `static inline int max(int a, int b) { return a > b ? a : b; }`（C++ 可用模板或 std::max）。易错点：漏括号（本题最大扣分点）；把宏当函数理解。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-1（期末考试卷）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": []
@@ -91,7 +91,7 @@
   "answer": "两个函数如下：\nstatic int a;\n\nvoid set_bit3(void)   { a |= (1 << 3); }    /* 置位：与 1 相或，其它位不变 */\nvoid clear_bit3(void) { a &= ~(1 << 3); }   /* 清位：与取反后的掩码相与，其它位不变 */\n说明：`1 << 3` = 0x08 只选中 bit3；置位靠'或'、清位靠'与掩码取反'，均保持其它位不变。a 是文件内 static 变量、函数直接访问；若 a 可能被中断同时修改，读—改—写需加临界区保护；掩码写 `1u << 3` 更规范。",
   "explain": "①置位 `|= (1 << 3)` ②清位 `&= ~(1 << 3)` ③保持其它位不变的原理 ④加分：临界区/无符号掩码细节。",
   "analysis": "位操作原理都基于'掩码只选中 bit3'：`1 << 3` 生成 0x08（只有 bit3 为 1）。置位用'或'——0|x=x、1|x=1，其它位与 0 相或保持不变、bit3 变 1；清位用'与上掩码取反'——`~(1 << 3)` = 0xF7，其它位与 1 相与不变、bit3 与 0 相与变 0。a 是文件内 static 变量、两个函数直接访问；若 a 可能被中断服务程序同时修改，读—改—写过程要加临界区保护；掩码写 `1u << 3` 更规范（避免有符号移位歧义）。易错点：清位写成 `a &= (1 << 3)`（其它位会被全清零）；置位/清位运算符用错。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-1（期末考试卷）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": []
@@ -270,7 +270,7 @@
   "answer": "填空：① `|| head->next==NULL`　② `p != NULL`　③ `head = p`　④ `temp2->next = temp1`。\n补全后的完整函数（已修正题面 Struct 笔误）：\nstruct node *reverse(struct node *head)\n{\n    struct node *p, *temp1, *temp2;\n    if (head == NULL || head->next == NULL)\n        return head;                 /* ① 空链表或单节点：直接返回 */\n    p = head->next;\n    head->next = NULL;               /* 原头成为逆置链表的尾 */\n    while (p != NULL)                /* ② 还有未处理节点 */\n    {\n        temp1 = head;                /* 保存已逆置链表的旧头 */\n        head = p;                    /* ③ 新头前移到当前节点 */\n        temp2 = p;\n        p = p->next;                 /* 先保存后继，再反转指针 */\n        temp2->next = temp1;         /* ④ 当前节点接到旧头之前（头插） */\n    }\n    return head;\n}\n说明：头插法逆置，时间复杂度 O(n)、空间复杂度 O(1)。",
   "explain": "①每空 1 分：|| head->next==NULL / p != NULL / head = p / temp2->next = temp1 ②加分：说明头插法思路或 O(n)/O(1) 复杂度。",
   "analysis": "思路是'头插法逆置'：先处理空链表/单节点（直接返回），再把原头节点 head 的 next 断开——它成为逆置链表的尾；随后每轮把当前节点 p 从原链摘下、接到已逆置链表的头部：保存旧头（temp1=head）、头指针前移（head=p）、保存当前节点并先走下一步（temp2=p; p=p->next）、最后反转指针（temp2->next=temp1）。循环到 p==NULL 结束，返回 head 即新链头。复杂度 O(n) 时间、O(1) 空间。题面 Struct 应为 struct（笔误，完整答案中已修正）。易错点：③④两空顺序（必须先保存后继再反转指针，否则丢链）；②空写错（写成 p->next 会在尾节点越界）。",
-  "hot": false,
+  "hot": true,
   "sec": "2024面试题-4（多份试卷合集）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": []
@@ -417,7 +417,7 @@
   "answer": "三段操作（放进完整函数中展示）：\n/* 设 a 为 8 位可读写变量；三段操作分别独立 */\nvoid a_bit3_ops(void)\n{\n    a |=  (1 << 3);     /* ① 置位：bit3 变 1，其余位不变 */\n    a &= ~(1 << 3);     /* ② 清位：bit3 变 0，其余位不变 */\n    a ^=  (1 << 3);     /* ③ 取反：bit3 翻转，其余位不变 */\n}\n掩码 `1<<3` = 0x08 只含 bit3，三种复合赋值都不影响其它位。对硬件寄存器连续操作时注意原子性（中断场景先关中断或用位带/BSRR）。",
   "explain": "①三句正确 ②加分：说明掩码只影响 bit3 或原子性提示。",
   "analysis": "三种操作都基于掩码 `1 << 3`（=0x08，只含 bit3）：置位用'或'——x|0=x、x|1=1，其它位与 0 相或保持、bit3 变 1；清位用'与取反掩码'——`~(1 << 3)` = 0xF7，其它位与 1 相与保持、bit3 与 0 相与变 0；取反用'异或'——x^0=x、x^1=~x，其它位异或 0 保持、bit3 翻转。对硬件寄存器做读-改-写时要注意原子性（中断也操作同一寄存器会丢更新）：先关中断，或用位带/BSRR 等硬件置位复位机制。易错点：清位写成 `a &= (1 << 3)`（直接清掉其它位）；三种运算符记混。",
-  "hot": false,
+  "hot": true,
   "sec": "2026面试题-4（软件工程师笔试题目）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": []
@@ -432,7 +432,7 @@
   "answer": "填空：① `*list = l->next;`　② `r->next = l->next;`。\n按题意补全的完整函数（list 为头指针的指针，r 为前驱、摘链头时传入 NULL）：\nvoid remove_node(struct node * *list, struct node *r, struct node *l)\n{\n    if (r == NULL) {\n        *list = l->next;      /* ① 摘的是链头：头指针后移 */\n    } else {\n        r->next = l->next;    /* ② 前驱直接指向 l 的后继，跳过 l */\n    }\n    free(l);                  /* 摘链后如不再使用该节点，释放以免泄漏 */\n}\n说明：r 初始为 NULL 表示 l 是链头；否则 r 是 l 的前驱。",
   "explain": "①第一空 *list = l->next ②第二空 r->next = l->next ③加分：说明 r/l 的语义或补充 free(l)。",
   "analysis": "摘链分两种情况——摘的是链头（r==NULL）还是中间/尾部节点：前者要改'指向链头的指针'，所以第一空 `*list = l->next;`（list 是头指针的指针，这样写才能改变调用者看到的链头）；后者改前驱的 next：`r->next = l->next;`，让前驱直接跳过 l。摘链完成后节点 l 若不再使用，一般还要 free(l)（内存池实现则归还池），否则内存泄漏。易错点：链头分支写成 `list = l->next;`（只改局部副本、调用者的链头没变）；忘记 free。",
-  "hot": false,
+  "hot": true,
   "sec": "2026面试题-12（嵌入式软件工程师考试试题）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": []
@@ -481,7 +481,7 @@
   "answer": "两级级联的电源开关：①MCU_IO 输出高 → 经限流电阻驱动 Q2（低侧 NPN/NMOS）导通 → 把 Q1（高侧 PNP/PMOS）的基极/栅极经 R2 拉低 → Q1 导通 → VCC 经 Q1 送到 VOUT（供电接通）；②MCU_IO 输出低 → Q2 截止 → R1 把 Q1 的基极/栅极上拉到高电平 → Q1 关断 → VOUT 断电。元件作用：R1 保证默认关断；R2 为偏置/限流；R4 与 C1 构成 MCU_IO 的 RC 滤波（抑制瞬态）；D1+EN1 支路可作为使能或强制关断。要点：Q1 高侧、Q2 低侧，低侧管把 MCU 的逻辑电平'翻译'成高侧管的驱动电平。",
   "explain": "①两级级联的导通/关断逻辑（含 Q1 高侧、Q2 低侧）②R/C 作用 ③加分：说明 PMOS 高侧开关的栅极电平与上拉/体二极管关系。",
   "analysis": "这是两级级联的电源开关，解决'MCU 无法直接驱动高侧管'的问题：MCU_IO 经限流/RC（R4、C1）驱动 Q2（低侧 NPN/NMOS）导通或截止；Q2 导通时把 Q1（高侧 PNP/PMOS）的基极/栅极电位经 R2 拉低，Q1 随之导通，VCC 经 Q1 送到 VOUT；Q2 截止时 R1 把 Q1 的基极/栅极上拉到高电平，Q1 关断、VOUT 断电。即：MCU_IO 高 → Q2 通 → Q1 通 → 输出上电，MCU_IO 低 → 输出断电，整体是'正逻辑'控制。元件作用：R1 默认关断上拉、R2 偏置/限流、R4+C1 构成 MCU_IO 的 RC 滤波（抑制瞬态/干扰）；D1+EN1 支路可作为使能或强制关断。易错点：把 Q1/Q2 高低侧说反；漏掉 R1 的默认关断作用。",
-  "hot": false,
+  "hot": true,
   "sec": "2026面试题-15（硬件工程师试题）",
   "sec_group": "一、从主观题题库迁出的题目（33 题，编号沿用 02_主观题.md）",
   "imgs": [
@@ -575,7 +575,7 @@
   "answer": "各小题答案如下（(b) 为说明，(a)(c)(d) 为代码）：\n/* (a) 定义寄存器变量：宏 + volatile 指针，32 位访问 */\n#define REG_SER_TO_PAR (*(volatile unsigned int *)0x20000000)\n\n/* (b) 读取效果说明：读取不会被挂起——内存映射寄存器读回的是引脚状态（Bit0/1/2 为\n       SerIn/SerClk/ParClk 的回读或上次写入值），不属于异常中断源；\n       具体读回值视硬件实现，可能为最后写入值 */\n\n/* (c) 设置 bit1、保持其余位不变：按位或 */\nvoid set_bit1(void) { REG_SER_TO_PAR |= (1 << 1); }\n\n/* (d) 按 HwValue 置位/清位，其余位不变；先校验位号范围 */\nvoid SysSetBit(unsigned char HwBit, unsigned char HwValue) {\n    if (HwBit > 15) return;                    /* 位号超出有效范围：拒绝 */\n    if (HwValue)\n        REG_SER_TO_PAR |=  (1 << HwBit);       /* 置位 */\n    else\n        REG_SER_TO_PAR &= ~(1 << HwBit);       /* 清位 */\n}\n要点：volatile 保证每次访问真实执行；|=(1<<n) 置位、&=~(1<<n) 清位均不影响其它位；写前校验位号防越界。",
   "explain": "volatile 指针宏、位操作、参数校验。",
   "analysis": "(a) 内存映射寄存器用宏封装为 (*(volatile unsigned int *)0x20000000)：volatile 告诉编译器该对象可能被硬件随时改变，每次访问都必须真实读写、不得优化或缓存；unsigned int 决定访问宽度为 32 位。(b) 读内存映射寄存器不会被挂起：它是外设寄存器、不是中断源，读回的是引脚回读值或上次写入值（视硬件实现）。(c) 置 bit1 用或运算 |= (1 << 1)，只把 bit1 置 1、其余位不变。(d) SysSetBit 按 HwValue 选择置位/清位，写前先校验位号不大于 15 防移位越界；清位用 &= ~(1 << HwBit)。复杂度 O(1)。易错点：漏 volatile；移位用有符号 1（工程常写 1u）；忘记参数校验；把读寄存器说成「会挂起」。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题1",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -590,7 +590,7 @@
   "answer": "答案（按两级 D 触发器 + RC 延时推导，可照此补划 B、C 点波形）：\n① B 点：输入 A 经一级 D 触发器打拍后的波形——同步到时钟沿、相对 A 延迟一个时钟周期，A 上额外的窄脉冲被压窄或移位（边沿按整拍移动）；\n② C 点：二级打拍 + RC 阈值判定后的输出——相对 B 再延迟一个时钟周期，尖峰脉冲被完全滤除，台阶之间为 RC 充电斜坡（上升/下降沿不平滑）；\n③ 画图自检：B、C 的跳变均只出现在时钟沿上，C 比 B 滞后一拍、B 比 A 滞后一拍，且窄脉冲在 C 上已消失。",
   "explain": "波形相位与滤波效果正确。",
   "analysis": "原理：输入 A 上的窄毛刺靠「两级 D 触发器同步打拍 + RC 低通滤波」来纠正。RC 网络对跳变产生充放电斜坡：窄脉冲来不及充到逻辑阈值就被吸收，所以额外脉冲被压窄或移位直至消失；两级触发器在同一时钟下连续采样：第一级可能在跳变附近采到亚稳态，第二级给足一个时钟周期让其衰减稳定，同时把波形对齐到时钟沿。画波形的要点：①所有触发器输出只可能在时钟沿跳变，B 相对 A 延迟一拍、C 相对 B 再延迟一拍（共约两拍）；②B 上被 RC 吸收的窄脉冲对应位置表现为电平不变或宽度变窄的残留；③C 为经过 RC 阈值判定的结果，尖峰被完全滤除，台阶之间是 RC 充电斜坡。延伸考点：亚稳态、建立/保持时间、同步器失效率。易错点：把 B/C 画得与 A 完全同相（漏掉逐级延迟）；忽略 RC 斜坡（把 C 画成理想方波）。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题1",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": [
@@ -637,7 +637,7 @@
   "answer": "完整函数（含重叠处理）与调用示例：\n#include <stddef.h>\n\n/* 拷贝 n 个字节；支持重叠：目标在源后方时从尾到头复制 */\nvoid *my_memcpy(void *dst, const void *src, size_t n)\n{\n    char *d = dst;\n    const char *s = src;\n    if (d > s && d < s + n) {           /* 重叠且目标在后：从尾到头 */\n        d += n;\n        s += n;\n        while (n--) *--d = *--s;\n    } else {                            /* 其它情况：从头到尾 */\n        while (n--) *d++ = *s++;\n    }\n    return dst;                         /* 返回目标首地址 */\n}\n/* 调用示例：my_memcpy(buf + 2, buf, 10); 用法与 memcpy 相同 */\n要点：重叠安全；O(n) 时间、O(1) 空间；返回 dst 支持链式调用。",
   "explain": "重叠处理（可选）+ 逐字节拷贝。 ④合并说明：同一题在多份试卷中重复出现，已合并 —— 原第 465 题（2026 年｜请编写一个内存拷贝函数，实现 C/C++ 中 memcpy 的功能。）。",
   "analysis": "内存拷贝按字节复制 n 个字节是基础；工程重点是「重叠」处理：①目标在源后面（d 落在 [s, s+n) 区间内）时从尾到头反序复制，否则前端的复制会覆盖尚未读出的源数据；②其它情况（无重叠或目标在前）从头到尾正序复制。判断条件用地址比较 d > s && d < s + n。返回 dst 以支持链式调用（与标准库 memcpy 一致）。库函数 memcpy 对重叠区间是未定义行为、memmove 才保证重叠安全——本题实现相当于自带 memmove 语义。复杂度 O(n) 时间、O(1) 空间；工程实现常按机器字长批量复制提速。易错点：重叠时方向选错；忘记返回 dst；用错类型指针（必须转成 char 逐字节）。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题2",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -669,7 +669,7 @@
   "answer": "完整程序如下（含交换优化）：\n#include <stdio.h>\n#define N 10               /* 数组大小可自行修改 */\n\nvoid bubble_sort(int num[], int n)\n{\n    int i, j, t;\n    int swapped;           /* 优化：若某轮没有交换说明已有序，可提前结束 */\n    for (i = 0; i < n - 1; i++) {              /* 控制比较轮数 */\n        swapped = 0;\n        for (j = 0; j < n - 1 - i; j++) {      /* 每轮比较次数递减（-i 因为末尾已排好） */\n            if (num[j] > num[j + 1]) {         /* 大的往后冒 → 从小到大 */\n                t = num[j + 1];\n                num[j + 1] = num[j];\n                num[j] = t;\n                swapped = 1;\n            }\n        }\n        if (!swapped) break;                   /* 已完全有序 */\n    }\n}\n\nint main(void)\n{\n    int a[N], n, i;\n    printf(\"请输入需要排序的数的个数: \\n\");\n    scanf(\"%d\", &n);\n    printf(\"请依次输入要排序的数: \\n\");\n    for (i = 0; i < n; i++) scanf(\"%d\", &a[i]);\n    bubble_sort(a, n);\n    printf(\"从小到大的排序为: \\n\");\n    for (i = 0; i < n; i++) printf(\"%d \", a[i]);\n    printf(\"\\n\");\n    return 0;\n}\n要点：①两层循环——外层控制轮数（n-1 轮），内层控制每轮比较次数（n-1-i，因每轮结束末尾 i 个元素已就位）；②相邻比较、逆序则交换，使较大元素逐步冒到末尾；③时间复杂度 O(n²)（用 swapped 优化后最好情况 O(n)），空间 O(1)，稳定排序（只在严格大于时交换）；④若要从大到小只需把大于号改成小于号；⑤数据量大时应换用 qsort/快排。",
   "explain": "①两层循环边界正确（n-1 与 n-1-i）②相邻比较交换方向正确、排序结果正确 ③加分：swapped 提前退出优化、稳定性或复杂度分析，或指出改方向只需换比较符。 ④合并说明：同一题在多份试卷中重复出现，已合并 —— 原第 422 题（2023面试题-3（软件试题）｜写一个函数，用冒泡排序法对整型数组进行升序排序。）；原第 459 题（2026 年｜编写程序：使用冒泡排序法排序数组。（同第 409 题，另见 2026面试题-11 第 4 题、2026面试题-20 第 ）；原第 469 题（2026 年｜使用 C/C++ 实现冒泡排序。（同第 409 题））；原第 477 题（2026 年｜（2026面试题-18）数组 `a={10,2,3,4,5,6,9,8,7,1}`，用熟悉的编程语言由小到大排序。）。",
   "analysis": "冒泡排序的核心思想：每轮从头相邻比较，逆序就交换，每轮至少把当前未排序部分的最大元素「冒」到末尾。①为什么外层 n-1 轮：每轮确定一个元素的最终位置，n 个元素只需 n-1 轮（最后剩的最小元素自然就位）；②为什么内层 n-1-i：经过 i 轮后末尾已有 i 个元素排好，剩下 n-i 个元素只需 n-i-1 次相邻比较；③复杂度：比较次数 (n-1)+(n-2)+…+1=n(n-1)/2，最坏/平均时间 O(n²)、空间 O(1)（原地）；④稳定性：只在严格大于时才交换，相等元素相对次序不变，是稳定排序；⑤swapped 优化：某轮一次交换都没发生说明已有序，立即结束，最好情况（本来有序）只需 1 轮 n-1 次比较、即 O(n)；⑥改成从大到小只需把大于号换成小于号。易错点：内层边界写成 n-1（num[j+1] 越界）或 n（多余比较）；n-1-i 写错；忽略 n=0/1 时循环不动自然正确。延伸：数据量大应改用 qsort/快速排序，冒泡适合教学与小规模近似有序数据。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题3",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -684,7 +684,7 @@
   "answer": "宏定义如下（配套的 get_local_time 返回时间字符串）：\n/* EPRINTF：打印「时间 [行号@文件名]: 调用表达式, 格式化内容」 */\n#define EPRINTF(func, fmt, args...) \\\n    { printf(\"%s [%d @ %s]: \" #func \", \" fmt, \\\n             get_local_time(), __LINE__, __FILE__, ##args); }\n\n/* WHEN：条件成立时打印并执行 act */\n#define WHEN(func, act) \\\n    { if (func) { printf(\"%s [%d @ %s]: \" #func \", \" #act \"\\n\", \\\n        get_local_time(), __LINE__, __FILE__); act; } }\n要点：#func 字符串化、##args 拼接可变参数（GNU 扩展，C99 为 __VA_ARGS__）、__LINE__/__FILE__ 定位；工程上宏体常改用 do { } while (0) 包裹。",
   "explain": "宏拼接（#、##）、__LINE__/__FILE__、可变参数。",
   "analysis": "两个宏考查预处理技巧：①#func 把宏参数变成字符串字面量（字符串化运算符 # 只在宏体中有效）；②args... 与 ##args 是 GNU 可变参数宏扩展（C99 标准写法为 ... 与 __VA_ARGS__）：把可变实参原样传给内部 printf，## 用于实参为空时去掉前面的逗号；③__LINE__、__FILE__ 是预定义宏，编译期展开为当前行号与源文件名；④相邻的字符串字面量会在编译期自动拼接，所以格式串由多段拼成；⑤工程上宏体建议用 do { } while (0) 包裹，避免 if/else 悬挂语句展开错误；宏无类型检查。用途：EPRINTF 统一错误/日志输出（含时间、位置、调用描述），WHEN 条件成立时打印并执行动作。易错点：# 只能对宏参数使用；忘记可变参数省略号；续行符丢失。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题4",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -699,7 +699,7 @@
   "answer": "完整程序如下：\n#include <stdio.h>\n\n/* 带函数指针成员的结构体：二元运算操作集 */\ntypedef struct {\n    int (*add)(int, int);      /* 函数指针成员：指向加法函数 */\n    int (*sub)(int, int);      /* 函数指针成员：指向减法函数 */\n} CalcOps;\n\nint add(int a, int b) { return a + b; }\nint sub(int a, int b) { return a - b; }\n\nint main(void)\n{\n    CalcOps ops = { add, sub };        /* 用函数名初始化函数指针 */\n    printf(\"%d\\n\", ops.add(3, 4));     /* 7 */\n    printf(\"%d\\n\", ops.sub(3, 4));     /* -1 */\n    return 0;\n}\n要点：函数指针成员定义要加括号；函数名即地址；ops.add(...) 与 (*ops.add)(...) 等价。",
   "explain": "结构体内函数指针 + 调用。",
   "analysis": "结构体成员可以是函数指针：定义形式为「返回类型 (*成员名)(参数类型表)」，int (*add)(int, int) 读作「add 是一个指针，指向 (int,int)->int 的函数」。初始化时直接写函数名（函数名即函数地址）；调用 ops.add(3,4) 与 (*ops.add)(3,4) 等价。用途：C 中模拟面向对象——把一组操作聚合成「操作集/接口表」，运行时按需替换实现（多态/回调/插件）；驱动框架（如 file_operations）、命令表都基于这种结构。扩展：先 typedef 函数指针类型再在结构体中使用更清晰；结构体使用前要初始化，未初始化指针调用是未定义行为。易错点：定义漏括号（int *add(int,int) 变成返回指针的函数声明）；---与 . 用错（结构体变量用点、指针用箭头）。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题4",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -714,7 +714,7 @@
   "answer": "UML 类图（可照着画）：HardDisk 1——* Partition；Partition 1——* Directory；Directory 1——* File/Directory（自关联，表示「目录包含文件与子目录」）；File 与 Directory 均继承公共基类 FsNode（继承用空心三角箭头、组合用实心菱形）。\n类代码如下（C++ 示意）：\n#include <vector>\n#include <string>\n\n/* 文件系统节点基类：统一接口多态；虚析构保证经基类指针删除安全 */\nclass FsNode {\npublic:\n    virtual ~FsNode() {}\n    virtual std::string name() const = 0;\n};\n\nclass File : public FsNode {          /* 文件：叶子节点 */\n    std::string m_name;\n    unsigned long m_size;\npublic:\n    std::string name() const override { return m_name; }\n    void setName(const std::string &n) { m_name = n; }\n};\n\nclass Directory : public FsNode {     /* 目录：容器，自关联包含子项 */\n    std::string m_name;\n    std::vector<FsNode *> m_children;\npublic:\n    std::string name() const override { return m_name; }\n    void add(FsNode *node) { m_children.push_back(node); }\n};\n\nclass Partition {                     /* 分区：拥有一个根目录 */\npublic:\n    Directory root;\n};\n\nclass HardDisk {                      /* 硬盘：拥有多个分区 */\npublic:\n    std::vector<Partition> parts;\n};\n要点：硬盘-分区-目录为组合关系；Directory 自关联包含子目录与文件；统一基类多态遍历。",
   "explain": "组合/聚合关系 + 代码结构。",
   "analysis": "UML 关系：HardDisk（硬盘）1——*（组合）Partition（分区）；Partition 1——*（组合）Directory（根目录）；Directory 自关联 parent-children（目录可含子目录与文件，一对多）；File（文件）与 Directory 都继承自公共基类 FsNode（文件系统节点），实现统一的多态接口。类代码要点：基类必须有虚析构（用 FsNode 指针删除派生对象时才能正确调用派生类析构）；组合关系用实心菱形、聚合用空心菱形，画图时要说明选择。复杂度：遍历目录树 O(n)。易错点：漏掉自关联（目录的子目录）；File/Directory 不写共同基类；忘记虚析构。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题4",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -729,7 +729,7 @@
   "answer": "核心结构（抽象交易类 + 注册表 + 服务器循环）如下：\n#include <map>\n#include <cstddef>\n\n/* 抽象交易处理类：所有交易处理器的公共接口 */\nclass Transaction {\npublic:\n    virtual ~Transaction() {}\n    virtual int parse(const char *msg, int len) = 0;    /* 解析报文 */\n    virtual int process(char *resp, int &rlen) = 0;     /* 处理并生成应答 */\n    virtual int type() const = 0;                       /* 交易码 */\n};\n\n/* 交易注册表：交易码 -> 处理类对象 */\nclass TxRegistry {\n    std::map<int, Transaction *> table;\npublic:\n    void reg(Transaction *t) { table[t->type()] = t; }\n    Transaction *find(int code) {\n        auto it = table.find(code);\n        return it == table.end() ? nullptr : it->second;   /* 未注册返回空 */\n    }\n};\n\n/* 服务器主循环（伪代码）：\n   socket recv -> 校验长度 -> 读交易码 code -> find(code)\n   -> parse(msg,len) -> process(resp,rlen) -> socket send；失败回错误码 */\n要点：多态分发 + 注册表解耦——新增交易只加子类并 reg；未注册交易码返回错误；解析前必须校验长度。",
   "explain": "多态分发 + 注册表。",
   "analysis": "交易处理模型 =「接收-分发-处理-应答」的经典架构：①服务器从 TCP 连接收报文，从报文头解析出交易码；②用注册表把交易码映射到对应交易处理对象（map 或数组）；③多态调用该对象的 parse/process，返回结果写回连接。为什么用抽象基类+虚函数：新增交易只新增子类并注册，分发代码不改（开闭原则）；表驱动分发避免巨型 switch。工程要点：报文要有长度字段做边界检查（防越界）；处理失败返回错误码；注册表通常启动时集中注册；C 语言可用函数指针表实现同样分发。复杂度：分发查找 O(log n)（map）或 O(1)（数组索引），处理时间由具体交易决定。易错点：不做边界检查直接解析；分发写成难维护的 if-else 链；忘记虚析构。",
-  "hot": false,
+  "hot": true,
   "sec": "2022面试题4",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -774,7 +774,7 @@
   "answer": "修改后的完整代码（其二：返回值方案亦可）：\n#include <stdlib.h>\n#include <string.h>\n#include <stdio.h>\n\n/* 改为二级指针：把 malloc 的地址写回调用者 */\nvoid GetMemory(char * *p, unsigned int size)\n{\n    *p = (char *)malloc(size);\n    if (*p == NULL) { /* 错误处理 */ }\n}\n\nint main(void)\n{\n    char *str = NULL;\n    GetMemory(&str, 100);          /* 传 str 的地址，函数才能修改 str */\n    if (str) {\n        strcpy(str, \"Anyka is a hi-tech company.\");\n        printf(\"%s\", str);         /* 不用 printf(str)，避免格式串问题 */\n        free(str);                 /* 释放动态内存 */\n        str = NULL;\n    }\n    return 0;\n}\n说明：值传递改成传二级指针是本题关键；配套做到 malloc 判空、printf(\"%s\")、free 释放。也可改为 char *GetMemory(unsigned int size) 返回指针的方案。",
   "explain": "二重指针 + 判空释放。",
   "analysis": "原代码的错误是「值传递」：形参 p 只是实参的副本，函数里 malloc 的结果赋给副本，调用者 str 仍为 NULL，后续 strcpy/printf 直接崩溃。修法（保持两个函数结构）：GetMemory 改为接收二级指针 char * *p，调用处传 &str，函数内 *p = malloc(...) 把分配结果写回调用者；同时补三处健壮性：①malloc 判空（失败不能用）；②printf(str) 改为 printf(\"%s\", str)（内容含 % 会被当格式串）；③用完 free(str) 防泄漏。另一等价方案是让 GetMemory 直接返回分配的指针。易错点：只改函数体不传地址（依然错）；malloc 不判空；忘记 free；返回局部数组指针（悬空）。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-2（Anyka）",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -804,7 +804,7 @@
   "answer": "两行代码（顺序不能反，先接后断）：\npTmp->next = p->next;    /* ① 先让新节点接上 p 的后继 */\np->next = pTmp;          /* ② 再让 p 指向新节点 */\n要点：不增加变量靠「先接后断」；顺序颠倒会丢失 p 的原后继链；单链表插入 O(1)。",
   "explain": "顺序正确（先接后断）。",
   "analysis": "把新节点插到 p 之后、且不增加变量，关键是顺序：①先让新节点的 next 指向 p 的后继（先接）——利用旧值；②再让 p 的 next 指向新节点（后断）。如果颠倒（先改 p->next），p 原来的后继链就丢了，无法再找到它。这利用了「写入前先利用旧值」的技巧，不需要额外临时变量。复杂度 O(1)。易错点：两句顺序写反；前提是 p 为非空节点（题干已给）。延伸：若允许增加变量，也可 q = p->next; p->next = pTmp; pTmp->next = q;。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-2（Anyka）",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -849,7 +849,7 @@
   "answer": "常用设计模式（各一句话定义）：①单例——保证一个类仅有一个实例，并提供全局访问点；②工厂方法——定义创建对象的接口，让子类决定实例化哪个类；③观察者——对象状态变化时自动通知依赖它的观察者；④策略——定义算法族并分别封装，使它们可以互相替换；⑤适配器——把不兼容的接口转换成客户期望的接口。\n单例示范（C++11 线程安全写法）：\nclass Singleton {\npublic:\n    static Singleton &getInstance() {\n        static Singleton inst;      /* C++11 起：局部静态变量初始化线程安全 */\n        return inst;\n    }\n    Singleton(const Singleton &) = delete;             /* 禁止拷贝 */\n    Singleton &operator=(const Singleton &) = delete;  /* 禁止赋值 */\nprivate:\n    Singleton() {}                                     /* 私有构造 */\n};\n要点：私有构造、静态实例、删除拷贝与赋值；C++11 起局部 static 初始化线程安全。",
   "explain": "模式列举 + 单例实现。",
   "analysis": "①单例（Singleton）：保证一个类只有一个实例并提供全局访问点——私有构造、静态方法返回唯一实例；推荐 Meyers 写法（函数内 static 局部变量，C++11 起初始化线程安全），并删除拷贝构造与赋值运算符。②工厂方法：定义创建对象的接口，让子类决定实例化哪个类。③观察者：对象状态变化时自动通知所有依赖它的观察者（发布-订阅）。④策略：定义一系列算法并分别封装，使它们可以互相替换。⑤适配器：把一个类的接口转换成客户期望的另一个接口。按创建型/结构型/行为型分类记忆。易错点：单例每次 new（不是单例）；不禁止拷贝导致能复制出第二个实例；线程安全说明（C++11 局部 static 线程安全）。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-3（软件试题）",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -864,7 +864,7 @@
   "answer": "配套类声明与四个成员函数实现（深拷贝、自赋值检查、释放旧内存）：\n#include <cstring>\n\nclass String {\npublic:\n    String(const char *str = nullptr);\n    String(const String &other);\n    ~String();\n    String &operator=(const String &rhs);\nprivate:\n    char *m_data;\n};\n\nString::String(const char *str) {\n    if (!str) {                        /* 空指针：分配 1 字节存 '\\0' */\n        m_data = new char[1];\n        m_data[0] = '\\0';\n    } else {\n        m_data = new char[strlen(str) + 1];\n        strcpy(m_data, str);\n    }\n}\nString::String(const String &other) {  /* 拷贝构造：深拷贝 */\n    m_data = new char[strlen(other.m_data) + 1];\n    strcpy(m_data, other.m_data);\n}\nString::~String() { delete [] m_data; } /* 析构：配对释放 */\n\nString &String::operator=(const String &rhs) {\n    if (this != &rhs) {                 /* 自赋值检查 */\n        delete [] m_data;               /* 释放旧内存 */\n        m_data = new char[strlen(rhs.m_data) + 1];\n        strcpy(m_data, rhs.m_data);\n    }\n    return *this;                       /* 返回引用支持连续赋值 */\n}\n要点：深拷贝防双重释放；自赋值检查；先释放再分配；返回 *this。",
   "explain": "深拷贝 + 自赋值 + 释放旧内存。",
   "analysis": "String 类四个特殊成员函数的考查点全在「资源管理」：①通用构造：判空指针（NULL 时也分配 1 字节存 '\\0'，保证对象可用）；分配 strlen+1 字节并拷贝。②拷贝构造：深拷贝——为新对象独立分配内存再复制内容（浅拷贝只复制指针，两个对象析构时双重释放）。③析构：delete[] 释放（new[]/delete[] 必须配对）。④赋值运算符：先自赋值检查（this != &rhs，否则先 delete 会把 rhs 数据销毁）；再释放旧内存、分配新内存、拷贝；返回 *this 支持连续赋值。异常安全改进（延伸）：先 new 成功再 delete 旧内存，或拷贝-交换惯用法。易错点：深/浅拷贝混用；漏自赋值判断；delete 与 delete[] 混用；返回值忘记引用。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-3（软件试题）",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -894,7 +894,7 @@
   "answer": "完整程序（哈希标记 + 双指针原地去重，O(n)）：\n#include <stdio.h>\n\n/* 原地去除重复字符：每个字符只保留第一次出现，其余删除 */\nvoid dedup(char *s)\n{\n    int seen[256] = {0};        /* 桶标记：字符是否已出现过 */\n    char *w = s;                /* 写指针 */\n    for (char *r = s; *r; r++) {/* 读指针 */\n        unsigned char c = (unsigned char)*r;\n        if (!seen[c]) {\n            seen[c] = 1;\n            *w++ = c;           /* 首次出现：写入并前移 */\n        }\n    }\n    *w = '\\0';                  /* 补上新的结尾 */\n}\n\nint main(void)\n{\n    char buf[10001];            /* 题目限长 ≤10000 */\n    printf(\"请输入字符串: \");\n    if (scanf(\"%10000s\", buf) != 1) return 1;\n    dedup(buf);\n    printf(\"%s\\n\", buf);        /* 例: abcaadc -> abcd */\n    return 0;\n}\n要点：seen[256] 标记 + 双指针原地重写；O(n) 时间、O(1) 额外空间（仅 256 桶）；结果保持首次出现的顺序。",
   "explain": "O(n) 哈希思想。",
   "analysis": "哈希去重思路：用 256 大小的标记数组（桶）记录每个字符是否出现过（字符值当索引，O(1) 查重）；再用双指针原地重写——r 指针从头读、w 指针指向下一个可写位置，遇没出现过的字符就标记并写入、w 前移；扫完后在 w 处补 '\\0'。因为去重只让字符串变短（w 永不超前于 r），在原串上覆盖写是安全的、不需要额外缓冲区。复杂度 O(n) 时间、O(256)=O(1) 额外空间。易错点：忘记补结尾 '\\0'；用 char 索引时负数问题（转成 unsigned char）；丢失「保留首次出现顺序」；大小写区分（'a' 与 'A' 是不同字符）。延伸：若要求去重后字典序最小需单调栈类解法；限长 ≤10000 说明可开 10001 的输入缓冲。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-4",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -924,7 +924,7 @@
   "answer": "伪码如下（Linux 思路，Wince 同构）：\n打开键盘设备（/dev/input/eventX 或键盘驱动句柄）\nwhile (1):\n    阻塞读取按键事件\n    if 按下事件:\n        ioctl(设备, SET_LED, ON)    // 点亮键盘灯\n        sleep(2) 或定时器 2 秒      // 延迟 2 秒\n        ioctl(设备, SET_LED, OFF)   // 关闭键盘灯\n要点：读事件区分按下/抬起；点亮后延时 2 秒再关灯；阻塞 sleep 简单场景可用，多任务下建议改用定时器/select 超时避免卡住事件循环。",
   "explain": "事件读取 + LED 控制 + 延时。",
   "analysis": "目标流程：读键盘事件→判断按下→点亮键盘灯→延时 2 秒→关灯→循环。Linux 下按键与其它输入事件统一走输入子系统（/dev/input/eventX），事件用 struct input_event 描述（type=EV_KEY、code=键码、value=1 按下/0 抬起）；键盘 LED 通过 EV_LED 事件（如 LED_KBD）或 ioctl 控制；主循环阻塞 read 拿事件，收到「按下」后点亮 LED、延时 2 秒再关闭。注意点：sleep(2) 会阻塞整个线程——简单场景可用；若还要及时响应其它事件，应改用定时器/select 超时，避免延时期间漏事件；Wince 对应使用键盘驱动事件 + 定时回调（伪码同构）。易错点：不区分按下/抬起（重复触发）；在事件回调里直接 sleep 卡住消息循环；忘记区分不同键盘设备。考点：设备打开、事件结构、LED 控制、延时方式。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-5",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -939,7 +939,7 @@
   "answer": "① 协议帧格式（稳健设计）：\n帧头（2B 固定同步字）+ 长度（数据区字节数）+ 命令/类型（1B）+ 数据（变长）+ 校验（CRC16 或和校验）+ 帧尾（可选）。\n② 空闲中断收帧解析流程（可照着画流程图）：\n① 初始化：使能 USART RX 中断/DMA 与总线空闲（IDLE）中断，准备环形缓冲区；\n② 每收到 1 字节：中断/DMA 存入环形缓冲区（只收不解析）；\n③ 总线空闲：IDLE 中断触发，取走本次一帧的全部字节（空闲标志=帧结束）；\n④ 校验：帧头是否正确→长度是否在合法范围→CRC 是否通过；\n⑤ 通过：投递解析/组包应答（在主循环或任务中完成）；\n⑥ 失败：丢弃本帧，从缓冲区数据中找下一帧头重同步。",
   "explain": "协议帧格式 + 空闲中断解析流程。",
   "analysis": "关键点：串口是字节流，没有天然的消息边界，必须自定义协议定界+校验。①帧格式：帧头（固定同步字，用来找帧起点）+ 长度（数据区字节数）+ 命令/类型 + 数据 + 校验（CRC16/和校验）+ 帧尾（可选）；长度字段让接收方知道本帧有多少字节、校验保证数据完整。②空闲中断（IDLE）判定帧边界：一帧发完后总线空闲超过一个字节传输时间，STM32 的 USART 产生 IDLE 标志/中断，此时把本次收到的字节从环形缓冲取出即得完整一帧（不消耗定时器、也不会把两帧粘在一起）。③接收流程：RX 中断（或 DMA）只管把字节塞进环形缓冲；IDLE 中断里取走整帧交给解析任务（中断里不做耗时解析）；校验帧头→长度合法性→CRC：通过则解析/应答，失败丢弃并重同步。工程要点：缓冲足够大防溢出丢帧；长度字段做上限校验；断帧由空闲超时或校验失败处理。易错点：在中断里做耗时解析、不做长度/CRC 校验、粘包/断帧处理缺失。",
-  "hot": false,
+  "hot": true,
   "sec": "2023面试题-6",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -999,7 +999,7 @@
   "answer": "完整程序（bit3 对应掩码 1u << 3，异或翻转实现闪烁）：\n#include <stdint.h>\n\n#define LED_REG (*(volatile uint32_t *)0x40021000)   /* 32 位 LED 控制寄存器 */\n\nvoid delay(void);    /* 延时函数（题目说明可忽略其实现） */\n\nint main(void)\n{\n    while (1)\n    {\n        LED_REG ^= (1u << 3);    /* 异或翻转 bit3：仅第 3 位 LED 状态取反 */\n        delay();                 /* 延时：控制闪烁频率 */\n    }\n    return 0;\n}\n要点：volatile 宏访问寄存器；^= (1u<<3) 只翻转 bit3、其余位不变；翻转+延时交替形成闪烁。",
   "explain": "代码正确性（算法思路、边界条件、能编译运行）与复杂度说明。",
   "analysis": "要点：①寄存器地址 0x40021000 用 volatile 指针宏访问——volatile 保证每次读写都真实发生、不被编译器优化掉；②「第 3 位 LED」对应 bit3，掩码 1u << 3（=0x08）；③用异或 ^= 翻转该位：0^x=x、1^x=~x——其它位与 0 异或保持不变，只有 bit3 每次翻转；④循环里「翻转 + 延时」交替亮灭即闪烁（题目说忽略延时函数，只需体现调用）；⑤不能直接赋值 LED_REG = (1u<<3)（其余位会被清零、其它 LED 全灭）；|= 只能常亮、&= ~ 只能常灭，都做不到交替闪烁。复杂度每轮 O(1)。易错点：忘记 volatile；直接赋值清掉其它位；用 |= 或 &=~ 代替 ^=。",
-  "hot": false,
+  "hot": true,
   "sec": "2024面试题-1",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1136,7 +1136,7 @@
   "answer": "完整函数（含调用示例）如下：\n/* 单链表节点（题目隐含定义） */\ntypedef struct List {\n    int val;\n    struct List *next;\n} List;\n\n/* 迭代反转：返回新表头；O(n) 时间、O(1) 空间 */\nList *list_reverse(List *head)\n{\n    List *prev = NULL;\n    while (head) {\n        List *next = head->next;   /* ① 先保存后继（防断链） */\n        head->next = prev;         /* ② 当前节点反向指向前驱 */\n        prev = head;               /* ③ prev 前移 */\n        head = next;               /* ④ head 前移 */\n    }\n    return prev;                   /* 新表头＝原表尾 */\n}\n/* 调用示例：head = list_reverse(head); */\n要点：三指针迭代 O(n)/O(1)；必须先存 next 再改指向；返回 prev。",
   "explain": "三指针迭代反转。 ④合并说明：同一题在多份试卷中重复出现，已合并 —— 原第 461 题（2026 年｜编写程序：将一个链表逆序。（同第 442 题实现））。 ⑤合并说明：同 附加面试题·面试题5 第 7 题（链表反转 1→2→3→4→5 ⇒ 5→4→3→2→1），重复题已合并。",
   "analysis": "迭代反转三指针：prev 指向已反转子链表的新头（初始 NULL），逐节点处理 head——先用 next 暂存 head 的后继（关键：改指针前必须保存，否则断链），再把 head->next 反向指向 prev，然后 prev、head 依次前移一格；循环到 head 为 NULL 时，prev 即原表尾（新表头），返回 prev。一趟 O(n)，只改指针不搬数据，空间 O(1)。对比：递归法写法短但用 O(n) 栈空间（长链表有爆栈风险，工程不推荐）；头插法重建新表要 O(n) 额外空间。边界：空表返回 NULL；单节点原样返回；返回的必须是 prev 而不是 head（结尾时 head 为 NULL）。易错点：不保存 next 导致断链；返回 head；循环条件写成 head->next（漏处理最后一个节点）。合并说明：本题与多份试卷重复题已合并，见得分点注。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1166,7 +1166,7 @@
   "answer": "完整程序如下（FreeRTOS 环境）：\n#include \"FreeRTOS.h\"\n#include \"task.h\"\n#include <stdio.h>\n\n/* 任务1：每 1 秒打印 */\nvoid Task1(void *p)\n{\n    while (1) {\n        printf(\"Task 1 is running\\n\");\n        vTaskDelay(pdMS_TO_TICKS(1000));   /* 延时 1000ms，让出 CPU */\n    }\n}\n\n/* 任务2：每 2 秒打印 */\nvoid Task2(void *p)\n{\n    while (1) {\n        printf(\"Task 2 is running\\n\");\n        vTaskDelay(pdMS_TO_TICKS(2000));\n    }\n}\n\nint main(void)\n{\n    xTaskCreate(Task1, \"T1\", 128, NULL, 1, NULL);   /* 栈 128 words、优先级 1 */\n    xTaskCreate(Task2, \"T2\", 128, NULL, 1, NULL);\n    vTaskStartScheduler();                           /* 启动调度器（不返回） */\n    return 0;\n}\n要点：任务 = 含延时的死循环；vTaskDelay + pdMS_TO_TICKS 控制周期；xTaskCreate 参数顺序别记错。",
   "explain": "API + 延时周期。",
   "analysis": "FreeRTOS 任务模型：任务是独立的无限循环函数（void f(void *参数)），由 xTaskCreate 创建（关键参数：任务函数、名字、栈深度（单位 word）、参数、优先级、句柄），最后由 vTaskStartScheduler 启动调度。任务「每 1 秒/2 秒」用 vTaskDelay 实现——它把当前任务挂起指定 tick 数并让出 CPU（不是忙等），配合 pdMS_TO_TICKS 把毫秒换算成系统节拍，与 tick 频率解耦。两个任务打印后各自延时，周期 1000ms/2000ms。要点：任务里必须含延时/阻塞点，否则同级任务得不到调度；延时用 vTaskDelay 而非空转循环。易错点：忘记 while(1)（函数返回）；忘记 vTaskDelay 或单位换算；xTaskCreate 参数顺序记错；栈空间给太小。延伸：要严格固定周期可改用 vTaskDelayUntil。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1181,7 +1181,7 @@
   "answer": "参考文字描述（可照着画）：\n① CS：整帧拉低选中从机（开始拉低、8 位发完拉高）；\n② SCK：画 8 个等宽时钟周期；模式 0 时空闲低电平、上升沿采样、下降沿移出；\n③ SDI（MOSI）：按 MSB-first 逐个周期输出 0、1、1、0、0、1、1、0（0x66 = 0110 0110），每位在 SCK 上升沿处保持有效；\n④ SDO（MISO）：同期返回从机数据（题图未给从机值，可标注「从机返回数据」示意）；\n⑤ 标注：位序号、采样沿、位序（MSB first）、模式 0。\n文字版：CS 拉低 → 8 个 SCK 周期，SDI 按 MSB-first 输出 0,1,1,0,0,1,1,0；SDO 同拍返回（可选）；采样边沿为上升沿（模式 0）。",
   "explain": "CS/SCK 时序 + 位序正确。",
   "analysis": "SPI 写时序逐拍分析：0x66=0110 0110b，MSB 先发即按 0,1,1,0,0,1,1,0 依次上 SDI。模式 0（CPOL=0/CPHA=0）下 SCK 空闲为低、上升沿采样、下降沿移出；一帧共 8 个时钟周期，期间 CS 保持低电平选中从机，SDO（MISO）同拍返回从机数据。画图顺序建议：先画 CS 阶梯（拉低→保持→拉高）、再画 8 个等宽 SCK 方波、然后把 8 个位对齐到周期内（在上升沿处保持有效）、最后标注采样沿与位序。趣味细节：0x66 的位序反转后仍是 0110 0110（回文位串），所以本题即使位序画反也不易察觉——但仍要标清 MSB 先发。易错点：SCK 个数与位数不符；采样沿方向画错；忘记 CS 起止。延伸：追问模式 1/2/3 或 LSB-first 时采样沿与位序如何变化。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1196,7 +1196,7 @@
   "answer": "参考文字描述（可照着画）：\n① 空闲：SCL、SDA 均保持高电平；\n② 起始条件（START）：SCL 保持高电平时，SDA 由高→低跳变（在 SCL 高电平平台处画下降沿，旁注「起始」）；\n③ 停止条件（STOP）：SCL 保持高电平时，SDA 由低→高跳变（画上升沿，旁注「停止」）；\n④ 跳变之间是数据位规则：SDA 只在 SCL 低电平期间变化、SCL 高电平期间保持稳定；\n⑤ 绘制：SCL 在上、SDA 在下两条水平线，时间向右，跳变处加箭头注释，边沿关系正确。",
   "explain": "两条线的边沿关系正确。",
   "analysis": "I2C 用 SCL、SDA 两根开漏线（需上拉，空闲均为高）。起止条件的识别规则：数据位只在 SCL 低电平期间变化，因此「SCL 高电平期间 SDA 发生跳变」就是起止信号——起始 START：SCL 高时 SDA 由高→低；停止 STOP：SCL 高时 SDA 由低→高。画图要点：两线先画空闲高电平段；在 SCL 高电平平台处画 SDA 跳变并用箭头标注；跳变必须对齐在 SCL 高电平内（画在低电平处就成普通数据位了）。易错点：跳变画在 SCL 低电平期间；两线上下顺序或方向写反；忘记空闲高电平状态。延伸：重复起始（Sr）与起始的区别、时钟延展。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1241,7 +1241,7 @@
   "answer": "完整函数（含调用示例）如下：\n/* 在 hay 中查找子串 needle 首次出现的位置；未找到返回 NULL；空 needle 返回 hay */\nchar *my_strstr(const char *hay, const char *needle)\n{\n    if (!*needle) return (char *)hay;     /* 空子串：约定返回原串 */\n    for (; *hay; hay++) {                 /* 枚举每个起点 */\n        const char *h = hay, *n = needle;\n        while (*h && *n && *h == *n) { h++; n++; }   /* 同步逐字符比较 */\n        if (!*n) return (char *)hay;      /* n 走完：匹配成功 */\n    }\n    return NULL;                          /* 未找到 */\n}\n/* 调用示例：char *p = my_strstr(\"hello world\", \"world\"); */\n说明：朴素匹配最坏 O(n·m)（n、m 分别为主串与子串长度）；返回首次出现位置的指针，未找到返回 NULL。",
   "explain": "实现 + 复杂度说明。",
   "analysis": "朴素（BF）子串匹配：外层枚举 hay 的每个起点，内层用两个游标 h、n 同步前进逐字符比较；若子串游标 n 先走到 '\\0'（!*n 成立）说明整段匹配、返回当前起点；外层走到结尾仍未命中返回 NULL。空 needle 约定返回 hay 本身（与标准库 strstr 语义一致）。复杂度最坏 O(n×m)：每个起点都可能比到最后一位（如主串全 a、子串以 b 结尾），n 为主串长、m 为模式长；无额外空间。优化方向：KMP 可做到 O(n+m)。易错点：匹配判定看错游标（要看 n 是否走完，而不是 h）；空串处理漏写；形参为 const char*，返回要强转 (char *)；内层失败后外层起点前移由 for 完成、内层必须用副本。延伸：返回首次出现位置指针，正是指针算术练习。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1256,7 +1256,7 @@
   "answer": "伪代码如下（含三态的全部迁移条件）：\ntypedef enum { RUN, SLEEP, FAULT } State;\nState st = RUN;\n\nvoid fsm_loop(void)\n{\n    switch (st) {\n    case RUN:                                  /* 运行：ADC 采样 + 通信 */\n        adc_sample();\n        comm_poll();\n        if (idle_timeout)   { disable_periph(); st = SLEEP; }  /* 空闲超时→休眠 */\n        if (error_detected) { log_error();       st = FAULT; }  /* 检出错误→故障 */\n        break;\n    case SLEEP:                                /* 休眠：关外设、等外部中断 */\n        enter_low_power();                     /* 等待 EXTI 唤醒 */\n        if (wakeup_event)   { init_periph();     st = RUN; }   /* 唤醒→运行 */\n        break;\n    case FAULT:                                /* 故障：日志 + 安全状态 */\n        safe_state();\n        log_flush();\n        if (fault_cleared)  { init_periph();     st = RUN; }   /* 故障清除→运行 */\n        break;\n    }\n}\n要点：三态 + 条件（idle_timeout→SLEEP、error_detected→FAULT、wakeup_event/fault_cleared→RUN）；休眠关外设、故障进安全状态。流程图同构：三个状态圆圈，箭头按上述条件标注。",
   "explain": "三态 + 转换条件 + 低功耗动作。",
   "analysis": "状态机设计题按「状态集合 + 迁移条件 + 状态动作」三段式答：①运行态（RUN）：执行 ADC 采样与通信轮询，空闲计时到（idle_timeout）就关外设→休眠，检出错误（error_detected）就记日志→故障；②休眠态（SLEEP）：进入低功耗、等待外部中断（EXTI）唤醒，唤醒事件（wakeup_event）到来重新初始化外设→运行；③故障态（FAULT）：进入安全状态并刷日志，故障清除（fault_cleared）后恢复外设→运行。实现用 switch 状态机最清晰，工程要点：进休眠前先关外设、配好唤醒源（否则醒不来）；故障态要让执行器处于安全状态（输出安全值）。易错点：迁移条件写漏（休眠无返回路径）；进休眠没关外设（功耗不达标）；故障态缺安全动作；不用状态机而堆 if（可维护性差）。若画流程图：三个圆圈表示状态，箭头按上述条件标注。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1271,7 +1271,7 @@
   "answer": "完整实现如下：\n#define QUEUE_SIZE 16          /* 缓冲区单元数；实际可存 QUEUE_SIZE-1 个事件 */\n\ntypedef struct {\n    int ID;                    /* 报警 ID */\n    int Value;                 /* 报警值 */\n    unsigned int timestamp;    /* 时间戳 */\n} FireEvent;\n\ntypedef struct ringbuffer_s {\n    FireEvent buf[QUEUE_SIZE];\n    volatile int head;         /* 写入位置 */\n    volatile int tail;         /* 读出位置 */\n} RingBuffer;\n\nvoid initBuffer(RingBuffer *q) { q->head = q->tail = 0; }\n\nint enqueue(RingBuffer *q, FireEvent event)\n{\n    int next = (q->head + 1) % QUEUE_SIZE;\n    if (next == q->tail) return 0;          /* 满：入队失败 */\n    q->buf[q->head] = event;\n    q->head = next;\n    return 1;\n}\n\nint dequeue(RingBuffer *q, FireEvent *event)\n{\n    if (q->head == q->tail) return 0;       /* 空：出队失败 */\n    *event = q->buf[q->tail];\n    q->tail = (q->tail + 1) % QUEUE_SIZE;\n    return 1;\n}\n/* 用法：initBuffer(&q)；enqueue(&q, ev)；dequeue(&q, &ev) */\n要点：牺牲一个单元区分空满（空 = head==tail、满 = (head+1)%SIZE==tail）；下标取模回绕；1 成功 / 0 失败；多任务共享加临界区。",
   "explain": "环形下标回绕 + 空满判断。",
   "analysis": "环形缓冲区的空满判定用「牺牲一个单元」法：head 指向下一个写入位、tail 指向下一个读出位，head==tail 表示空，而 (head+1)%QUEUE_SIZE==tail 表示满——因为满时 head 也会「追上」tail，通过永远保留一个空位把「满」与「空」区分开，实际容量为 QUEUE_SIZE-1=15 个事件。入队三步：算 next、判满（满返回 0）、写入并前移 head；出队：判空（空返回 0）、取值并前移 tail；下标一律取模回绕。所有操作 O(1)、无动态分配。工程细节：中断与主循环共享时 head、tail 加 volatile；真正多任务访问需临界区或保证单生产者单消费者。易错点：判空/判满条件写反；回绕漏 %QUEUE_SIZE；忽略牺牲单元导致容量多算；忘记 volatile 或共享保护。题目要求 initBuffer/enqueue/dequeue，事件类型 FireEvent{ID/Value/timestamp}。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1286,7 +1286,7 @@
   "answer": "完整程序如下（C，转 32 位整数键 + qsort）：\n#include <stdio.h>\n#include <stdlib.h>\n\n/* \"a.b.c.d\" 转 32 位无符号整数键：整数序与 IP 序一致 */\nunsigned int ip_key(const char *ip)\n{\n    unsigned int a, b, c, d;\n    sscanf(ip, \"%u.%u.%u.%u\", &a, &b, &c, &d);\n    return (a << 24) | (b << 16) | (c << 8) | d;   /* 用 unsigned 防溢出 */\n}\n\n/* qsort 比较器：按整数键升序 */\nint cmp_ip(const void *p, const void *q)\n{\n    unsigned int x = ip_key(*(const char * const *)p);\n    unsigned int y = ip_key(*(const char * const *)q);\n    return (x > y) - (x < y);\n}\n\nint main(void)\n{\n    const char *ips[] = {\"192.168.1.10\", \"10.0.0.2\", \"172.16.5.4\",\n                         \"8.8.8.8\", \"192.168.1.2\"};\n    int n = sizeof(ips) / sizeof(ips[0]);\n    qsort(ips, n, sizeof(ips[0]), cmp_ip);\n    for (int i = 0; i < n; i++) printf(\"%s\\n\", ips[i]);\n    return 0;\n}\n要点：IP → 32 位键 → qsort O(n log n)；键必须 unsigned；比较器用 (x>y)-(x<y) 保证三值语义。",
   "explain": "IP 转整型 + 排序。",
   "analysis": "排序键思路：IPv4 点分十进制四段各占 8 位，打包成 32 位整数（a<<24 | b<<16 | c<<8 | d）即可把 IP 映射为无符号整数——整数序与 IP 字典序一致，问题转化为整数排序，直接 qsort O(n log n)。必须用无符号数：255 左移 24 位若放 int 中会溢出（有符号溢出是未定义行为），所以键与移位都按 unsigned 处理。也可用伪代码描述「按四段逐段比较」的思路。易错点：直接按字符串排序（\"10.x\" 会排在 \"9.x\" 前，错误）；有符号左移溢出；sscanf 未检查返回值（非法 IP 需兜底）；比较器要返回三值（<0/0/>0）。延伸：IPv6 或带端口时应按字节数组逐段比较。",
-  "hot": false,
+  "hot": true,
   "sec": "2025 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1301,7 +1301,7 @@
   "answer": "完整函数与测试例程如下：\n#include <stdio.h>\n\n/* 把 src 拼到 dst 末尾，返回 dst；要求 dst 空间足够 */\nchar *str_cat(char *dst, const char *src)\n{\n    char *p = dst;\n    while (*p) p++;                 /* ① 找到 dst 结尾 */\n    while ((*p++ = *src++))         /* ② 逐字符追加（含 '\\0'） */\n        ;\n    return dst;\n}\n\nint main(void)\n{\n    char buf[64] = \"Hello, \";\n    str_cat(buf, \"World!\");\n    puts(buf);                      /* Hello, World! */\n\n    char buf2[64] = \"\";\n    str_cat(buf2, \"abc\");\n    puts(buf2);                     /* abc */\n    return 0;\n}\n要点：先寻尾再逐字符拷贝（含 '\\0'）；返回 dst；O(len) 时间、O(1) 额外空间；需保证目标缓冲足够。",
   "explain": "找到结尾后逐字符追加。",
   "analysis": "指针实现拼接两步走：①「找尾」——p 从 dst 头出发 while(*p) p++ 停在 dst 的 '\\0' 处，即追加起始点；②「追加」——while ((*p++ = *src++)) 把 src 的每个字符（包括结尾 '\\0'）拷到 p 处并整体后移，赋值表达式的值就是刚拷入的字符，遇到 '\\0'（值 0）循环结束，保证目标串以 '\\0' 正确收尾。返回 dst（与标准库 strcat 一致）便于链式调用。复杂度 O(len(dst)+len(src))；空间 O(1) 原地。安全前提：调用方保证 dst 缓冲区剩余空间足够（工程实现会先判断长度或用 snprintf）。易错点：缓冲区不足溢出；指针未先移到 dst 结尾（从头覆盖）；漏拷 '\\0'；返回值类型写错。测试例程覆盖「已含内容 + 追加」与空串两种情形。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1316,7 +1316,7 @@
   "answer": "完整函数与测试例程如下：\n#include <stdio.h>\n\n/* 判断 s 处是否以 str 开头；返回匹配的字节数（0 = 不匹配）。不用库函数 */\nstatic int match_at(const char *s, const char *str)\n{\n    int i = 0;\n    while (str[i] && s[i] == str[i]) i++;\n    return str[i] ? 0 : i;      /* 全部比完返回字节数，否则 0 */\n}\n\n/* 括号匹配检查：支持半角 () 与全角（）；匹配返回 1，不匹配返回 0 */\nint brackets_match(const char *s)\n{\n    int depth = 0, n;\n    while (*s) {\n        if (*s == '(') { depth++; s++; }                        /* 半角左 */\n        else if (*s == ')') { if (--depth < 0) return 0; s++; } /* 半角右 */\n        else if ((n = match_at(s, \"（\")) > 0) { depth++; s += n; }   /* 全角左 */\n        else if ((n = match_at(s, \"）\")) > 0) {\n            if (--depth < 0) return 0;   /* 右括号多余：提前失败 */\n            s += n;\n        } else {\n            s++;                         /* 其他字符跳过 */\n        }\n    }\n    return depth == 0;                   /* 深度归零才匹配 */\n}\n\nint main(void)\n{\n    printf(\"%d\\n\", brackets_match(\"（11）2（33）（4）\"));  /* 1：匹配 */\n    printf(\"%d\\n\", brackets_match(\"（113）3（\"));          /* 0：不匹配 */\n    return 0;\n}\n要点：深度计数 + 右括号多余立即失败；结尾深度为 0 才匹配；全角括号按字符串字面量逐字节比较（避开多字节字符常量的坑），O(n)/O(1)。",
   "explain": "深度计数 + 提前失败。",
   "analysis": "判断括号匹配用「深度计数 + 提前失败」：遇左括号深度加一，遇右括号先减一——若减到负说明右括号多余，立即返回不匹配（不必等扫描结束，可提前发现 \")(\" 一类错序）；直到串尾深度恰为 0 才匹配。细节：题目样例含全角括号，必须与半角 () 一起识别；注意「多字节字符常量」的坑——直接写 *s == '（' 这类比较时，编译器把全角字符当作多字节整型常量（GCC 会告警 multi-character character constant），其值不等于字符串中的单个字节，判定必然失败；稳妥做法是对字符串字面量 \"（\" 逐字节比较（仍不调用任何库函数），匹配后整体跳过该字符的多个字节。正确性：计数法等价于「任意前缀深度非负 + 末尾深度 0」，O(n)/O(1)。易错点：只识别半角括号；用多字节字符常量比较（见上）；不提前失败；结尾忘判深度=0；跳过全角字符时步进字节数写错。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1346,7 +1346,7 @@
   "answer": "完整函数（含调用示例）如下：\n/* 二叉树节点定义 */\ntypedef struct Node {\n    int data;\n    struct Node *left;\n    struct Node *right;\n} Node;\n\n/* 中序遍历：左 → 根 → 右（递归） */\nvoid inorder(Node *root)\n{\n    if (!root) return;            /* 递归出口：空树 */\n    inorder(root->left);          /* ① 左子树 */\n    printf(\"%d \", root->data);    /* ② 根 */\n    inorder(root->right);         /* ③ 右子树 */\n}\n/* 调用示例：inorder(tree); 若 tree 为二叉搜索树，输出为升序 */\n要点：中序 = 左→根→右；O(n) 时间、O(h) 栈空间；BST 中序即升序。",
   "explain": "递归顺序。",
   "analysis": "中序遍历 =「左→根→右」：先递归遍历左子树，再访问根节点（本题为打印），最后递归右子树；空节点是递归出口。命名的由来：按「根」的访问位置记忆——根在中间是中序、根在最前是前序、根在最后是后序。重要性质：二叉搜索树的中序遍历得到升序序列（常用于校验 BST、找第 k 小等）。复杂度：每节点恰好访问一次 O(n) 时间；递归栈深等于树高 h（平衡树 O(log n)、退化成链最坏 O(n)）。易错点：顺序写错（先访问根再递归左）；漏空指针出口；打印格式与题目要求不符。延伸：非递归版用显式栈；Morris 遍历可做到 O(1) 额外空间。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1391,7 +1391,7 @@
   "answer": "完整函数（含调用示例）如下：\n/* 字符串转整数（仿 atoi）：跳过前导空白，可带 +/-，遇非数字结束 */\nint Atoi(char str[])\n{\n    int i = 0, sign = 1, num = 0;\n    while (str[i] == ' ' || str[i] == '\\t') i++;    /* 跳过前导空白 */\n    if (str[i] == '-') { sign = -1; i++; }          /* 处理符号 */\n    else if (str[i] == '+') i++;\n    while (str[i] >= '0' && str[i] <= '9')          /* 逐位累加 */\n        num = num * 10 + (str[i++] - '0');\n    return sign * num;\n}\n/* 调用示例：Atoi(\"-123\") 返回 -123；Atoi(\" 45x\") 返回 45 */\n要点：符号 + 逐位 num*10+digit；遇非数字或 '\\0' 结束；合并题要求跳过前导空格（已包含）。",
   "explain": "符号 + 逐位累加。 ③合并说明：同 附加面试题·面试题5 第 6 题（设计函数 int atoi(char *s)：跳过前导空格、遇数字或正负号开始转换、遇非数字或 \\0 结束），重复题已合并。",
   "analysis": "atoi 的逐位累加原理：num = num*10 + (c-'0')——每读一位把已有结果扩大十倍再补新位；符号位在转换前单独处理（'-' 则 sign=-1、'+' 跳过）；遇到第一个非数字字符或 '\\0' 结束。本题合并的另一版本要求跳过前导空格（空格/制表符），故完整实现先吃掉空白再收符号。'0' 的 ASCII 是 48，用 c-'0' 把字符转为数值，比查表简洁。复杂度 O(位数)。易错点：忘记负号；sign 应用位置搞错（最后乘即可）；空格未处理（合并题要求）；遇非数字未及时停（继续累加出错）；超 int 范围溢出未处理（进阶考点，标准 atoi 对此行为未定义）。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1406,7 +1406,7 @@
   "answer": "完整实现如下：\n#include <stdint.h>\n\n#define QSIZE 10               /* 缓冲区格子数；实际最多存 QSIZE-1 个元素 */\n\ntypedef struct {\n    uint8_t data[QSIZE];\n    int head;                  /* 出队位置 */\n    int tail;                  /* 入队位置 */\n} Queue;\n\nvoid InitQueue(Queue *q) { q->head = q->tail = 0; }\n\nint IsQueueEmpty(Queue *q) { return q->head == q->tail; }        /* 空：重合 */\nint IsQueueFull(Queue *q)  { return (q->tail + 1) % QSIZE == q->head; }  /* 满：下一格是 head */\n\nint EnQueue(Queue *q, uint8_t v)\n{\n    if (IsQueueFull(q)) return 0;          /* 满：失败 */\n    q->data[q->tail] = v;\n    q->tail = (q->tail + 1) % QSIZE;       /* 回绕前移 */\n    return 1;\n}\n\nint DeQueue(Queue *q, uint8_t *v)\n{\n    if (IsQueueEmpty(q)) return 0;         /* 空：失败 */\n    *v = q->data[q->head];\n    q->head = (q->head + 1) % QSIZE;\n    return 1;\n}\n/* 用法：InitQueue(&q); EnQueue(&q, 5); DeQueue(&q, &v) */\n要点：牺牲一个单元判满（(tail+1)%SIZE==head）；空为 head==tail；1 成功 / 0 失败；实际容量 9。",
   "explain": "牺牲一个单元的空满判定。",
   "analysis": "固定长度循环队列的「牺牲一个单元」设计：head 指向出队位置、tail 指向入队位置；空判断 head==tail；满判断 (tail+1)%QSIZE==head——缓冲区永远留一个空位来区分空与满，因此 10 个格子的队列最多存 9 个元素。入队：判满→存 tail 处→tail 回绕前移；出队：判空→取 head 处→head 回绕前移。全部操作 O(1)、无动态内存。易错点：容量理解错（说成能存 10 个）；% QSIZE 漏写导致下标越界；两判断写反；入队先移指针后存数据（覆盖）。扩展：多生产者/消费者场景需临界区或原子操作；也可用 count 计数器法（不浪费单元但多一个变量）。题目要求结构体、InitQueue、IsQueueEmpty、IsQueueFull、EnQueue、DeQueue 全套接口。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1468,7 +1468,7 @@
   "answer": "完整函数如下（crc16 / aes128_encrypt 为平台或工程已有实现）：\n#include <stdint.h>\n#include <string.h>\n\n/* 假定平台提供：CRC16 计算、AES-128 加密接口 */\nextern uint16_t crc16(const uint8_t *data, uint32_t len);\nextern void aes128_encrypt(const uint8_t *in, uint32_t len, uint8_t *out, const uint8_t key[16]);\n\nstatic const uint8_t key[16] = {0};   /* 实际密钥由工程配置（此处占位） */\n\n/* 封装数据包：4 字节浮点电量 + CRC16，整帧 AES-128 加密后输出 */\nvoid build_telemetry_packet(float energy, uint8_t *output)\n{\n    uint8_t plain[4];\n    uint8_t buf[6];\n    uint16_t crc;\n\n    memcpy(plain, &energy, 4);                /* ① 数据域：4 字节浮点电量 */\n    crc = crc16(plain, 4);                    /* ② 对数据域算 CRC16 */\n    memcpy(buf, plain, 4);                    /* 组帧：4 字节数据 + 2 字节校验 */\n    memcpy(buf + 4, &crc, 2);\n    aes128_encrypt(buf, 6, output, key);      /* ③ 整帧 AES-128 加密输出 */\n}\n要点：数据域 → CRC16 → AES-128 的顺序；offset 0..3 数据、4..5 校验；字节序与密钥按工程约定；AES 实际按 16 字节分组（需填充时在封装层处理）。",
   "explain": "数据布局 + 加密/校验调用顺序。",
   "analysis": "封装顺序 = 数据域→校验→加密：①「数据域」4 字节浮点电量用 memcpy 取浮点的内存字节表示（注意跨平台字节序约定，收发两端一致即可）；②先对明文算 CRC16（校验覆盖 4 字节数据域），再与数据拼成 6 字节帧；③整帧交给 AES-128 加密输出——机密性由 AES 提供、完整性由 CRC 提供。为什么先校验后加密：接收端解密后先验 CRC 可第一时间剔除坏包；CRC 作为校验域放到帧尾。工程细节：浮点直接按结构体发送存在对齐/填充风险，memcpy 到定长缓冲是正确姿势；AES 按 16 字节分组工作，实际组帧时通常填充到分组长度再加密（题目按封装接口调用即可）；密钥不该硬编码在源码里。复杂度：CRC O(长度)、AES O(分组数)，均为常数级。易错点：memcpy 长度与偏移写错；输出缓冲不足；接口参数顺序记错；忽略字节序。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1498,7 +1498,7 @@
   "answer": "完整实现（含调用示例）如下：\n#include <stdlib.h>\n\ntypedef struct Node {\n    int v;\n    struct Node *next;\n} Node;\n\ntypedef struct {\n    Node *top_;        /* 栈顶：链表头 */\n    int size;          /* 元素个数 */\n} Stack;\n\nvoid init(Stack *s)  { s->top_ = NULL; s->size = 0; }\nint  empty(Stack *s) { return s->top_ == NULL; }\n\nvoid push(Stack *s, int v)\n{\n    Node *n = malloc(sizeof(Node));\n    if (!n) return;                    /* 分配失败：不动栈 */\n    n->v = v;\n    n->next = s->top_;                 /* 头插 */\n    s->top_ = n;\n    s->size++;\n}\n\nint pop(Stack *s)\n{\n    if (empty(s)) return -1;           /* 空栈保护 */\n    Node *n = s->top_;\n    int v = n->v;\n    s->top_ = n->next;                 /* 先记 next 再 free */\n    free(n);\n    s->size--;\n    return v;\n}\n\nint top(Stack *s) { return empty(s) ? -1 : s->top_->v; }\n/* 用法：init(&s); push(&s, 1); top(&s); pop(&s); empty(&s) */\n要点：头插法 + 各操作 O(1)；pop 先记 next 再 free；pop/top 判空保护；链表栈动态容量、无溢出。",
   "explain": "头插法 + 各操作。",
   "analysis": "链表实现栈的核心是头插法：栈顶就放在链表头——push 分配节点、把 next 指向原栈顶、再更新栈顶指针（O(1)）；pop 取栈顶值后先记住 next、再 free 旧顶、更新栈顶（O(1)）；top 直接访问栈顶值；empty 判断栈顶指针是否为 NULL。链表栈相比数组栈：容量动态无上限、不需预估大小；代价是每元素一次动态分配/释放、节点多一个指针开销。工程要点：malloc 判空；pop/top 前判空（空栈访问会崩）；free 前先保存 next（防悬挂）。易错点：忘记判空；pop 不保存 next 直接 free；忘记维护 size；malloc 失败未处理。扩展：实时性敏感场景可预分配节点池避免运行时分配。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1513,7 +1513,7 @@
   "answer": "完整函数（含调用示例）如下：\n/* 单链表节点定义 */\nstruct ListNode {\n    int val;\n    ListNode *next;\n};\n\n/* 删除所有值为 val 的节点，返回新头（哨兵节点法） */\nListNode* removeElements(ListNode* head, int val)\n{\n    ListNode dummy{0, head};        /* 哨兵：dummy.next = head */\n    ListNode *p = &dummy;\n    while (p->next) {\n        if (p->next->val == val) {\n            ListNode *del = p->next;    /* 摘链并释放 */\n            p->next = del->next;\n            delete del;                 /* 删除时 p 不前移 */\n        } else {\n            p = p->next;                /* 非目标：前移 */\n        }\n    }\n    return dummy.next;              /* 新头 */\n}\n/* 调用示例：head = removeElements(head, 6); */\n要点：哨兵统一「删头/删中间」；删除时不前移 p、可连续删；O(n)/O(1)。",
   "explain": "哨兵处理头节点删除。",
   "analysis": "删除所有值为 val 的节点，难点是「连续删除头节点」的处理——引入哨兵（dummy）节点挂在表头前，令所有删除都变成「删除某个节点的后继」，逻辑统一、无需特判头指针。算法：p 从 dummy 出发，看 p->next：值为 val 就摘链删除（保存待删节点、p->next 跳过它、delete 释放，注意此时 p 不前移）；否则 p 前移一格；直到 p->next 为空。返回 dummy.next 作为新头（原头可能已被删）。因为每个节点最多检查一次，O(n)/O(1)。C 语言等价写法可用 malloc 哨兵或二级指针。易错点：删除时错误地前移 p（漏删连续节点）；忘记释放（若题目要求 delete）；返回 head 而非 dummy.next；边界（空表、全删）漏测。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1528,7 +1528,7 @@
   "answer": "完整函数与测试例程如下：\n#include <stdio.h>\n#include <string.h>\n\n/* 原地逆序字符串：双指针两端向中间交换，O(1) 额外空间 */\nvoid str_reverse(char *s)\n{\n    char *e = s + strlen(s) - 1;      /* 指向最后一个字符 */\n    while (s < e) {                   /* 两端向中间靠拢 */\n        char t = *s;\n        *s++ = *e;\n        *e-- = t;\n    }\n}\n\nint main(void)\n{\n    char t[] = \"hello\";\n    str_reverse(t);\n    puts(t);                          /* olleh */\n    return 0;\n}\n要点：双指针原地交换 O(n)/O(1)；测试必须用可修改的字符数组；空串/单字符天然安全。",
   "explain": "双指针原地交换。",
   "analysis": "原地逆序字符串用「双指针交换」：左指针从头、右指针从尾（strlen(s)-1），向中间靠拢，逐对交换字符；循环条件 s<e 保证奇数长度时中间字符无需处理、偶数长度时恰好换完；空串时 e=s-1 循环直接不进，安全。只用了两个指针加一个交换临时字符，满足「不额外分配空间」（O(1) 空间）、时间 O(n)。易错点：测试用字符串字面量（只读，写入崩溃）——必须用字符数组；循环条件写成 s<=e（多一次自交换，无害但可指正）；strlen 依赖串以 '\\0' 结尾（非法串越界）；忘记包含 string.h。延伸：递归版（首尾交换后递归内层）是 O(n) 栈空间，不如迭代。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1558,7 +1558,7 @@
   "answer": "参考文字描述（可照着画）：\n① 主电路：VCC — R（约 10K）— RST（单片机复位引脚）；C（约 10μF，电解电容正极朝 RST）接在 RST 与 GND 之间；即 R 跨接 VCC 与 RST、C 跨接 RST 与 GND；\n② 可选手动复位：按键并联在 C 两端（按下 → 短路 C → RST 被 R 拉高 → 手动复位）；\n③ 可选放电二极管（如 1N4148）：并联在 R 两端，掉电时给 C 提供快速放电回路，保证下次上电复位可靠；\n④ 原理标注：上电瞬间 C 两端电压为 0，RST 被 R 拉成高电平开始复位；VCC 经 R 给 C 充电、RST 电位指数下降，充电完成后回落为低电平、复位结束；\n⑤ 参数标注：R=10K、C=10μF ⇒ 时间常数 τ=RC=0.1s，复位高电平脉宽远大于 8051 要求的 2 个机器周期。\n要点：R 接 VCC→RST、C 接 RST→GND；上电 RST 先高后低自动完成复位；按键手动复位、二极管加速放电。",
   "explain": "R/C 接法。",
   "analysis": "89C51（8051 内核）为高电平复位：RST 引脚保持高电平约 2 个机器周期以上即触发复位，因此阻容复位电路的目标是让上电瞬间 RST 出现一段足够长的高电平、随后自动回落到低电平。电路接法：R（如 10K）跨接 VCC 与 RST；C（如 10μF 电解电容）跨接 RST 与 GND。上电瞬间电容两端电压不能突变（初始 0V），RST 被 R 拉到高电平开始复位；随后 VCC 经 R 给 C 充电，RST 电位按指数规律下降，充电基本完成后 RST 回落为低电平、复位结束。复位脉宽由时间常数 τ=RC 决定（10K×10μF=0.1s，远大于最小脉宽要求）。可选元件：手动复位按键并联在 C 两端（按下使 C 短路、RST 经 R 拉高，实现手动复位）；二极管（如 1N4148）并联在 R 两端作快速放电回路（掉电时迅速泄放 C 上电荷，保证下一次上电复位可靠）。难点与易错：R 接 VCC、C 接 GND 的上下关系；高电平复位方向别画反；时间常数与复位脉宽关系要标注。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1573,7 +1573,7 @@
   "answer": "参考文字描述（可照着画；两路电路完全相同、各自独立）：\n① 控制侧：MCU IO → 基极电阻 Rb（约 1K~4.7K）→ NPN 三极管 Q（如 S8050）基极；需要电气隔离时可先经光耦（如 PC817）再驱动三极管；\n② 执行侧（继电器方案）：Q 集电极 → 继电器线圈 → +24V；继电器常开触点串在 +24V 与电机之间，电机另一端接 GND；\n③ 线圈保护：继电器线圈两端反向并联续流二极管 D（1N4007，阴极接 +24V 侧），吸收断电反电动势保护三极管；\n④ 电机与电源保护：电机两端并联滤波电容；24V 入口串联保险丝；可选触点 RC 吸收网络（如 100Ω + 0.1μF）抑制火花；\n⑤ 参数标注：单路电流 I = P/U = 10W/24V ≈ 0.42A，继电器触点额定电流 ≥ 0.42A×2（留裕量），三极管按线圈电流选型；两路各用一组 IO、三极管与继电器分别控制电机 A、B 的启停。\n要点：IO 必须经三极管/MOS（或光耦）放大驱动、不得直带负载；继电器线圈与电机均需保护元件；标注 0.42A 与选型裕量。",
   "explain": "驱动 + 保护元件。",
   "analysis": "设计步骤：①先算负载参数——每路 DC24V/10W ⇒ 电流 I=P/U=10/24≈0.42A；②判断驱动能力——单片机 IO 为 3.3V/5V 弱电，不能直接带 24V 强电负载，必须加驱动级与保护；③选择方案——继电器方案：IO → 限流电阻 → 三极管（如 S8050）基极，三极管集电极驱动继电器线圈（线圈另一端接 24V），继电器触点串在 24V 与电机之间承受 0.42A 负载电流；需要电气隔离时可用光耦（如 PC817）再推三极管；也可用逻辑电平 MOS 管（如 IRF540）直接驱动电机；④保护设计——继电器线圈两端反向并联续流二极管（1N4148/1N4007）吸收断电反电动势保护三极管；电机两端并联滤波电容；24V 入口加保险丝；可选触点 RC 吸收网络抑制火花；⑤选型校核——继电器触点额定电流 ≥0.42A 并留 2 倍以上裕量，三极管 Ic 满足线圈电流并校核饱和。易错点：IO 直驱电机（烧片）；漏续流二极管（反电动势击穿三极管）；不标参数；两路电路漏画或标注混用。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1603,7 +1603,7 @@
   "answer": "完整函数如下（KEY_GPIO_PORT/KEY_PIN、delay_ms、GPIO 库函数为工程既有定义）：\n#include <stdio.h>\n\n/* 按键扫描：低电平触发 + 10ms 软件消抖，按下打印 \"Key Pressed!\" */\nvoid key_scan(void)\n{\n    if (GPIO_ReadInputDataBit(KEY_GPIO_PORT, KEY_PIN) == 0) {  /* 第一次检测到低电平 */\n        delay_ms(10);                                          /* 消抖延时 10ms */\n        if (GPIO_ReadInputDataBit(KEY_GPIO_PORT, KEY_PIN) == 0) {  /* 复检仍为低：确认按下 */\n            printf(\"Key Pressed!\\r\\n\");                        /* 打印按键信息 */\n            while (GPIO_ReadInputDataBit(KEY_GPIO_PORT, KEY_PIN) == 0)\n                ;                                              /* 等待按键释放，防重复触发 */\n        }\n    }\n}\n/* 调用方式：主循环 while(1) 中周期调用 key_scan(); */\n要点：低电平判断 + 延时 10ms 后复检的二次确认；确认后打印并等待释放；引脚需配内部上拉。",
   "explain": "低电平判断 + 延时复检 + 打印。",
   "analysis": "按键扫描的三步法：①检测——按键接成低电平触发（按键一端接地、另一端接 GPIO，引脚配置内部上拉 GPIO_PuPd_UP，空闲读回高电平、按下读回 0）；②消抖——机械按键触点在闭合瞬间有 5~20ms 抖动，检测到低电平后延时 10ms 再复检，两次都为低才确认有效按下；③确认后打印「Key Pressed!」，并可用「等待按键释放」防止一次按下被重复响应。该实现为阻塞式（消抖与等待释放都用延时/自旋），适合在主循环中周期调用；若用于中断上下文则不应使用长延时。复杂度：每次扫描 O(1)。工程细节：消抖延时不宜过短（滤不掉抖动）也不宜过长（响应迟钝）；等待释放循环可加超时以免卡死主循环。易错点：引脚未配上拉导致悬空误触发；只判断一次不消抖；先打印再复检；忘打印或字符串不匹配。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1618,7 +1618,7 @@
   "answer": "伪代码（框架）如下（API 名称按所用协议栈替换）：\n/* BLE 从机初始化流程 */\nvoid ble_slave_init(void)\n{\n    /* ① 协议栈初始化：时钟/射频/中断 + GAP/GATT 层复位 */\n    ble_stack_init();\n\n    /* ② 广播设置：设备名、广播参数、广播数据（内含服务 UUID 等） */\n    gap_set_device_name(\"MyDev\");\n    gap_set_adv_data(adv_data, len);\n    gap_start_advertising();          /* ③ 开始广播，等待主机连接 */\n\n    /* ④ 连接建立后创建 GATT 数据库 */\n    gatt_add_service(uuid, primary);                /* 创建服务 */\n    gatt_add_characteristic(uuid, props, handler);  /* 创建特征值：props 含读/写/通知属性，handler 为回调 */\n\n    /* ⑤ 进入事件循环：处理连接/断开/读写/通知回调 */\n    ble_run_event_loop();\n}\n要点：顺序 = 协议栈 → 广播 → 服务/特征值 → 事件循环；广播数据需带服务 UUID；特征值属性与回调要匹配。",
   "explain": "初始化→广播→服务/特征值 顺序。",
   "analysis": "BLE 从机初始化的顺序遵循「自下而上」：①协议栈初始化——时钟/射频/中断与 GAP/GATT 层复位，这是所有上层 API 可用的前提；②GAP 层广播设置——设置设备名、广播参数，组织广播数据（把服务 UUID、设备名等放入 adv_data），然后启动广播等待主机扫描与连接；③GATT 数据库创建——连接建立后创建服务（Service，含 UUID 与 primary 属性），再在服务里添加特征值（Characteristic，含 UUID、读/写/通知等属性以及读写回调），建立从机对外提供的数据接口；④事件循环——处理连接/断开/读写/通知等事件回调。顺序不能乱：广播未开启主机发现不了设备；服务/特征值未建立则读写无从进行；多数协议栈要求在连接建立后才能创建 GATT 数据库。工程细节：特征值属性（read/write/notify）需与回调匹配；服务 UUID 需放入广播数据否则主机扫不到服务；事件回调必须注册。易错点：先建 GATT 后开广播导致顺序错误；广播数据漏服务 UUID；忘记事件循环（无法响应主机操作）。",
-  "hot": false,
+  "hot": true,
   "sec": "2026 年",
   "sec_group": "二、2022~2026 编程 / 画图大题汇编（80 题，编号 401~480）",
   "imgs": []
@@ -1648,7 +1648,7 @@
   "answer": "补充完整后的函数如下：\n#define BIT5 (0x1<<5)\nstatic int a;\n\n/* 置位：把 a 的 bit5 置 1，其余位不变 */\nvoid set_bit(void)\n{\n    a |= BIT5;          /* 0|1=1 置位；其余位 x|0=x 保持不变 */\n}\n\n/* 清零：把 a 的 bit5 清 0，其余位不变 */\nvoid clear_bit(void)\n{\n    a &= ~BIT5;         /* ~BIT5 为除 bit5 外全 1 的掩码；目标位 x&0=0 清 0，其余位 x&1=x 不变 */\n}\n要点：置位用或 1、清零用与 0（掩码取反）；^= 是翻转而非清零；通用写法 a |= (1u<<n); a &= ~(1u<<n);。",
   "explain": "① set_bit 用 `|=` ② clear_bit 用 `&= ~` ③ 加分：说明\"其余位不变\"的位运算原理或提到 `^=` 是翻转、volatile/原子性注意点。",
   "analysis": "位操作三件套：置位用按位或「|=」——目标位与 1 或必为 1，其余位与 0 或保持不变（x|0=x），所以 a |= BIT5 即可只置 bit5、不动其它位；清零用按位与取反「&= ~」——~BIT5 生成除 bit5 外全 1 的掩码，相与后目标位 x&0=0 被清零、其余位 x&1=x 不变。题目特意要求「保持其它位不变」，两个操作分别靠「或 1」和「与 0」实现。注意 ^=（异或）是翻转：bit5 原本为 1 时反而把它清掉、原本为 0 时置 1，语义与题目要求的置位/清零不同，不能替代。通用写法 a |= (1u<<n); a &= ~(1u<<n);——若 1 为有符号 int 且位号 ≥31 应写 1u；若 a 被中断与主循环共享应加 volatile，要求原子性时用关中断或读改写保护（如 STM32 对 GPIO 可用 BSRR 寄存器原子置位/复位）。易错点：清零写成 a &= BIT5（把其它位全清）；置位写成 a |= ~BIT5；用 ^= 冒充清零。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1663,7 +1663,7 @@
   "answer": "软件模拟 SPI 的完整实现如下（引脚操作以 STM32 标准库为例，可按平台替换）：\n/* 连接：MCU P10~P13 → SPI_Flash 的 /CS、MOSI(DI)、MISO(DO)、CLK */\n#define CS_LOW()      GPIO_ResetBits(GPIOA, GPIO_Pin_10)   /* /CS 拉低：选中器件 */\n#define CS_HIGH()     GPIO_SetBits(GPIOA, GPIO_Pin_10)\n#define CLK_LOW()     GPIO_ResetBits(GPIOA, GPIO_Pin_13)   /* CLK 时钟线 */\n#define CLK_HIGH()    GPIO_SetBits(GPIOA, GPIO_Pin_13)\n#define MOSI_WRITE(x) do { if (x) GPIO_SetBits(GPIOA, GPIO_Pin_11); \\\n                           else   GPIO_ResetBits(GPIOA, GPIO_Pin_11); } while (0)\n#define MISO_READ()   GPIO_ReadInputDataBit(GPIOA, GPIO_Pin_12)   /* 返回 0/1 */\n\nstatic void spi_delay(void) { /* 短延时：决定 SCK 频率（按 Flash 允许上限调整） */ }\n\n/* 发送并接收 1 字节：MSB first、上升沿采样（Mode0：CPOL=0，CPHA=0） */\nstatic unsigned char spi_rw(unsigned char dat)\n{\n    unsigned char i, rd = 0;\n    for (i = 0; i < 8; i++) {\n        CLK_LOW();                            /* 时钟拉低：准备数据 */\n        MOSI_WRITE((dat & 0x80) ? 1 : 0);     /* 先发最高位（MSB first） */\n        dat <<= 1;\n        spi_delay();\n        CLK_HIGH();                           /* 上升沿：从机采样 MOSI、主机读 MISO */\n        rd = (rd << 1) | MISO_READ();         /* 读入 1 位（MSB first） */\n        spi_delay();\n    }\n    CLK_LOW();\n    return rd;\n}\n\n/* 读 Flash：/CS 拉低 → 03h → 24 位地址 → 连续读 len 字节 → /CS 拉高 */\nvoid spi_flash_read(unsigned long addr, unsigned char *buf, unsigned int len)\n{\n    unsigned int i;\n    CS_LOW();                                   /* 片选拉低，整帧保持有效 */\n    spi_rw(0x03);                               /* 读数据指令 03h */\n    spi_rw((unsigned char)(addr >> 16));        /* 地址高字节（24 位，高位先发） */\n    spi_rw((unsigned char)(addr >> 8));         /* 地址中字节 */\n    spi_rw((unsigned char)(addr));              /* 地址低字节 */\n    for (i = 0; i < len; i++)\n        buf[i] = spi_rw(0xFF);                  /* 主机发 dummy，移位读出数据 */\n    CS_HIGH();                                  /* 片选拉高，结束操作 */\n}\n要点：/CS 全程低电平；顺序 = 03h → 24 位地址 → 连续读；MSB first、Mode0 上升沿采样；时钟频率不超 Flash 上限。",
   "explain": "① 正确顺序：/CS 拉低 → 发 03h → 发 24 位地址 → 连续读数据 → /CS 拉高 ② 位序 MSB first、时钟边沿与 CPOL/CPHA 说明 ③ 加分：给出硬件 SPI 配置方式或提到 DMA 批量读/不同读指令（0Bh 高速读）。",
   "analysis": "本题按图写「软件模拟 SPI（IO 口模拟时序）读 Flash」程序。时序流程：/CS 在整帧期间保持低电平 → 发送 8 位读数据指令 03h → 发送 24 位地址（高位先发）→ 随后每个时钟周期从 DO（MISO）移出 1 位数据、连续读出直到 /CS 拉高；因此片选必须全程有效、位序为 MSB first。时钟极性与相位按图：CLK 空闲为低，采用 Mode0（CPOL=0、CPHA=0），即时钟上升沿采样、下降沿移出；软件实现上把「输出一位 + 时钟拉高采样 + 读回一位」放进一个 8 次循环（spi_rw 函数）完成字节收发，读数据时主机发 0xFF（dummy）只为产生时钟。要点：03h 是标准读指令、地址 24 位；大容量器件有 4 字节地址（13h）与高速读（0Bh，需 8 个 dummy 周期）；软件 SPI 时钟频率由延时控制、不得超过 Flash 允许最高频率；若用硬件 SPI 可配置 SPI_FirstBit_MSB + SPI_CPOL_Low + SPI_CPHA_1Edge，或用 DMA 批量读提高吞吐。易错点：漏发或发错地址字节次序；片选中途拉高；位序写成 LSB first；采样沿与模式不符。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1678,7 +1678,7 @@
   "answer": "常用数字滤波算法及完整实现如下：\n#include <stdlib.h>\n\n/* ① 限幅滤波：新值与上次值差超过 A_MAX 视为脉冲，输出上次值 */\n#define A_MAX 20\nint limit_filter(int new_val, int old_val)\n{\n    return (abs(new_val - old_val) > A_MAX) ? old_val : new_val;\n}\n\n/* ② 中值滤波：连续采 N（奇数）次，排序后取中间值（抗脉冲） */\n#define N_MID 5\nint median_filter(int (*get_adc)(void))\n{\n    int buf[N_MID], i, j, t;\n    for (i = 0; i < N_MID; i++)\n        buf[i] = get_adc();\n    for (i = 0; i < N_MID - 1; i++)                 /* 冒泡排序 */\n        for (j = 0; j < N_MID - 1 - i; j++)\n            if (buf[j] > buf[j + 1]) {\n                t = buf[j]; buf[j] = buf[j + 1]; buf[j + 1] = t;\n            }\n    return buf[N_MID / 2];                          /* 中间值 */\n}\n\n/* ③ 递推平均滤波：环形缓冲滑动窗口，输出最近 N 个点的均值 */\n#define N_AVG 8\nint avg_filter(int new_val)\n{\n    static int  buf[N_AVG];\n    static int  idx = 0;\n    static long sum = 0;\n    sum -= buf[idx];                    /* 旧值出窗 */\n    buf[idx] = new_val;                 /* 新值入窗 */\n    sum += new_val;\n    idx = (idx + 1) % N_AVG;\n    return (int)(sum / N_AVG);\n}\n\n/* ④ 一阶低通（惯性）滤波：Y(n)=a*X(n)+(1-a)*Y(n-1)，a 越小越平滑 */\n#define ALPHA_NUM 1                 /* a = ALPHA_NUM/ALPHA_DEN = 1/8 */\n#define ALPHA_DEN 8\nint lpf_filter(int new_val)\n{\n    static int last = 0;\n    last = (ALPHA_NUM * new_val + (ALPHA_DEN - ALPHA_NUM) * last) / ALPHA_DEN;\n    return last;\n}\n要点：脉冲干扰用限幅/中值/去极值；随机噪声用递推平均；缓变量求实时用一阶低通；均以「平滑度 vs 响应速度」折中选型。",
   "explain": "① 列出≥3 种滤波算法名称与适用场景 ② 给出至少 1~2 段可直接使用的代码 ③ 加分：说明各算法的优缺点/选型依据（响应速度与平滑度权衡），或提到卡尔曼/防脉冲干扰平均。",
   "analysis": "常用数字滤波算法各有针对性：①限幅滤波——比较相邻两次采样差值，超过阈值 A_MAX 视为突发脉冲、输出上次值，适合缓变量，能抑制单次大脉冲但平滑度差；②中值滤波——连续采样 N 次（N 取奇数）排序后取中间值，对脉冲干扰抑制最好，代价是需要 N 次采样、响应慢；③递推平均（滑动平均）——维护长度 N 的环形缓冲，新值入队旧值出队、输出 N 点均值，平滑随机噪声，采样越多越平滑但滞后越大；④一阶低通（惯性）滤波——Y(n)=a·X(n)+(1-a)·Y(n-1)，a 越小越平滑、动态响应越慢，只需 1 个状态变量、省内存；⑤其它还有去极值平均（去掉最大最小各 M 个再平均，抗脉冲）、加权平均（对近期数据给更大权重，如 1,2,3,4,5 加权）、防脉冲干扰平均（先中值再平均，兼顾脉冲与随机噪声）、卡尔曼滤波（带状态估计的最优滤波，适合有模型的动态系统，运算量大）。选型建议：抑制突发脉冲（继电器动作、静电）→ 中值/去极值/限幅；抑制随机噪声（ADC 抖动）→ 递推平均/加权平均；信号缓慢变化且要求实时（温度、电池电压）→ 一阶低通；要求最优估计且算力允许 → 卡尔曼；采样点越多越平滑但响应越慢，需按「信号变化速率 vs 噪声幅度」折中。易错点：中值滤波取错中间下标或忘记排序；滑动平均缓冲未清零导致开机输出异常；低通整数系数先乘后除防精度丢失/溢出。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1693,7 +1693,7 @@
   "answer": "简化版完整实现如下（底层输出 uart_putc 换成任意平台/串口均可）：\n#include <stdarg.h>\n\nstatic void uart_putc(char c) { /* 把 c 写入 UART 发送寄存器并等待发送完成（按平台实现） */ }\n\nstatic void out_str(const char *s) { while (*s) uart_putc(*s++); }\n\nstatic void out_num(unsigned long v, int base, int upper, int width, char pad)\n{\n    char tmp[32]; int n = 0;\n    const char *dig = upper ? \"0123456789ABCDEF\" : \"0123456789abcdef\";\n    if (v == 0) tmp[n++] = '0';\n    while (v) { tmp[n++] = dig[v % base]; v /= base; }   /* 除基取余：得到逆序字符 */\n    while (n < width) tmp[n++] = pad;                    /* 左补零/空格 */\n    while (n--) uart_putc(tmp[n]);                       /* 逆序输出 */\n}\n\n/* 支持 %d/%i/%u/%x/%X/%p/%c/%s/%% 与宽度、0 填充 */\nint my_printf(const char *fmt, ...)\n{\n    va_list ap;\n    int cnt = 0;\n    va_start(ap, fmt);\n    while (*fmt) {\n        if (*fmt != '%') { uart_putc(*fmt++); cnt++; continue; }\n        fmt++;                                   /* 跳过 '%' */\n        int width = 0;\n        char pad = ' ';\n        if (*fmt == '0') { pad = '0'; fmt++; }\n        while (*fmt >= '0' && *fmt <= '9') width = width * 10 + (*fmt++ - '0');\n        switch (*fmt) {\n        case 'd': case 'i': {\n            int v = va_arg(ap, int);\n            if (v < 0) { uart_putc('-'); cnt++; out_num((unsigned long)(-v), 10, 0, width, pad); }\n            else       out_num((unsigned long)v, 10, 0, width, pad);\n            break; }\n        case 'u': out_num(va_arg(ap, unsigned int), 10, 0, width, pad); break;\n        case 'x': out_num(va_arg(ap, unsigned int), 16, 0, width, pad); break;\n        case 'X': out_num(va_arg(ap, unsigned int), 16, 1, width, pad); break;\n        case 'p': out_str(\"0x\"); out_num((unsigned long)va_arg(ap, void *), 16, 0, 8, '0'); break;\n        case 'c': uart_putc((char)va_arg(ap, int)); break;\n        case 's': { char *s = va_arg(ap, char *); if (!s) s = \"(null)\"; out_str(s); break; }\n        case '%': uart_putc('%'); break;\n        default:  uart_putc('%'); uart_putc(*fmt); break;\n        }\n        fmt++;\n    }\n    va_end(ap);\n    return cnt;\n}\n要点：va_list 变参 + 格式状态机 + 除基取余逆序数字；工程可先用 vsnprintf 格式化再输出；%d 等类型必须与实参匹配。",
   "explain": "① 说明使用变参（stdarg）与格式串解析 ② 给出可用的简化实现（至少支持 %d/%s/%c/%x）③ 加分：数字转字符串的逆序处理、负号/无符号区别，或指出可用 vsnprintf+串口重定向、多任务需互斥。",
   "analysis": "printf 的实现核心是「变参解析 + 格式化输出」两件事。变参靠 <stdarg.h> 的 va_list/va_start/va_arg/va_end——它在 ABI 层面按参数类型从寄存器/栈中取数据，所以格式串里的转换符必须与实参类型严格匹配（%d 取 int、%f 取 double、%p 取指针，取错类型结果未定义）。格式化用状态机逐字符扫描：普通字符直出，遇到 % 解析「标志/宽度/精度/长度修饰符/转换符」，按类型取出实参并转成文本输出。数字转文本是「除基取余」得到逆序字符再倒序输出（负数先输出负号再取绝对值，无符号类型不要当有符号处理）。工程上常见的简化策略：①若工具链已有 vsnprintf，先格式化到缓冲区再整体输出，既保留完整能力又可控长度；②重定向 fputc/_write 让标准 printf 走串口，但注意代码体积与线程安全；③无 FPU 时避免 %f（软件浮点占空间），改用整数放大表示；④多任务共用要加互斥或做「写日志缓冲 + 单独任务输出」，避免输出交叉。易错点：va_arg 类型不匹配；宽度/补零标志解析顺序（'0' 标志在宽度前）；INT_MIN 取反溢出；%s 传 NULL（可兜底打印 (null)）。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1708,7 +1708,7 @@
   "answer": "完整实现（含调用示例）如下：\n#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct dnode {\n    int             data;\n    struct dnode   *prev;\n    struct dnode   *next;\n} dnode_t;\n\ntypedef struct {\n    dnode_t *head;\n    dnode_t *tail;\n    int      size;\n} dlist_t;\n\n/* 初始化空链表 */\nvoid dlist_init(dlist_t *l) { l->head = l->tail = NULL; l->size = 0; }\n\n/* 尾插：返回新节点（失败返回 NULL） */\ndnode_t *dlist_push_back(dlist_t *l, int v)\n{\n    dnode_t *n = (dnode_t *)malloc(sizeof(dnode_t));\n    if (!n) return NULL;\n    n->data = v;\n    n->next = NULL;\n    n->prev = l->tail;\n    if (l->tail) l->tail->next = n;     /* 原尾节点指向新节点 */\n    else         l->head = n;           /* 空链表：头也要指新节点 */\n    l->tail = n;\n    l->size++;\n    return n;\n}\n\n/* 头插 */\ndnode_t *dlist_push_front(dlist_t *l, int v)\n{\n    dnode_t *n = (dnode_t *)malloc(sizeof(dnode_t));\n    if (!n) return NULL;\n    n->data = v;\n    n->prev = NULL;\n    n->next = l->head;\n    if (l->head) l->head->prev = n;\n    else         l->tail = n;           /* 空链表：尾也要指新节点 */\n    l->head = n;\n    l->size++;\n    return n;\n}\n\n/* 按值查找（返回首个匹配节点，未找到返回 NULL） */\ndnode_t *dlist_find(dlist_t *l, int v)\n{\n    dnode_t *p;\n    for (p = l->head; p; p = p->next)\n        if (p->data == v) return p;\n    return NULL;\n}\n\n/* 按值删除：处理 头/尾/中间 三种情况；找到删除返回 0，未找到返回 -1 */\nint dlist_erase(dlist_t *l, int v)\n{\n    dnode_t *p = dlist_find(l, v);\n    if (!p) return -1;\n    if (p->prev) p->prev->next = p->next; else l->head = p->next;  /* 删头 */\n    if (p->next) p->next->prev = p->prev; else l->tail = p->prev;  /* 删尾 */\n    free(p);\n    l->size--;\n    return 0;\n}\n\n/* 正向 / 反向遍历 */\nvoid dlist_print(dlist_t *l)\n{\n    dnode_t *p;\n    for (p = l->head; p; p = p->next) printf(\"%d \", p->data);\n    printf(\"\\n\");\n    for (p = l->tail; p; p = p->prev) printf(\"%d \", p->data);\n    printf(\"\\n\");\n}\n\n/* 释放全部节点 */\nvoid dlist_free(dlist_t *l)\n{\n    dnode_t *p = l->head, *nx;\n    while (p) { nx = p->next; free(p); p = nx; }   /* 先存 next 再 free */\n    dlist_init(l);\n}\n\n/* 调用示例 */\nint main(void)\n{\n    dlist_t l;\n    dlist_init(&l);\n    dlist_push_back(&l, 1);\n    dlist_push_back(&l, 2);\n    dlist_push_front(&l, 0);      /* 0 1 2 */\n    dlist_print(&l);              /* 正向 0 1 2；反向 2 1 0 */\n    dlist_erase(&l, 1);           /* 0 2 */\n    dlist_free(&l);\n    return 0;\n}\n要点：节点含 prev/next，可双向遍历、已知节点插入/删除 O(1)；头尾边界单独处理；free 前先存 next。",
   "explain": "① 节点结构含 data/prev/next ② 实现插入（头/尾）、删除、遍历 ③ 加分：正确处理头尾边界、free 前先存 next、指出已知节点删除为 O(1)，或用静态内存池替代 malloc。",
   "analysis": "双向链表节点含 data、prev、next 两个指针——相比单链表，可以双向遍历、已知节点时插入/删除都是 O(1)（不需要从头找前驱）。实现要点：①插入/删除必须同时维护前后两个方向的指针，并单独处理边界——新节点插到空表时 head/tail 都指它；删除头节点要更新 head、删除尾节点要更新 tail；②按值删除先查找，找不到返回错误，找到后按「前驱/后继是否为空」摘链、再 free；③释放整表时先保存 next 再 free，防止访问已释放内存；④基础操作包括头插/尾插/按值查找/按值删除/正反两向遍历。复杂度：头/尾插入 O(1)、已知节点删除 O(1)、按值查找与删除 O(n)。嵌入式可用静态数组 + 索引（链式数组）替代 malloc 避免内存碎片。易错点：忘记更新 tail（尾插/尾删时）；删头时忘记把新头的 prev 置 NULL；free 后又访问节点；空链表插入漏处理。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1723,7 +1723,7 @@
   "answer": "四种实现如下（考试推荐第 1 种）：\n/* ① 指针版：C 标准做法（传地址才能交换实参） */\nvoid swap(int *a, int *b)\n{\n    int t = *a; *a = *b; *b = t;        /* 经指针访问实参变量 */\n}\n\n/* ② 宏版：可交换任意类型（GCC typeof 扩展；do-while(0) 保证单语句语义） */\n#define SWAP(a, b) do { \\\n        typeof(a) _t = (a); (a) = (b); (b) = _t; \\\n    } while (0)\n\n/* ③ 通用字节版：交换任意类型的内存块（size 为字节数） */\nvoid swap_any(void *a, void *b, unsigned int size)\n{\n    unsigned char *pa = (unsigned char *)a, *pb = (unsigned char *)b, t;\n    while (size--) { t = *pa; *pa++ = *pb; *pb++ = t; }\n}\n\n/* ④ 异或版：不用临时变量（仅整型；同址会清零，必须先判） */\nvoid swap_xor(int *a, int *b)\n{\n    if (a == b) return;                 /* 防同一变量：否则被清零 */\n    *a ^= *b; *b ^= *a; *a ^= *b;\n}\n要点：值传递必须传指针（C++ 可传引用，如 void swap(int &a, int &b)）；异或版仅整型且须判同址；宏版注意副作用与 do-while(0)。",
   "explain": "① 给出传指针的正确实现 ② 说明值传递必须传地址（否则实参不变）③ 加分：提供宏/通用字节/异或版本之一并指出异或法的同址清零陷阱或 C++ 引用写法。",
   "analysis": "C 的参数是值传递，`void swap(int a, int b)` 交换的只是两份副本，函数返回后实参纹丝不动——必须传指针（`void swap(int *a, int *b)`）交换指针指向的变量；C++ 则可以直接用引用 `void swap(int &a, int &b)`。常见四种写法：①指针版（C 标准做法）；②宏版（do{...}while(0) 包裹 + typeof 支持任意类型，注意宏实参副作用如 SWAP(i++, j++) 行为不可控）；③通用字节版（按字节循环交换任意内存块，配 size 参数）；④异或版（无需临时变量，但仅限整型、可读性差，并且当两个指针指向同一变量时会把变量清零——必须入口判同址）。工程要点：宏用 do-while(0) 保证在 if/else 中作为单条语句使用；交换大结构体注意开销。易错点：值传递版直接交换形参；异或版忘判同址；宏不使用 do-while 导致悬空。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1738,7 +1738,7 @@
   "answer": "完整函数（含调用示例）如下：\n/* 把 src（含结尾 '\\0'）复制到 dst，返回 dst；要求 dst 空间足够 */\nchar *strcpy_m(char *dst, const char *src)\n{\n    char *ret = dst;                    /* 保存原始首地址用于返回 */\n    while ((*dst++ = *src++) != '\\0')   /* 逐字符拷贝，遇 '\\0' 结束（'\\0' 已拷入） */\n        ;\n    return ret;                         /* 返回目标首地址，支持链式调用 */\n}\n/* 调用示例：char buf[32]; strcpy_m(buf, \"hello\"); */\n要点：赋值表达式条件保证 '\\0' 一并复制；返回 dst 原始指针；不做长度检查——工程需用带长度版本防溢出。",
   "explain": "① 正确实现（含 '\\0' 拷贝）② 返回目标首地址 ③ 加分：指出无长度检查的溢出风险与 strncpy/snprintf 替代、const 修饰、重叠需 memmove。",
   "analysis": "strcpy 的核心是「循环拷贝直到 '\\0' 并含 '\\0'」：惯用法 while ((*dst++ = *src++) != '\\0');——赋值表达式的值即刚复制的字符，遇到 '\\0'（值为 0）退出，同时把结尾符也复制过去；必须保存 dst 原始首地址返回（标准 strcpy 返回 dst 以支持链式调用）。工程要点：形参 src 加 const 表明只读；不做长度检查是标准行为——src 长于 dst 空间时缓冲区溢出，实际应改用带长度限制的版本（strncpy 截断时可能不补 '\\0'、用 snprintf 更稳）；标准规定 src 与 dst 重叠属未定义行为（重叠应使用 memmove）；dst 必须指向可写内存，不能是字符串字面量。易错点：忘记 '\\0'（若手动循环）；返回值返回错对象；用字面量测试崩溃。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1753,7 +1753,7 @@
   "answer": "三种实现（推荐指针版）如下：\n/* ① 指针版（推荐）：指针差即为长度 */\nunsigned int strlen_p(const char *s)\n{\n    const char *p = s;\n    while (*p) p++;                 /* 走到结尾 '\\0' */\n    return (unsigned int)(p - s);   /* 不含 '\\0' */\n}\n\n/* ② 计数版 */\nunsigned int strlen_c(const char *s)\n{\n    unsigned int n = 0;\n    while (s[n] != '\\0') n++;\n    return n;\n}\n\n/* ③ 递归版（仅作理解，实际不用：深串爆栈） */\nunsigned int strlen_r(const char *s)\n{\n    return *s ? 1 + strlen_r(s + 1) : 0;\n}\n/* 调用示例：strlen_p(\"abc\") 返回 3；注意 char s[]=\"abc\" 时 sizeof(s)==4 */\n要点：到第一个 '\\0' 停止、不含 '\\0'；返回类型标准为 size_t；必须保证结尾符否则越界。",
   "explain": "① 正确实现（遇到 '\\0' 停止、不含 '\\0'）② 说明与 sizeof 的区别 ③ 加分：指出必须保证以 '\\0' 结尾否则越界、const 修饰与 size_t 返回类型。",
   "analysis": "strlen 统计从串首到第一个 '\\0' 之前的字符个数（不含 '\\0'）。实现三层次：①指针版——p 从 s 向后走到 '\\0'，返回 p-s（指针相减即元素个数），推荐；②计数版——下标 n 累加直到 s[n]=='\\0'；③递归版——*s ? 1+strlen(s+1) : 0，仅用于理解，深串会爆栈。返回类型标准为 size_t（示例用 unsigned int 便于理解）。关键约束：必须保证字符串以 '\\0' 结尾，否则会越界读到随机的 0（典型的野指针式 bug）；空串返回 0。与 sizeof 的区别是高频考点：sizeof 对数组含 '\\0'（char s[]=\"abc\" 得 4），对指针只给指针大小（4/8），strlen 永远不含 '\\0'。易错点：无 '\\0' 的字符数组调用 strlen；把 sizeof 当 strlen 用；递归实现用于长串。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1768,7 +1768,7 @@
   "answer": "完整程序如下：\n#include <stdio.h>\n#include <string.h>\n\n/* 自实现字符串拷贝：逐字符复制并手动补 '\\0'，返回 dest */\nchar *my_strcpy(char *dest, const char *src)\n{\n    int i;\n    for (i = 0; src[i] != '\\0'; i++)    /* 循环赋值（结尾符不在此循环内拷） */\n        dest[i] = src[i];\n    dest[i] = '\\0';                     /* 必须手动补字符串结束符 */\n    return dest;                        /* 返回目标首地址 */\n}\n\nint main(void)\n{\n    char dest[50] = {0};\n    char src[50]  = \"hello\";\n\n    printf(\"请输入字符串: \");\n    scanf(\"%s\", src);                   /* 工程上应限制宽度防溢出，如 %49s */\n    my_strcpy(dest, src);\n    printf(\"当前获取的字符串为 %s\\n\", dest);\n    return 0;\n}\n要点：下标法必须手动补 '\\0'；返回 dest；无长度检查，调用者须保证 dest 空间足够。",
   "explain": "① 逐字符复制且正确补 '\\0' ② 返回目标首地址 ③ 加分：指出指针法可自动复制 '\\0'、或强调无长度检查的溢出风险与 const 修饰。",
   "analysis": "my_strcpy 用下标循环实现「逐字符复制 + 手动补 '\\0'」：循环把 src[i] 复制到 dest[i] 直到遇到 src 的 '\\0'，循环退出后必须手动 dest[i]='\\0'——这是下标法与指针法最大的区别（指针法 while ((*dest++=*src++)); 会把 '\\0' 一并复制，无需手动补）。返回 dest 支持链式调用；src 加 const 表明只读。安全提示：不做长度检查，调用者须保证 dest 空间足够；原程序用 scanf(\"%s\") 读入无宽度限制，工程上应写 %49s 之类限制宽度防溢出。易错点：漏补 '\\0' 导致打印乱码/越界；返回类型写成 void；用只读字面量作 dest。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1813,7 +1813,7 @@
   "answer": "以插入排序为例的完整函数（含调用示例）如下：\n/* 插入排序：原地、稳定、最好 O(n)、平均/最坏 O(n^2) */\nvoid insertion_sort(int a[], int n)\n{\n    int i, j, key;\n    for (i = 1; i < n; i++) {\n        key = a[i];                    /* 待插入元素 */\n        j = i - 1;\n        while (j >= 0 && a[j] > key) { /* 比 key 大的元素整体后移 */\n            a[j + 1] = a[j];\n            j--;\n        }\n        a[j + 1] = key;                /* 插入到正确位置 */\n    }\n}\n/* 调用示例：int a[] = {5,2,4,1,3}; insertion_sort(a, 5); 得 1,2,3,4,5 */\n要点：已排序区+未排序区逐轮扩大；O(n^2) 最坏 / O(n) 最好、O(1) 空间、稳定；小规模与近乎有序时效率高。",
   "explain": "① 写出一种可运行的排序实现并保证结果正确 ② 说明复杂度与稳定性 ③ 加分：说明适用场景（小规模/近乎有序），或列举多种排序并给出选型依据。 ④合并说明：同 附加面试题·面试题7 第 12 题（C 语言写个排序算法并说明其优缺点），重复题已合并。",
   "analysis": "插入排序把数组看作「已排序区 + 未排序区」，每轮取未排序区首元素 key，在已排序区中从后向前找位置——比 key 大的元素整体后移一格，腾出空位后放入 key。关键性质：平均/最坏 O(n^2)（逆序时比较与移动最多），最好 O(n)（基本有序时内层几乎不动）、空间 O(1) 原地、稳定（相等元素不跨越）。适用场景：小规模（如 n 在 50 以内）或基本有序的数据——这也是快速排序递归到小区间时切换到插入排序的原因。其它算法速览：冒泡（相邻交换、稳定、O(n^2)）、选择（每轮选最值、不稳定、O(n^2)）、快排（分治分区、平均 O(n log n)、最坏 O(n^2)、不稳定）、归并（分治合并、稳定、需 O(n) 空间）、堆排（O(n log n)、O(1)、不稳定）、希尔（增量插入）、计数/基数（非比较、整数且范围小时 O(n+k)）。工程中优先用 qsort()/std::sort()（内省排序）。易错点：内层边界 j>=0 漏判（越界）；移动方向写反；稳定性说明错误；把快排/堆排误标为稳定。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1828,7 +1828,7 @@
   "answer": "①有问题：宏在替换列表中不能递归展开（自引用不再被替换），且 ## 直接连接记号——`parser ##cmd` 是把名字 parser 与 cmd 的实参拼接，并不构成第二次宏调用。\n②因此 parser(a,b,c); 的展开结果为：\nparsera(b, c);\n即函数名 = parser 与 cmd 值 a 连接成的 parsera，实参 = payload→b、len→c（宏调用 3 个实参，展开后是 2 个实参的函数调用）。\n③正确写法（两级宏保证参数先展开再拼接）：\n#define CAT_(x, y) x ## y\n#define CAT(x, y)  CAT_(x, y)\n#define parser(cmd, payload, len)  CAT(parser, cmd)(payload, len)\n④拼接的名字必须是已存在的函数，否则链接失败；若用于「命令→函数」派发，用函数指针表更可控（可检查、可调试、可遍历）。\n要点：宏不可递归；## 连接记号、实参 3 变 2；正解是两级 CAT 宏或函数指针表。",
   "explain": "① 判断\"有问题\"并说明原因（宏不可递归 + ## 直接连接记号、参数个数变化）② 给出展开结果 `parsera(b,c)`（名称与参数）③ 加分：给出两级 CAT 宏的正确写法，或建议改用函数指针表实现\"命令→函数\"派发。",
   "analysis": "两层问题。①「宏不能递归展开」：替换列表中又出现自身名字时，预处理器规定该名字在这次展开中不再被替换（自引用被标记），所以 parser ##cmd 不会再次当作宏调用，而是把记号 parser 与参数 cmd 的实参直接连接。②「## 连接的是记号」：parser ##cmd(payload,len) 先做参数替换得到 parser ##a (b,c)，连接 parser 与 a 得 parsera，再补上 (b,c)。因此 parser(a,b,c); 展开为 parsera(b, c);——名字是 parser 与 cmd 值 a 的连接 parsera，宏调用的 3 个实参里 len 不再出现在结果中（展开结果是 2 个实参的函数调用）。注意 ## 两侧不能是空参数（未定义/实现相关），连接结果必须是合法记号。改进：用两级宏（外层负责展开参数、内层负责连接）保证 cmd 本身是宏时也能正确展开；若目的是「按命令名派发函数」，更推荐函数指针表（可检查、可调试、可遍历），而不是宏拼接。易错点：误以为宏能递归；把 ## 与 #（字符串化）混淆；空参数拼接。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1843,7 +1843,7 @@
   "answer": "a. 含义与 b. 定义如下：\na. `char (*A)(char*)` 中 A 是函数指针：先与 `*` 结合说明 A 是指针，再与 `(char*)` 结合说明指向函数，函数形参为 `char *`、返回值为 `char`。括号不能省——`char *A(char*)` 会成为「返回 char* 的函数」。\nb. 按成员类型写函数原型（签名必须完全匹配）：\n/* 成员 A 需要：char (*)(char*) —— 形参 char*、返回 char */\nchar Def1(char *p);\nchar Def2(char *p);\n\n/* 成员 B 需要：void (*)(void) —— 无形参、无返回 */\nvoid Def3(void);\n\n/* 具体实现可留空（示意） */\nchar Def1(char *p) { (void)p; return 0; }\nchar Def2(char *p) { (void)p; return 0; }\nvoid Def3(void)    { }\n注意：原初始化 `{0x12, Def1, Def2}` 与 `{0x23, Def2, Def3}` 存在类型不匹配（Def2 同时被用作两种类型），修正后的表应让两列各用匹配签名的函数：\nconst MyDef tbl[] =\n{\n    {0x12, Def1, Def3},   /* A=Def1（char*→char）、B=Def3（void→void） */\n    {0x23, Def2, Def3},\n};\n查表派发（命令码 → 处理函数）示意：\nvoid dispatch(char id, char *payload)\n{\n    unsigned int i;\n    for (i = 0; i < sizeof(tbl) / sizeof(tbl[0]); i++)\n        if (tbl[i].ID == id) { tbl[i].A(payload); tbl[i].B(); return; }\n}\n要点：函数指针的括号分界（指针 vs 返回指针的函数）；签名必须匹配；这是命令码跳转表、比 switch 易扩展。",
   "explain": "① 说明 A 是函数指针、指向\"形参 char*、返回 char\"的函数（并强调括号的作用）② 写出三个函数的正确原型，签名与成员类型匹配 ③ 加分：指出原题初始化存在类型不匹配、说明这是\"命令码→函数\"跳转表并给出查表派发写法。",
   "analysis": "a 部分从内向外读：char (*A)(char*) 中 A 先与 * 结合说明 A 是指针，再与 (char*) 结合说明指向函数——A 是函数指针，所指向的函数形参为 char*、返回值为 char；括号不能省，去掉后 char *A(char*) 的 A 先与 (char*) 结合变成「返回 char* 的函数」。b 部分按成员类型写函数原型：成员 A 需要 char (*)(char*) 类型 ⇒ 函数如 char Def1(char *p);；成员 B 需要 void (*)(void) ⇒ void Def3(void);。原题初始化 {0x12, Def1, Def2} 与 {0x23, Def2, Def3} 存在类型不匹配：同一行 Def2 被同时用于两种类型（第一行 B 位、第二行 A 位），不可能同时满足 void(*)(void) 与 char(*)(char*)——正确做法是 A、B 各配一个符合各自签名的函数。这是嵌入式「命令码 → 处理函数」跳转表：ID 是命令码，两个函数指针分别是带参处理与无参回调，比 switch-case 更易扩展。查表派发用循环遍历比对 ID 即可。要点：函数指针赋值必须签名完全一致，否则是未定义行为；表加 const 放只读段更安全；派发时注意判空。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1858,7 +1858,7 @@
   "answer": "接口（原型）+ 实现如下，两种常用形态：\n/* 形态一：字符串拷贝（带长度限制；n 为 dst 容量，始终以 '\\0' 封口） */\nchar *my_strcpy_s(char *dst, const char *src, unsigned int n)\n{\n    unsigned int i = 0;\n    if (!dst || !src || n == 0) return NULL;         /* 参数校验 */\n    while (i + 1 < n && src[i] != '\\0') {            /* 最多写 n-1 个字符 */\n        dst[i] = src[i];\n        i++;\n    }\n    dst[i] = '\\0';                                   /* 一定封口 */\n    return dst;                                      /* 返回 dst 支持链式调用 */\n}\n\n/* 形态二：任意内存块拷贝（按字节计，最通用） */\nvoid *my_memcpy(void *dst, const void *src, unsigned int len)\n{\n    char *d = (char *)dst;\n    const char *s = (const char *)src;\n    if (!dst || !src) return NULL;\n    while (len--) *d++ = *s++;                       /* 重叠场景需改 memmove（正/反向判断） */\n    return dst;\n}\n/* 调用示例：char buf[16]; my_strcpy_s(buf, \"hello\", sizeof(buf)); */\n接口约定：dst 在前 src 在后、src 带 const；必须带长度参数防溢出（n 为 dst 总容量）；返回 dst、失败返 NULL；字符串必须补 '\\0'、内存块按字节拷贝；重叠需 memmove 语义。",
   "explain": "① 给出函数原型 + 实现（含长度参数的安全版）② 说明 dst/src/长度/返回值的接口约定与 const 修饰 ③ 加分：指出必须带长度以防溢出、重叠需 memmove 语义、或区分浅/深拷贝。",
   "analysis": "拷贝函数接口设计的要点：①参数顺序与标准库保持一致（dst 在前、src 在后），src 加 const 表明只读；②必须带长度参数（或明确目标容量），否则缓冲区溢出——这是接口设计的核心；③返回 dst 便于链式调用与错误判断，失败（NULL 参数/空间不足）返回 NULL 或错误码；④明确重叠行为（不处理就注明调用者不得重叠，或提供 memmove 语义的版本）；⑤明确拷贝语义（字符串必须补 '\\0'，内存块只按字节数拷；浅拷贝字节 vs 深拷贝数据）。两种常用形态：安全版字符串拷贝（逐字符复制、限制 n、始终封口）与任意内存块拷贝（按字节循环、最通用，需重叠时改成 memmove 的双向判断）。复杂度 O(len)。易错点：n 的语义混乱（是 dst 总容量还是字符数要写清）；忘记封口；漏判 NULL；把 n 用错导致越界或最后一个字节未拷贝。",
-  "hot": false,
+  "hot": true,
   "sec": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -1933,7 +1933,7 @@
   "answer": "核心代码（快慢指针）如下，含进阶的找入环点：\n#include <stddef.h>\n\ntypedef struct Node { int data; struct Node *next; } Node;\n\n/* 判环：有环返回 1，无环返回 0；O(n) 时间、O(1) 空间、只读链表 */\nint has_loop(const Node *head)\n{\n    const Node *slow = head, *fast = head;\n    while (fast != NULL && fast->next != NULL) {\n        slow = slow->next;          /* 慢指针每次 1 步 */\n        fast = fast->next->next;    /* 快指针每次 2 步 */\n        if (slow == fast)           /* 相遇：有环 */\n            return 1;\n    }\n    return 0;                       /* 快指针到尾：无环 */\n}\n\n/* 进阶：找入环点（无环返回 NULL） */\nconst Node *loop_entry(const Node *head)\n{\n    const Node *slow = head, *fast = head;\n    while (fast && fast->next) {\n        slow = slow->next;\n        fast = fast->next->next;\n        if (slow == fast) {                 /* 相遇后一指针回起点 */\n            slow = head;\n            while (slow != fast) {          /* 同速前进，再遇即入环点 */\n                slow = slow->next;\n                fast = fast->next;\n            }\n            return slow;\n        }\n    }\n    return NULL;\n}\n要点：快慢指针相遇 ⟺ 有环；O(n)/O(1) 满足只读、无额外数组的限制；入环点 = 相遇后一指针回起点、同速再遇。",
   "explain": "①快慢指针思路 + 可运行代码 ②O(n) 时间与 O(1) 空间、能满足三条件 ③加分：给出找入环点的推导或代码、说明相遇必然性。",
   "analysis": "题目三个限制（只读内存、空间有限、长度任意）排除了「打标记/改指针」和「哈希表/数组记录」两类方案，剩下唯一可行的是空间 O(1) 的快慢指针（Floyd 判圈）：慢指针每步 1、快指针每步 2，若有环，快指针相对慢指针每轮净逼近 1 步、必在环内某点追上（相遇）；若无环，快指针先到达 NULL 或 next 为 NULL，退出循环。复杂度 O(n) 时间、O(1) 空间、只读链表，恰好满足题目全部限制。进阶「找入环点」：相遇后把其中一个指针放回头节点，两指针同速（各 1 步）前进，再次相遇点即入环点。推导：设头到入环点距离 x、入环点到相遇点距离 y、环长 L，快走 2(x+y)=x+y+kL ⇒ x=kL−y——从头走 x 步与从相遇点走 kL−y 步同时到达入环点。易错点：循环条件只判 fast 不判 fast->next（解引用空指针）；快指针步进写错；认为需要额外空间。对比：标记法需可写内存、哈希需额外空间，均不满足限制。",
-  "hot": false,
+  "hot": true,
   "sec": "补充：面试题5 / 面试题6 / 面试题7（综合大题 10 题）",
   "sec_group": "三、附加面试题（2026 补充试卷：编程 / 画图大题）",
   "imgs": []
@@ -2023,7 +2023,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n/* 循环版：在升序数组 a[0..n-1] 中查找 key；找到返回下标，未找到返回 -1 */\nint binary_search(const int a[], int n, int key)\n{\n    int lo = 0, hi = n - 1;                     /* 区间语义：闭区间 [lo, hi] */\n    while (lo <= hi) {                          /* 区间非空则继续 */\n        int mid = lo + (hi - lo) / 2;           /* 防 (lo + hi) 相加溢出 */\n        if (a[mid] == key)      return mid;\n        else if (a[mid] < key)  lo = mid + 1;   /* 右半区 [mid+1, hi] */\n        else                    hi = mid - 1;   /* 左半区 [lo, mid-1] */\n    }\n    return -1;\n}\n\n/* 递归版：与循环版同语义（闭区间 [lo, hi]），出口是区间为空 */\nint binary_search_rec(const int a[], int lo, int hi, int key)\n{\n    int mid;\n    if (lo > hi) return -1;                     /* 未找到：区间为空 */\n    mid = lo + (hi - lo) / 2;\n    if (a[mid] == key)      return mid;\n    else if (a[mid] < key)  return binary_search_rec(a, mid + 1, hi, key);\n    else                    return binary_search_rec(a, lo, mid - 1, key);\n}\n\nint main(void)\n{\n    int a[] = {1, 3, 5, 7, 9, 11, 13};\n    int n = sizeof(a) / sizeof(a[0]);\n\n    printf(\"循环版查 7  -> 下标 %d\\n\", binary_search(a, n, 7));               /* 3 */\n    printf(\"循环版查 8  -> 下标 %d\\n\", binary_search(a, n, 8));               /* -1 */\n    printf(\"递归版查 13 -> 下标 %d\\n\", binary_search_rec(a, 0, n - 1, 13));   /* 6 */\n    printf(\"递归版查 0  -> 下标 %d\\n\", binary_search_rec(a, 0, n - 1, 0));    /* -1 */\n    return 0;\n}\n要点：必须有序为前提；mid 用 lo+(hi-lo)/2 防溢出；闭区间配套 lo<=hi 与 mid±1 跳过；循环版迭代、递归版同语义；时间 O(log n)。",
   "explain": "①循环版与递归版都正确（区间边界与返回语义一致）②说明 mid 防溢出的原因、写明 O(log n) 复杂度 ③加分：指出必须有序的前提、lo=mid 死循环风险、或 bsearch/二分答案等应用。",
   "analysis": "二分查找的前提是序列有序（本题按升序）。原理：每次取区间中间元素与 key 比较，相等即命中；key 大于中间元素则到右半区继续，小于则到左半区继续——每比较一次区间缩小一半，最多约 log2(n)+1 次比较，时间复杂度 O(log n)。两个关键边界：①中点必须写成 int mid = lo + (hi - lo) / 2，不能写 (lo + hi) / 2——当 lo、hi 都接近 int 上限时相加会溢出（有符号溢出是未定义行为，Java 数组二分曾用同款修法修复）；②区间语义必须与更新方式配套：本题用闭区间 [lo, hi]，循环条件 lo <= hi，排除中点后写 lo = mid + 1 或 hi = mid - 1；若改用左闭右开 [lo, hi) 则循环条件 lo < hi、hi 更新为 mid，两种写法不能混用，否则漏元素或死循环。循环版用 while 迭代（额外空间 O(1)）；递归版把区间缩小表达为自调用，出口是 lo > hi（区间为空表示未找到），递归深度 O(log n)、栈空间 O(log n)。易错点：忘记数组必须有序；mid 相加溢出；把更新写成 lo = mid 导致死循环；递归版区间与循环版不一致；返回值语义（下标还是布尔）混淆。应用：有序表查找、库函数 bsearch、以及「二分答案」（对答案空间二分的算法题）。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2038,7 +2038,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n/* 希尔排序：增量 gap 依次取 n/2, n/4, ..., 1；每个 gap 对相隔 gap 的组做插入排序 */\nvoid shell_sort(int a[], int n)\n{\n    int gap, i, j, key;\n    for (gap = n / 2; gap > 0; gap /= 2) {       /* 增量折半，直到 1 */\n        for (i = gap; i < n; i++) {              /* 组内插入排序（步长 gap） */\n            key = a[i];\n            j = i;\n            while (j >= gap && a[j - gap] > key) {\n                a[j] = a[j - gap];               /* 比 key 大的元素后移 gap 位 */\n                j -= gap;\n            }\n            a[j] = key;\n        }\n    }\n}\n\nint main(void)\n{\n    int a[] = {9, 1, 5, 8, 3, 7, 4, 6, 2};\n    int n = sizeof(a) / sizeof(a[0]), i;\n\n    shell_sort(a, n);\n    for (i = 0; i < n; i++) printf(\"%d \", a[i]);   /* 1 2 3 4 5 6 7 8 9 */\n    printf(\"\\n\");\n    return 0;\n}\n要点：增量 gap 从 n/2 折半到 1；组内按步长 gap 做插入排序；最坏约 O(n²)、平均优于插入排序且与增量序列有关；O(1) 空间、不稳定。",
   "explain": "①写出正确的希尔排序（gap 折半循环 + 组内插入排序）②说明增量序列与复杂度、稳定性 ③加分：Hibbard/Sedgewick 等增量改进、或适用场景（中等规模、原地、嵌入式）。",
   "analysis": "希尔排序（缩小增量排序）是插入排序的改进：先按增量 gap 把序列分成若干子序列（下标相隔 gap 的元素同组），组内做插入排序——这样元素一次可跨 gap 个位置移动，逆序对快速减少；随后增量折半缩小，当 gap = 1 时做最后一轮普通插入排序，而此时序列已基本有序，插入排序接近 O(n)。实现要点：gap 从 n/2 开始，每轮 gap /= 2 直到 0；内层对每个 i（从 gap 到 n-1）把 a[i] 按步长 gap 插入到组内正确位置——结构与直接插入排序完全相同，只是步长 1 换成 gap。性能：复杂度与增量序列的选取有关，n/2 折半序列最坏约 O(n²)，但平均表现明显优于直接插入排序与冒泡；取 Hibbard 增量（2^k-1）约 O(n^1.5)，Sedgewick 序列可到 O(n^1.3) 量级。稳定性：不稳定——相同元素可能被分到不同组、跨越彼此；空间 O(1)，原地排序。适用场景：中等规模数据、内存受限场景、希望代码简单且平均性能优于 O(n²) 类算法时；工程中大数组一般仍选快排/归并/堆排。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2053,7 +2053,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n/* 分区（挖坑法）：以 a[lo] 为基准，小的放左、大的放右；返回基准最终位置 */\nint partition(int a[], int lo, int hi)\n{\n    int key = a[lo];                            /* 基准取首元素（可选三数取中优化） */\n    while (lo < hi) {\n        while (lo < hi && a[hi] >= key) hi--;   /* 从右往左找比基准小的 */\n        a[lo] = a[hi];                          /* 填入左坑 */\n        while (lo < hi && a[lo] <= key) lo++;   /* 从左往右找比基准大的 */\n        a[hi] = a[lo];                          /* 填入右坑 */\n    }\n    a[lo] = key;                                /* 两指针相遇处即基准的最终位置 */\n    return lo;\n}\n\n/* 递归快排：对 [lo, hi] 区间排序 */\nvoid quick_sort(int a[], int lo, int hi)\n{\n    int p;\n    if (lo >= hi) return;                       /* 0 或 1 个元素：已有序 */\n    p = partition(a, lo, hi);\n    quick_sort(a, lo, p - 1);                   /* 左半区 */\n    quick_sort(a, p + 1, hi);                   /* 右半区 */\n}\n\nint main(void)\n{\n    int a[] = {6, 2, 9, 1, 8, 3, 7, 5, 4};\n    int n = sizeof(a) / sizeof(a[0]), i;\n\n    quick_sort(a, 0, n - 1);\n    for (i = 0; i < n; i++) printf(\"%d \", a[i]);   /* 1 2 3 4 5 6 7 8 9 */\n    printf(\"\\n\");\n    return 0;\n}\n要点：挖坑法分区一趟 O(n)、基准归位后递归左右；平均/最好 O(n log n)、最坏 O(n²)（有序加固定基准）；优化有随机基准/三数取中、小区间插入、三路划分；不稳定。",
   "explain": "①partition 与递归框架正确（基准归位、左右区间对）②说明最坏/平均复杂度及成因 ③加分：给出至少一种优化（随机基准/三数取中/三路划分/尾递归）或指出不稳定。",
   "analysis": "快速排序是分治算法，三步：①选基准（pivot）；②分区（partition）——把小于基准的元素放到左边、大于基准的放到右边，基准归位；③对左右两个子区间分别递归。本题分区用挖坑法：基准取首元素保存到 key（原位置成为第一个坑），从右往左找比 key 小的填入左坑、再从左往右找比 key 大的填入右坑，交替直到两指针相遇，最后把 key 放回相遇点——一趟分区 O(n)，基准的最终位置从此确定、不再参与后续排序。性能：平均与最好 O(n log n)（每次划分接近均分，共 log n 层、每层 O(n)）；最坏 O(n²)，发生在序列基本有序或逆序而基准又固定取首元素时（每次划分一个子区间为空、递归深度 n），大量重复元素时同样会退化。优化：①随机基准或三数取中（首、中、尾取中位数）降低踩最坏的概率；②小区间（长度低于阈值，如 16）改用插入排序；③三路划分（小于、等于、大于三段）处理重复键；④尾递归优化或手工栈控制递归深度。空间：递归栈平均 O(log n)、最坏 O(n)。稳定性：不稳定（分区交换会打乱相等元素相对次序）。快排是实践中最快的通用内排序之一，C 标准库 qsort、C++ std::sort（内省排序：快排 + 堆排 + 插入排序）都基于它。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2068,7 +2068,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n/* 选择排序：每趟从未排序区选出最小元素，与未排序区第一个元素交换 */\nvoid selection_sort(int a[], int n)\n{\n    int i, j, min_idx, t;\n    for (i = 0; i < n - 1; i++) {\n        min_idx = i;                            /* 假定区首最小 */\n        for (j = i + 1; j < n; j++)\n            if (a[j] < a[min_idx])\n                min_idx = j;                    /* 记录更小元素的下标 */\n        if (min_idx != i) {                     /* 最小值不在区首才交换 */\n            t = a[i]; a[i] = a[min_idx]; a[min_idx] = t;\n        }\n    }\n}\n\nint main(void)\n{\n    int a[] = {5, 2, 8, 1, 9, 3, 7, 4, 6};\n    int n = sizeof(a) / sizeof(a[0]), i;\n\n    selection_sort(a, n);\n    for (i = 0; i < n; i++) printf(\"%d \", a[i]);   /* 1 2 3 4 5 6 7 8 9 */\n    printf(\"\\n\");\n    return 0;\n}\n要点：每趟从未排序区选最小放区首；比较次数固定 n(n-1)/2、移动至多 n-1 次；O(n²)、O(1)、不稳定。",
   "explain": "①实现正确（只与未排序区首交换、范围正确）②说明 O(n²) 与比较/移动次数特点 ③加分：举出不稳定的具体例子或适用场景（小规模、交换代价敏感）。",
   "analysis": "选择排序把数组分为已排序区（前部）与未排序区（后部）：每轮在未排序区扫描一遍，记下最小元素下标，与未排序区第一个元素交换——一趟确定一个元素的最终位置，共 n-1 趟。特点：①比较次数固定为 n(n-1)/2，与初始序列无关，无论什么数据都要完整扫描；②移动次数少，最多 n-1 次交换（每趟至多一次），在对「交换代价大」的场合仍有价值；③空间 O(1)、原地；④不稳定：交换是跨距离进行的，可能把相等元素越过——例如 [5a, 5b, 2]，第一趟最小值是 2，与 5a 交换得到 [2, 5b, 5a]，两个 5 的相对次序被破坏。复杂度：最好、最坏、平均均为 O(n²)，只适合小规模数据或对交换次数敏感的场景；大规模数据工程上用快排/归并/堆排，选择排序更多出现在教学与小数据场合。易错点：把最小值与 a[j] 随手交换会破坏已排序区（应只与区首交换）；比较次数与移动次数说反；稳定性回答错误（选择排序不稳定）。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2083,7 +2083,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n/* 合并：把有序区间 a[lo..mid] 与 a[mid+1..hi] 并成一段有序（借用 tmp） */\nstatic void merge(int a[], int tmp[], int lo, int mid, int hi)\n{\n    int i = lo, j = mid + 1, k = lo;\n    while (i <= mid && j <= hi)\n        tmp[k++] = (a[i] <= a[j]) ? a[i++] : a[j++];   /* 等值取左段：保证稳定 */\n    while (i <= mid) tmp[k++] = a[i++];                /* 左段剩余 */\n    while (j <= hi)  tmp[k++] = a[j++];                /* 右段剩余 */\n    for (k = lo; k <= hi; k++)\n        a[k] = tmp[k];                                 /* 结果拷回原数组 */\n}\n\n/* 归并排序：左右两半分别递归，再合并 */\nvoid merge_sort(int a[], int tmp[], int lo, int hi)\n{\n    int mid;\n    if (lo >= hi) return;                       /* 0 或 1 个元素：递归出口 */\n    mid = lo + (hi - lo) / 2;\n    merge_sort(a, tmp, lo, mid);                /* 左半区 */\n    merge_sort(a, tmp, mid + 1, hi);            /* 右半区 */\n    merge(a, tmp, lo, mid, hi);                 /* 合并两段有序区 */\n}\n\nint main(void)\n{\n    int a[] = {9, 3, 7, 1, 8, 2, 6, 4, 5};\n    int tmp[sizeof(a) / sizeof(a[0])];          /* 辅助空间 O(n) */\n    int n = sizeof(a) / sizeof(a[0]), i;\n\n    merge_sort(a, tmp, 0, n - 1);\n    for (i = 0; i < n; i++) printf(\"%d \", a[i]);   /* 1 2 3 4 5 6 7 8 9 */\n    printf(\"\\n\");\n    return 0;\n}\n要点：分治递归 + merge 双指针；等值取左段保证稳定；辅助数组 O(n)；任何输入的复杂度都是 O(n log n)。",
   "explain": "①merge 与递归框架正确（双指针合并、拷回原数组）②说明稳定与 O(n) 辅助空间 ③加分：说明任意输入均 O(n log n)、链表归并 O(1) 额外空间、或外部排序应用。",
   "analysis": "归并排序是典型分治法：①分解——把区间 [lo, hi] 二分成 [lo, mid] 与 [mid+1, hi]；②递归——对两个子区间分别归并排序；③合并（merge）——把两段已有序子序列并成一段有序序列：双指针从两段头部开始，每次取较小者放入辅助数组，取完后再拷回原数组。两个核心点：①合并结果先暂存辅助数组再拷回，因此需要 O(n) 的额外空间——这是归并相对快排/堆排的最大代价；②比较写成「等值时取左段」（a[i] <= a[j] 时先取 a[i]）即可保证稳定。性能：最好、最坏、平均均为 O(n log n)——每层合并总量 O(n)、共 log n 层，这也是它相对快排的稳健优势；空间 O(n)（辅助数组加 O(log n) 递归栈）；稳定。适用：要求稳定排序、数据量大、或数据在链表上（链表归并可做到 O(1) 额外空间，天然适合）；也是外部排序（大文件分块归并）的基础。易错点：忘记把辅助数组拷回原数组；merge 的右段起点写成 mid（应为 mid+1）；稳定性靠等值取左段这个细节；递归出口 lo >= hi；每次合并都 malloc/free 辅助数组会拖慢性能（应一次分配、反复使用）。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2098,7 +2098,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n/* 下滤：在大小为 n 的堆中把下标 i 的节点向下调整，维持大顶堆性质 */\nstatic void sift_down(int a[], int i, int n)\n{\n    int child, tmp = a[i];                      /* tmp 保存待调整元素（挖坑法） */\n    for (; 2 * i + 1 < n; i = child) {\n        child = 2 * i + 1;                      /* 左孩子 */\n        if (child + 1 < n && a[child + 1] > a[child])\n            child++;                            /* 右孩子更大则选右 */\n        if (tmp >= a[child]) break;             /* 已满足堆序：父不小于子 */\n        a[i] = a[child];                        /* 大孩子上移 */\n    }\n    a[i] = tmp;                                 /* 放到最终位置 */\n}\n\n/* 堆排序：先建大顶堆，再反复把堆顶（最大）换到末尾并缩小堆 */\nvoid heap_sort(int a[], int n)\n{\n    int i, t;\n    for (i = n / 2 - 1; i >= 0; i--)            /* 从最后一个非叶节点起建堆，O(n) */\n        sift_down(a, i, n);\n    for (i = n - 1; i > 0; i--) {\n        t = a[0]; a[0] = a[i]; a[i] = t;        /* 堆顶（最大）换到当前末尾 */\n        sift_down(a, 0, i);                     /* 堆大小减 1，对堆顶重新下滤 */\n    }\n}\n\nint main(void)\n{\n    int a[] = {4, 6, 8, 5, 9, 1, 3, 2, 7};\n    int n = sizeof(a) / sizeof(a[0]), i;\n\n    heap_sort(a, n);\n    for (i = 0; i < n; i++) printf(\"%d \", a[i]);   /* 1 2 3 4 5 6 7 8 9 */\n    printf(\"\\n\");\n    return 0;\n}\n要点：从 n/2-1 起到 0 建大顶堆；排序阶段交换堆顶与堆尾后缩小堆再下滤；O(n log n)、O(1)、不稳定；建堆 O(n)。",
   "explain": "①建堆 + 下滤 + 排序循环三步正确 ②说明 O(n log n)/O(1) 与不稳定 ③加分：指出建堆 O(n) 或最坏有保证 / Top-K / 优先队列等适用场景。",
   "analysis": "堆排序利用大顶堆（顺序存储的完全二叉树：下标 i 的左右孩子为 2i+1、2i+2，下标从 0 起）。分两步：①建堆——从最后一个非叶节点（下标 n/2-1）开始向前逐个下滤（sift down）：节点与较大的孩子比较，小于孩子则把大孩子上移、继续向下，直至父不小于子；②排序——重复 n-1 次：把堆顶（当前最大）与堆尾元素交换，堆大小减 1，再对堆顶下滤——最大元素依次归位到数组尾部，最终整体升序。要点：下滤中必须先选较大的孩子再比较（小顶堆则选小的）；节点不小于孩子即可提前停止；建堆自下而上保证每个子树先成为堆。性能：建堆 O(n)（逐层求和推导的结论，不是 O(n log n)）；每次交换加下滤 O(log n)，共 n-1 次，总时间 O(n log n)，且最好/最坏/平均一致；空间 O(1)（原地，无递归无额外数组）；不稳定（堆顶与堆尾是远距离交换）。适用：要求最坏情况也有 O(n log n) 且不接受归并的 O(n) 额外空间时（实时/嵌入式系统关注最坏上限）；也常用于 Top-K（维护大小 K 的小顶堆）与优先队列场景。易错点：下滤孩子下标越界判断；把堆顶与堆尾交换后忘记缩小堆范围；建堆复杂度说成 O(n log n)；把堆排误答为稳定排序。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2113,7 +2113,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n#define MAXSIZE 100                     /* 顺序表最大容量 */\n\ntypedef struct {\n    int data[MAXSIZE];                  /* 连续存储数据区（下标 0 起存数据） */\n    int length;                         /* 当前长度（元素个数） */\n} seqlist_t;\n\n/* 初始化：清空表 */\nvoid seq_init(seqlist_t *L)\n{\n    L->length = 0;\n}\n\n/* 插入：在第 i 个位置（1 <= i <= length+1）插入 x；成功 0，失败 -1 */\nint seq_insert(seqlist_t *L, int i, int x)\n{\n    int j;\n    if (L->length >= MAXSIZE)        return -1;   /* 表满 */\n    if (i < 1 || i > L->length + 1)  return -1;   /* 位置非法 */\n    for (j = L->length; j >= i; j--)              /* 从后往前挪：腾出第 i 位 */\n        L->data[j] = L->data[j - 1];\n    L->data[i - 1] = x;\n    L->length++;\n    return 0;\n}\n\n/* 删除：删除第 i 个位置（1 <= i <= length）元素，值带回 *x；成功 0，失败 -1 */\nint seq_delete(seqlist_t *L, int i, int *x)\n{\n    int j;\n    if (i < 1 || i > L->length)      return -1;   /* 空表或位置非法 */\n    if (x) *x = L->data[i - 1];                   /* 把被删值带出 */\n    for (j = i; j < L->length; j++)               /* 从前往后挪：填补空位 */\n        L->data[j - 1] = L->data[j];\n    L->length--;\n    return 0;\n}\n\n/* 按值查找：返回第一个等于 x 的位置（1 起），找不到返回 0 */\nint seq_find(const seqlist_t *L, int x)\n{\n    int i;\n    for (i = 0; i < L->length; i++)\n        if (L->data[i] == x)\n            return i + 1;\n    return 0;\n}\n\nint main(void)\n{\n    seqlist_t L;\n    int i, v;\n\n    seq_init(&L);\n    seq_insert(&L, 1, 10);              /* 10 */\n    seq_insert(&L, 2, 20);              /* 10 20 */\n    seq_insert(&L, 2, 15);              /* 10 15 20 */\n    seq_delete(&L, 1, &v);              /* 删 10 -> 15 20 */\n\n    printf(\"删除的值 = %d, 15 的位置 = %d\\n\", v, seq_find(&L, 15));  /* 10, 1 */\n    for (i = 0; i < L.length; i++) printf(\"%d \", L.data[i]);          /* 15 20 */\n    printf(\"\\n\");\n    return 0;\n}\n要点：连续存储 + 长度字段；插入从后往前挪、删除从前往后挪；边界插入 1~length+1、删除 1~length；平均移动 n/2 与 (n-1)/2；O(n)。",
   "explain": "①四个函数正确（边界检查与长度维护）②给出平均移动次数与 O(n) 结论 ③加分：与链表对比、或动态扩容改进。",
   "analysis": "顺序表 = 一块连续内存 + 当前长度，逻辑相邻即物理相邻：可以随机访问（下标 O(1)），但插入/删除需移动元素以保持连续。①初始化：length 置 0；②插入：先检查表满与位置合法（1 <= i <= length+1），再从最后一个元素开始向后挪一位腾出第 i 位，写入新值、长度加 1；③删除：检查位置合法（1 <= i <= length），把被删值带回后把第 i 位之后的元素逐个前移、长度减 1；④按值查找：从头顺序比较，返回第一个相等元素的位置（1 起）或 0。平均移动次数（等概率）：插入有 n+1 个可选位置，平均移动 n/2 个元素；删除有 n 个位置，平均移动 (n-1)/2 个；按值查找平均比较 (n+1)/2 次——三者都是 O(n)。与链表对比：顺序表随机访问快、无指针开销、缓存友好，但插删代价大、容量固定（静态数组）；链表插删只改指针，但不能随机访问、每节点有指针开销。易错点：插入挪动方向必须从后往前、删除必须从前往后；i 的边界（插入可取 length+1、删除不能）；忘记维护 length；平均移动次数背错。工程改进：动态数组（容量不足时 realloc 倍增）缓解固定容量问题。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2128,7 +2128,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n#include <stdlib.h>\n\ntypedef struct node {\n    int          data;\n    struct node *next;\n} node_t;\n\n/* 尾插法建表（带头结点）：把数组 a 的 n 个元素依次接到表尾，返回头结点 */\nnode_t *list_create_tail(const int a[], int n)\n{\n    node_t *head = (node_t *)malloc(sizeof(node_t));   /* 头结点：不存数据 */\n    node_t *tail = head;                               /* 尾指针：让尾插 O(1) */\n    int i;\n    if (!head) return NULL;\n    head->next = NULL;\n    for (i = 0; i < n; i++) {\n        node_t *p = (node_t *)malloc(sizeof(node_t));\n        if (!p) return head;                           /* 分配失败：返回已建部分 */\n        p->data = a[i];\n        p->next = NULL;\n        tail->next = p;                                /* 新节点接到表尾 */\n        tail = p;                                      /* 尾指针后移 */\n    }\n    return head;\n}\n\n/* 在第 i 个位置（1 <= i <= 表长+1）插入 x；成功 0，失败 -1 */\nint list_insert(node_t *head, int i, int x)\n{\n    node_t *p = head;                                  /* 走到第 i-1 个节点 */\n    node_t *s;\n    int j = 0;\n    if (i < 1) return -1;\n    while (p && j < i - 1) { p = p->next; j++; }\n    if (!p) return -1;                                 /* i 超过表长+1 */\n    s = (node_t *)malloc(sizeof(node_t));\n    if (!s) return -1;\n    s->data = x;\n    s->next = p->next;                                 /* 先连新节点到后继 */\n    p->next = s;                                       /* 再让前驱指向新节点 */\n    return 0;\n}\n\n/* 按值查找：返回第一个值为 x 的节点指针，未找到返回 NULL */\nnode_t *list_find(node_t *head, int x)\n{\n    node_t *p = head->next;                            /* 从首元节点开始 */\n    while (p && p->data != x) p = p->next;\n    return p;\n}\n\n/* 删除第一个值等于 x 的节点；成功 0，未找到 -1 */\nint list_delete(node_t *head, int x)\n{\n    node_t *p = head, *q;\n    while (p->next && p->next->data != x)              /* 停下时 p 是待删节点的前驱 */\n        p = p->next;\n    if (!p->next) return -1;                           /* 到链尾仍没找到 */\n    q = p->next;                                       /* q = 待删节点 */\n    p->next = q->next;                                 /* 摘链：前驱跳过 q */\n    free(q);\n    return 0;\n}\n\n/* 打印整表（辅助函数） */\nvoid list_print(node_t *head)\n{\n    node_t *p = head->next;\n    while (p) { printf(\"%d \", p->data); p = p->next; }\n    printf(\"\\n\");\n}\n\nint main(void)\n{\n    int a[] = {1, 2, 3, 4};\n    node_t *head = list_create_tail(a, 4);             /* 1 2 3 4 */\n    node_t *p;\n\n    list_insert(head, 1, 0);                           /* 0 1 2 3 4 */\n    list_insert(head, 6, 9);                           /* 0 1 2 3 4 9 */\n    list_delete(head, 3);                              /* 0 1 2 4 9 */\n    p = list_find(head, 4);\n    printf(\"找到 4 吗：%s\\n\", p ? \"是\" : \"否\");\n    list_print(head);                                  /* 0 1 2 4 9 */\n\n    p = head;                                          /* 释放整表 */\n    while (p) { node_t *t = p->next; free(p); p = t; }\n    return 0;\n}\n要点：头结点不作特例；尾指针使建表 O(n)；插入先连后断、删除先找前驱；查找/删除 O(n)、定位后插入 O(1)。",
   "explain": "①四个函数正确（尾插建表、第 i 位插入、查找、删除）②说明头结点作用与指针操作顺序要点 ③加分：说明尾指针建表 O(n)、头删/尾删/空表边界或 free 释放。",
   "analysis": "带头结点的单链表：头结点不存数据，只作统一哨兵，使首元节点的插入/删除与其它位置代码一致（不必把「改头指针」当特例处理）。①尾插法建表：初始 head->next = NULL、tail = head；每来一个元素让 tail->next 指向新节点、tail 后移——有尾指针后整体建表 O(n)（每次都从头找尾会退化为 O(n²)），且建出的链表顺序与输入一致（头插法会逆序）；②第 i 位插入：从头结点走 i-1 步找到前驱（链表只能顺链定位，没有下标随机访问），并检查 1 <= i <= 表长+1；挂链顺序「新节点先接后继、前驱再接新节点」不能反，否则丢失后继；③按值查找：从首元节点顺链比较，返回首个命中的节点指针或 NULL；④删除第一个等于 x 的节点：同样要找前驱（从头结点出发判断 p->next->data == x），摘链（前驱跳过 q）后再 free，顺序反了会断链。要点：插入与删除都要「先连后断」；找到即停（第一个）；查找/删除 O(n)，已知位置插入本身 O(1)（定位仍 O(n)）；头删、尾删、空表都要能走通。易错点：插入顺序写反丢链；删除忘记前驱；不用头结点时空表/头删特判遗漏；建表忘记置新节点 next = NULL；删除节点不 free 造成泄漏。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2143,7 +2143,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n#include <stdlib.h>\n\n#define HASH_SIZE 13                    /* 桶数：除留余数法的模数，一般取质数 */\n\ntypedef struct hashnode {\n    int              key;\n    struct hashnode *next;              /* 拉链：同义词挂同一条链 */\n} hashnode_t;\n\ntypedef struct {\n    hashnode_t *buckets[HASH_SIZE];     /* 桶数组：每个元素是一条链的头指针 */\n    int         count;                  /* 已存元素个数（用于算装填因子 n/m） */\n} hashtable_t;\n\n/* 初始化：全部桶置空、计数清零 */\nvoid hash_init(hashtable_t *h)\n{\n    int i;\n    for (i = 0; i < HASH_SIZE; i++)\n        h->buckets[i] = NULL;\n    h->count = 0;\n}\n\n/* 哈希函数：除留余数法 */\nstatic int hash_func(int key)\n{\n    return key % HASH_SIZE;\n}\n\n/* 插入：计算桶号后头插；成功 0，内存分配失败 -1 */\nint hash_insert(hashtable_t *h, int key)\n{\n    int idx = hash_func(key);\n    hashnode_t *p = (hashnode_t *)malloc(sizeof(hashnode_t));\n    if (!p) return -1;\n    p->key = key;\n    p->next = h->buckets[idx];          /* 头插：O(1)，与链长无关 */\n    h->buckets[idx] = p;\n    h->count++;\n    return 0;\n}\n\n/* 查找：先算桶号，再遍历该桶的链；找到 0，未找到 -1 */\nint hash_find(const hashtable_t *h, int key)\n{\n    hashnode_t *p = h->buckets[hash_func(key)];\n    while (p) {\n        if (p->key == key) return 0;\n        p = p->next;\n    }\n    return -1;\n}\n\nint main(void)\n{\n    hashtable_t h;\n    int keys[] = {18, 23, 5, 31, 44, 10, 7, 26};\n    int n = sizeof(keys) / sizeof(keys[0]), i;\n\n    hash_init(&h);\n    for (i = 0; i < n; i++)\n        hash_insert(&h, keys[i]);\n\n    printf(\"查 31：%s\\n\", hash_find(&h, 31) == 0 ? \"找到\" : \"未找到\");   /* 找到 */\n    printf(\"查 99：%s\\n\", hash_find(&h, 99) == 0 ? \"找到\" : \"未找到\");   /* 未找到 */\n    printf(\"元素数 %d / 桶数 %d\\n\", h.count, HASH_SIZE);                /* 8 / 13 */\n    return 0;\n}\n要点：除留余数 + 链地址；插入头插 O(1)；查找算桶号后只遍历一条链；装填因子 α=n/m 控制在 1 附近，超限扩容。",
   "explain": "①初始化/插入/查找正确（桶号计算与链表操作）②说明装填因子与拉链冲突处理 ③加分：扩容重散列、桶数取质数、或与开放地址法对比。",
   "analysis": "哈希表用哈希函数把关键字映射到桶，实现平均 O(1) 的插入与查找。本题用除留余数法 H(key) = key % m（m 为桶数）加链地址法（拉链）：每个桶挂一条同义词链，冲突关键字头插进对应链（头插 O(1)，与链长无关）。①初始化：所有桶指针置空、计数清零；②插入：算桶号、头插新节点（要求键不重复时先查找再插入）；③查找：算桶号后只遍历该桶的一条链，命中返回成功、到链尾未找到返回失败。关键参数：装填因子 α = 元素数 n / 桶数 m——α 越大链越长、查找越慢；拉链法允许 α 大于 1（比开放地址法宽松），但通常把 α 控制到 0.75~1 左右，超过阈值就扩容（桶数约翻倍、把全部元素重新散列，摊还代价仍可接受）。哈希函数设计：除留余数法的模数 m 一般取质数（或不含 20 以内质因子的数）使分布更均匀；还有直接定址、平方取中、折叠、乘法散列等。冲突处理对比：链地址法无堆积、删除简单、适合冲突多的场合；开放地址法（线性探测、二次探测、双散列）省指针但易聚集、删除要打标记。易错点：桶数取偶数/合数导致分布变差；装填因子算反（应为 n/m）；查找失败也要遍历整条链；扩容时忘记重新散列；删除节点要摘链并释放内存。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []
@@ -2158,7 +2158,7 @@
   "answer": "完整代码如下：\n#include <stdio.h>\n\n#define STACK_MAX 100                   /* 栈的最大容量 */\n\ntypedef struct {\n    int data[STACK_MAX];                /* 连续存储区 */\n    int top;                            /* 栈顶下标：-1 表示空栈 */\n} seqstack_t;\n\n/* 初始化：置空栈 */\nvoid stack_init(seqstack_t *s)\n{\n    s->top = -1;\n}\n\n/* 判空：空返回 1 */\nint stack_empty(const seqstack_t *s)\n{\n    return s->top == -1;\n}\n\n/* 判满：满返回 1 */\nint stack_full(const seqstack_t *s)\n{\n    return s->top == STACK_MAX - 1;\n}\n\n/* 入栈：成功 0；栈满（上溢）返回 -1 */\nint stack_push(seqstack_t *s, int x)\n{\n    if (stack_full(s)) return -1;       /* 溢出检查：不查会越界写 */\n    s->data[++s->top] = x;              /* 先增栈顶下标，再存入 */\n    return 0;\n}\n\n/* 出栈：成功 0 且值带回 *x；空栈（下溢）返回 -1 */\nint stack_pop(seqstack_t *s, int *x)\n{\n    if (stack_empty(s)) return -1;      /* 下溢检查：空栈取到的是垃圾值 */\n    if (x) *x = s->data[s->top--];      /* 先取值，再减栈顶下标 */\n    return 0;\n}\n\nint main(void)\n{\n    seqstack_t s;\n    int v, i;\n\n    stack_init(&s);\n    for (i = 1; i <= 5; i++) stack_push(&s, i * 10);   /* 10 20 30 40 50 */\n    while (!stack_empty(&s)) {                          /* 出栈：后进先出 */\n        if (stack_pop(&s, &v) == 0) printf(\"%d \", v);   /* 50 40 30 20 10 */\n    }\n    printf(\"\\n\");\n    printf(\"空栈出栈返回 %d\\n\", stack_pop(&s, &v));     /* -1（下溢保护） */\n    return 0;\n}\n要点：数组 + top 下标；push 先判满、pop 先判空，失败返回 -1；顺序栈操作 O(1)、容量固定；链栈动态扩展但有指针与分配开销。",
   "explain": "①四个功能正确（含溢出检查与返回值约定）②说明与链栈的取舍（固定容量 vs 动态分配）③加分：两栈共享空间、动态扩容、或 top 语义变体说明。",
   "analysis": "顺序栈用数组 + 栈顶下标实现后进先出：top 指向栈顶元素（本题 -1 表示空栈），入栈先 ++top 再存值、出栈先取值再 --top。四个操作：①初始化 top = -1；②判空 top == -1；③判满 top == STACK_MAX - 1；④入栈前查满、出栈前查空——两个溢出检查是栈实现的核心安全点：栈满再 push 会越界写坏相邻内存，空栈再 pop 会取到垃圾值；本题失败统一返回 -1（成功 0）。与链栈的取舍：顺序栈实现简单、无 malloc/free 开销、内存连续缓存友好，但要预先固定容量（支持任意深度需动态扩容或预估上限），适合栈深可预测、追求确定性与效率的场景；链栈用单链表头插头删，入栈/出栈 O(1)、不受固定容量限制（仅受堆限制），但每节点多一个指针开销、动态分配有碎片与失败的不确定性，适合栈深变化大、无法预估上限的场合。扩展：两栈共享空间（数组两端向中间生长）可提升利用率；若采用 top 指向「栈顶之上的空位」的变体，判空/判满条件要配套修改（判满 top == STACK_MAX）。易错点：先存值再 ++top/先 --top 再取值弄反；只判空不判满；top 语义与判据不配套；出栈忘记把值带出。",
-  "hot": false,
+  "hot": true,
   "sec": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "sec_group": "四、查漏补缺补充题（数据结构 / 排序 / 查找 10 题，编号 506~515）",
   "imgs": []

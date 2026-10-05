@@ -197,6 +197,16 @@ root.update()
 check(app.progress[app.bank[0]["id"]]["wrote"] == "第 1 题原答案",
       "启动不回写、不清空已保存的作答")
 
+# 12. 热点板块（前 50% 高频题）
+hot_n = sum(1 for it in app.bank if it.get("hot"))
+check(hot_n > 0, f"题库已标记热点 {hot_n} 题")
+app.set_mode("热点")
+root.update()
+check(app.mode == "热点" and len(app.queue) == hot_n,
+      f"热点板块队列 = {len(app.queue)}（应为 {hot_n}）", f"（首题 #{app.queue[0]['num'] if app.queue else '?'}）")
+app.set_mode("顺序")
+root.update()
+
 root.destroy()
 
 # 恢复用户进度

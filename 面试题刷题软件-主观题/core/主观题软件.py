@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """面试题刷题软件 · 主观题
 题库来源：题库.json（由 build_bank.py 从 题库/02_主观题.md 生成）
-功能：顺序浏览 + 打字作答（自动保存）+ 查看题目解析与标准答案（含自评要点）+ 跳题 +
+功能：顺序浏览 + 热点板块（前 50% 高频题）+ 打字作答（自动保存）+ 查看题目解析与标准答案（含自评要点）+ 跳题 +
       收藏题目（收藏区取消收藏，带确认）+ 分区跳转（按试卷分区、确认后跳转）+
       模拟考试（10 题 / 40 分钟，计划式抽题、暂停/退出/恢复、交卷后逐题回顾）+ 重置进度。
 特点：不打分、无错题库；考试交卷后对照标准答案与自评要点自评。
@@ -211,9 +211,9 @@ class App:
         bar.grid(row=0, column=0, sticky="ew")
         tk.Label(bar, text="🎯 面试题刷题（主观题）", bg="#2c3e50", fg="white",
                  font=("Microsoft YaHei", 13, "bold"), padx=12).pack(side=tk.LEFT, pady=6)
-        # 板块按钮：顺序 / 收藏 / 考试
+        # 板块按钮：顺序 / 热点 / 收藏 / 考试
         self.mode_btns = {}
-        for m in ("顺序", "收藏", "考试"):
+        for m in ("顺序", "热点", "收藏", "考试"):
             b = tk.Button(bar, text=m, command=lambda mm=m: self.set_mode(mm),
                           relief=tk.FLAT, padx=10, cursor="hand2",
                           font=("Microsoft YaHei", 10))
@@ -367,6 +367,12 @@ class App:
                 w.destroy()
             favs = set(self._favs())
             self.queue = [it for it in self.bank if it.get("id") in favs]
+            self.idx = 0
+            self.show_question()
+        elif mode == "热点":
+            for w in self.exam_bar.winfo_children():
+                w.destroy()
+            self.queue = [it for it in self.bank if it.get("hot")]
             self.idx = 0
             self.show_question()
         else:
@@ -1266,8 +1272,9 @@ class App:
         revealed = sum(1 for it in self.bank
                        if self.progress.get(it.get("id", ""), {}).get("revealed"))
         fav_n = len(self._favs())
+        hot_n = sum(1 for it in self.bank if it.get("hot"))
         self.stat_label.config(
-            text=f"已看答案 {revealed}/{total} · 已作答 {done}/{total} · ⭐收藏 {fav_n}")
+            text=f"已看答案 {revealed}/{total} · 已作答 {done}/{total} · ⭐收藏 {fav_n} · 🔥热点 {hot_n}")
 
     def _save_progress(self):
         try:
