@@ -40,11 +40,11 @@ app = bs.App(root)
 root.update()
 
 # 1. 题库
-check(len(app.bank) == 312, f"题库 312 题 (实际 {len(app.bank)})")
+check(len(app.bank) == 316, f"题库 312 题 (实际 {len(app.bank)})")
 kinds = {}
 for it in app.bank:
     kinds[it["kind"]] = kinds.get(it["kind"], 0) + 1
-check(kinds == {"choice": 270, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
+check(kinds == {"choice": 274, "multi": 5, "judge": 35, "qa": 2}, f"题型分布 {kinds}")
 
 # 2. 顺序 + 单选判分 + 错题次数
 app.set_mode("顺序")

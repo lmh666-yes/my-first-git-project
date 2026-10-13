@@ -28,3 +28,6 @@ tests/题库.json.bak
 
 # 个人简历（不提交到仓库）
 李孟函_简历*
+
+# APK build logs
+apk_build*.log
