@@ -6,12 +6,12 @@ __pycache__/
 
 # 刷题软件本机进度（自动生成）
 C刷题软件/progress.json
-面试题刷题软件-客观题/progress.json
-面试题刷题软件-主观题/progress.json
-面试题刷题软件-大题/progress.json
-面试题刷题软件-客观题/progress.json.testbak.*
-面试题刷题软件-主观题/progress.json.testbak.*
-面试题刷题软件-大题/progress.json.testbak.*
+面试刷题/面试题刷题软件-客观题/progress.json
+面试刷题/面试题刷题软件-主观题/progress.json
+面试刷题/面试题刷题软件-大题/progress.json
+面试刷题/面试题刷题软件-客观题/progress.json.testbak.*
+面试刷题/面试题刷题软件-主观题/progress.json.testbak.*
+面试刷题/面试题刷题软件-大题/progress.json.testbak.*
 
 # 测试脚本生成的运行日志
 *.run.txt
@@ -19,6 +19,9 @@ tests/题库.json.bak
 
 # 英语单词刷词：词库源 PDF（内容已提取成 词库/词库.csv + 词库.json 并入库）
 计算机专业英语词汇*.pdf
+
+# 面试素材（本地保留，不提交）
+面试刷题/素材/
 
 # 本地打包产物
 *.rar
